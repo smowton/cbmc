@@ -1544,16 +1544,47 @@ codet java_bytecode_convert_methodt::convert_instructions(
     code.add(code_declt(var));
   }
 
-  for(const auto & it : address_map)
+  bool emitted_first_block=false;
+  for(auto ait=address_map.begin(), aend=address_map.end(); ait != aend; ++ait)
   {
+    const auto& it=*ait;
     const unsigned address=it.first;
     assert(it.first==it.second.source->address);
     const codet &c=it.second.code;
-
     if(targets.find(address)!=targets.end())
-      code.add(code_labelt(label(i2string(address)), c));
+    {
+      code_blockt toadd;
+      toadd.add(c);
+      code.add(code_labelt(label(i2string(address)), toadd));
+      emitted_first_block=true;
+    }
     else if(c.get_statement()!=ID_skip)
-      code.add(c);
+    {
+      bool added=false;
+      if(emitted_first_block && it.second.predecessors.size()==1)
+      {
+        auto prev=ait;
+        --prev;
+        if(prev->second.successors.size()==1 &&
+           (*(prev->second.successors.begin()))==it.first)
+        {
+          auto& lastop=to_code(code.operands().back());
+          auto& otherblock=to_code_block(
+            lastop.get_statement()==ID_label ?
+            to_code_label(lastop).code() :
+            lastop);
+          otherblock.add(c);
+          added=true;
+        }
+      }
+      if(!added)
+      {
+        code_blockt toadd;
+        toadd.add(c);
+        code.add(toadd);
+      }
+      emitted_first_block=true;
+    }
   }
 
   return code;
