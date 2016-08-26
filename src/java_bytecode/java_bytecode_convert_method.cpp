@@ -1545,6 +1545,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
   }
 
   bool emitted_first_block=false;
+  bool start_new_block=true;
   for(auto ait=address_map.begin(), aend=address_map.end(); ait != aend; ++ait)
   {
     const auto& it=*ait;
@@ -1560,30 +1561,22 @@ codet java_bytecode_convert_methodt::convert_instructions(
     }
     else if(c.get_statement()!=ID_skip)
     {
-      bool added=false;
-      if(emitted_first_block && it.second.predecessors.size()==1)
+      if(emitted_first_block && (!start_new_block) && it.second.predecessors.size()==1)
       {
-        auto prev=ait;
-        --prev;
-        if(prev->second.successors.size()==1 &&
-           (*(prev->second.successors.begin()))==it.first)
-        {
-          auto& lastop=to_code(code.operands().back());
-          auto& otherblock=to_code_block(
-            lastop.get_statement()==ID_label ?
-            to_code_label(lastop).code() :
-            lastop);
-          otherblock.add(c);
-          added=true;
-        }
+        auto& lastop=to_code(code.operands().back());
+        auto& otherblock=to_code_block(
+          lastop.get_statement()==ID_label ?
+          to_code_label(lastop).code() :
+          lastop);
+        otherblock.add(c);
       }
-      if(!added)
-      {
+      else {
         code_blockt toadd;
         toadd.add(c);
         code.add(toadd);
       }
       emitted_first_block=true;
+      start_new_block=it.second.successors.size()>1;
     }
   }
 
