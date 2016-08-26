@@ -1544,7 +1544,17 @@ codet java_bytecode_convert_methodt::convert_instructions(
     code.add(code_declt(var));
   }
 
-  bool emitted_first_block=false;
+  // Try to recover block structure as indicated in the local variable table:
+
+  struct block_tree_node {
+    // Leaf is valid if it is non-blank.
+    code_labelt leaf;
+    std::map<unsigned,block_tree_node> branch;
+    block_tree_node() = default;
+    block_tree_node(const code_labelt& _leaf) : leaf(_leaf) {}
+  };
+  block_tree_node root;
+  
   bool start_new_block=true;
   for(auto ait=address_map.begin(), aend=address_map.end(); ait != aend; ++ait)
   {
@@ -1552,33 +1562,32 @@ codet java_bytecode_convert_methodt::convert_instructions(
     const unsigned address=it.first;
     assert(it.first==it.second.source->address);
     const codet &c=it.second.code;
-    if(targets.find(address)!=targets.end())
+
+    if(!start_new_block)
+      start_new_block=targets.find(address)!=targets.end();
+    if(!start_new_block)
+      start_new_block=it.second.predecessors.size()>1;
+
+    code_blockt* add_to_block;
+    if(start_new_block)
     {
-      code_blockt toadd;
-      toadd.add(c);
-      code.add(code_labelt(label(i2string(address)), toadd));
-      emitted_first_block=true;
+      code_labelt newlabel(label(i2string(address)), code_blockt());
+      auto insret=root.branch.insert(std::make_pair(address,block_tree_node(newlabel)));
+      assert(insret.second && "Block already exists at this address?");
+      add_to_block=&to_code_block(insret.first->second.leaf.code());
     }
-    else if(c.get_statement()!=ID_skip)
-    {
-      if(emitted_first_block && (!start_new_block) && it.second.predecessors.size()==1)
-      {
-        auto& lastop=to_code(code.operands().back());
-        auto& otherblock=to_code_block(
-          lastop.get_statement()==ID_label ?
-          to_code_label(lastop).code() :
-          lastop);
-        otherblock.add(c);
-      }
-      else {
-        code_blockt toadd;
-        toadd.add(c);
-        code.add(toadd);
-      }
-      emitted_first_block=true;
-      start_new_block=it.second.successors.size()>1;
+    else {
+      auto it=root.branch.end();
+      --it;
+      add_to_block=&to_code_block(it->second.leaf.code());
     }
+    if(c.get_statement()!=ID_skip)
+      add_to_block->add(c);
+    start_new_block=it.second.successors.size()>1;
   }
+
+  for(auto it : root.branch)
+    code.move_to_operands(it.second.leaf);
 
   return code;
 }
