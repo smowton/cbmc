@@ -1806,16 +1806,13 @@ codet java_bytecode_convert_methodt::convert_instructions(
   // Add anonymous locals to the symtab, and declare at top:
   for(const auto & var : used_local_names)
   {
-    symbolt new_symbol;
+    auxiliary_symbolt new_symbol;
     new_symbol.name=var.get_identifier();
     new_symbol.type=var.type();
     new_symbol.base_name=var.get(ID_C_base_name);
     new_symbol.pretty_name=id2string(var.get_identifier()).substr(6, std::string::npos);
     new_symbol.mode=ID_java;
     new_symbol.is_type=false;
-    new_symbol.is_file_local=true;
-    new_symbol.is_thread_local=true;
-    new_symbol.is_lvalue=true;
     symbol_table.add(new_symbol);
     code.add(code_declt(new_symbol.symbol_expr()));
   }
