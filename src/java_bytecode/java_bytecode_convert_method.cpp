@@ -85,7 +85,8 @@ protected:
     size_t start_pc;
     size_t length;
     bool is_parameter;
-    variablet() : symbol_expr(), is_parameter(false) {}      
+    bool is_initialised;
+    variablet() : symbol_expr(), is_parameter(false), is_initialised(false) {}      
   };
 
   typedef std::vector<variablet> variablest;
@@ -100,8 +101,7 @@ protected:
   } instruction_sizet;
 
   // return corresponding reference of variable
-  variablet &find_variable_for_slot(unsigned number_int, size_t address,
-                                    variablest &var_list)
+  variablet &find_variable_for_slot(size_t address, variablest &var_list)
   {
     for(variablet &var : var_list)
     {
@@ -121,6 +121,8 @@ protected:
     return var_list[list_length];
   }
 
+
+
   // JVM local variables
   const exprt variable(const exprt &arg, char type_char, size_t address, bool do_cast = true)
   {
@@ -131,7 +133,7 @@ protected:
     variablest &var_list = variables[number_int];
 
     // search variable in list for correct frame / address if necessary
-    variablet &var = find_variable_for_slot(number_int, address, var_list);
+    variablet &var = find_variable_for_slot(address, var_list);
 
     if(var.symbol_expr.get_identifier().empty())
     {
@@ -150,6 +152,77 @@ protected:
       if(do_cast && t!=result.type()) result=typecast_exprt(result, t);
       return result;
     }
+  }
+
+  static bool sort_pair_by_pc(const std::pair<unsigned,variablet*> lhs,
+                              const std::pair<unsigned,variablet*> rhs)
+  {
+    return lhs.second->start_pc < rhs.second->start_pc;
+  }
+ 
+  void find_trivial_initialisers(const methodt::instructionst& insts) {
+
+    // Make a sorted list of stack slots and variables by initialisation PC:
+    std::vector<std::pair<unsigned,variablet*> > vars_by_pc;
+    for(unsigned vlistidx=0, vlistlim=variables.size(); vlistidx!=vlistlim; ++vlistidx)
+    {
+      auto& vlist=variables[vlistidx];
+      for(auto& v : vlist)
+        vars_by_pc.push_back(std::make_pair(vlistidx,&v));
+    }
+    std::sort(vars_by_pc.begin(),vars_by_pc.end(),sort_pair_by_pc);
+
+    // For each variable, look for a trivial initialiser preceding its live range,
+    // such as:
+    // astore_2
+    // --- live range begins for slot 2 ---
+    // more instructions...
+    // If this pattern is found, allow the store to directly initialise the named variable
+    // and mark it initialised.
+    // Otherwise we'll initialise the local when recovering block structure and inserting
+    // decl instructions at the end of convert_instructions.
+    
+    auto varit=vars_by_pc.begin(),varend=vars_by_pc.end();
+
+    for(auto instit=insts.begin(),instend=insts.end(); instit!=instend; ++instit)
+    {
+      for(; varit!=varend && varit->second->start_pc<instit->address; ++varit) {}
+      for(; varit!=varend && varit->second->start_pc==instit->address; ++varit)
+      {
+        auto slotidx=varit->first;
+        auto& var=*(varit->second);
+        if(instit!=insts.begin())
+        {
+          auto previt=instit;
+          --previt;
+          auto& previnst=*previt;
+          const std::string prevstatement=id2string(previnst.statement);
+          if(prevstatement.size()>=1 && prevstatement.substr(1,5)=="store")
+          {
+            std::string storeslot;
+            if(previnst.args.size()==1)
+            {
+              const auto& arg=previnst.args[0];
+              storeslot=id2string(to_constant_expr(arg).get_value());
+            }
+            else
+            {
+              assert(prevstatement[6]=='_' && prevstatement.size()==8);
+              storeslot=prevstatement[7];
+              assert(isdigit(storeslot[0]));
+            }
+            auto storeslotidx=safe_string2unsigned(storeslot);
+            if(storeslotidx==slotidx)
+            {
+              // The instruction immediately prior to this is an initialiser.
+              var.is_initialised=true;
+              var.start_pc=previnst.address;
+            }
+          }
+        }
+      }
+    }
+  
   }
 
   // temporary variables
@@ -353,11 +426,13 @@ void java_bytecode_convert_methodt::convert(
     irep_idt identifier(id_oss.str());
     symbol_exprt result(identifier, t);
     result.set(ID_C_base_name, v.name);
-    size_t number_index_entries = variables[v.index].size();
-    variables[v.index].resize(number_index_entries + 1);
-    variables[v.index][number_index_entries].symbol_expr = result;
-    variables[v.index][number_index_entries].start_pc = v.start_pc;
-    variables[v.index][number_index_entries].length = v.length;
+
+    variables[v.index].push_back(variablet());
+    auto& newv=variables[v.index].back();
+    newv.symbol_expr = result;
+    newv.start_pc = v.start_pc;
+    newv.length = v.length;
+    
     symbolt new_symbol;
     new_symbol.name=identifier;
     new_symbol.type=t;
@@ -370,6 +445,8 @@ void java_bytecode_convert_methodt::convert(
     new_symbol.is_lvalue=true;
     symbol_table.add(new_symbol);
   }
+
+  find_trivial_initialisers(m.instructions);
 
   // set up variables array
   for(std::size_t i=0, param_index=0;
@@ -1726,7 +1803,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
     code.add(code_declt(var));
   }
 
-  // Add anonymous locals to the symtab, and declare at top for now:
+  // Add anonymous locals to the symtab, and declare at top:
   for(const auto & var : used_local_names)
   {
     symbolt new_symbol;
@@ -1746,10 +1823,12 @@ codet java_bytecode_convert_methodt::convert_instructions(
   // Try to recover block structure as indicated in the local variable table:
 
   // The block tree node mirrors the block structure of root_block,
-  // indexing the Java PCs were each subblock starts and ends.
+  // indexing the Java PCs where each subblock starts and ends.
   block_tree_node root;
   code_blockt root_block;
-  
+
+  // First create a simple flat list of basic blocks. We'll add lexical nesting
+  // constructs as variable live-ranges require next.
   bool start_new_block=true;
   for(auto ait=address_map.begin(), aend=address_map.end(); ait != aend; ++ait)
   {
@@ -1808,13 +1887,22 @@ codet java_bytecode_convert_methodt::convert_instructions(
     {
       if(v.is_parameter)
         continue;
-      code_declt d(v.symbol_expr);
+      if(v.symbol_expr.get_identifier()==irep_idt())
+        continue;
       auto& block=get_block_for_pcrange(
         root,
         root_block,
         v.start_pc,
         v.start_pc+v.length,
         std::numeric_limits<unsigned>::max());
+      if(!v.is_initialised)
+      {
+        // This local isn't initialised as it is declared. We should inherit the prior
+        // value belonging to the same stack slot.
+        // Implement this if we ever encounter a wild example.
+        throw "TODO: Variable without a trivial initialiser.";
+      }
+      code_declt d(v.symbol_expr);
       block.operands().insert(block.operands().begin(),d);
     }
   }
