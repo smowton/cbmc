@@ -101,13 +101,13 @@ protected:
 
   // return corresponding reference of variable
   variablet &find_variable_for_slot(unsigned number_int, size_t address,
-                                    variablest &var_list, instruction_sizet inst_size)
+                                    variablest &var_list)
   {
     for(variablet &var : var_list)
     {
       size_t start_pc = var.start_pc;
       size_t length = var.length;
-      if (address + (size_t) inst_size >= start_pc && address < start_pc + length)
+      if (address >= start_pc && address < start_pc + length)
         return var;
     }
     // add unnamed local variable to end of list at this index
@@ -122,7 +122,7 @@ protected:
   }
 
   // JVM local variables
-  const exprt variable(const exprt &arg, char type_char, size_t address, instruction_sizet inst_size, bool do_cast = true)
+  const exprt variable(const exprt &arg, char type_char, size_t address, bool do_cast = true)
   {
     irep_idt number=to_constant_expr(arg).get_value();
     
@@ -131,7 +131,7 @@ protected:
     variablest &var_list = variables[number_int];
 
     // search variable in list for correct frame / address if necessary
-    variablet &var = find_variable_for_slot(number_int, address, var_list, inst_size);
+    variablet &var = find_variable_for_slot(number_int, address, var_list);
 
     if(var.symbol_expr.get_identifier().empty())
     {
@@ -1039,7 +1039,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
       // store value into some local variable
       assert(op.size()==1 && results.empty());
 
-      exprt var=variable(arg0, statement[0], i_it->address, INST_INDEX, /*do_cast=*/false);
+      exprt var=variable(arg0, statement[0], i_it->address, /*do_cast=*/false);
 
       exprt toassign=op[0];
       if('a'==statement[0] && toassign.type()!=var.type())
@@ -1070,7 +1070,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
     else if(statement==patternt("?load"))
     {
       // load a value from a local variable
-      results[0]=variable(arg0, statement[0], i_it->address, INST_INDEX);
+      results[0]=variable(arg0, statement[0], i_it->address);
     }
     else if(statement=="ldc" || statement=="ldc_w" ||
             statement=="ldc2" || statement=="ldc2_w")
@@ -1232,10 +1232,9 @@ codet java_bytecode_convert_methodt::convert_instructions(
     else if(statement=="iinc")
     {
       code_assignt code_assign;
-      code_assign.lhs()=variable(arg0, 'i', i_it->address, INST_INDEX_CONST, /*do_cast=*/false);
-      code_assign.rhs()=plus_exprt(
-                                   variable(arg0, 'i', i_it->address, INST_INDEX_CONST),
-                          typecast_exprt(arg1, java_int_type()));
+      code_assign.lhs()=variable(arg0, 'i', i_it->address, /*do_cast=*/false);
+      code_assign.rhs()=plus_exprt(variable(arg0, 'i', i_it->address),
+                                   typecast_exprt(arg1, java_int_type()));
       c=code_assign;
     }
     else if(statement==patternt("?xor"))
