@@ -1657,6 +1657,14 @@ void goto_convertt::convert_goto(
   const codet &code,
   goto_programt &dest)
 {
+  // Precede with a 'skip', which will be replaced by any pre-departure
+  // destructor code if appropriate. Without this the goto can be amalgamated
+  // into a control-flow structure, such as IF x THEN GOTO 1;, leaving
+  // nowhere for the destructors to go.
+  goto_programt::targett skip=dest.add_instruction(SKIP);
+  skip->source_location=code.source_location();
+  skip->code=code_skipt();
+  
   goto_programt::targett t=dest.add_instruction();
   t->make_goto();
   t->source_location=code.source_location();
