@@ -452,10 +452,10 @@ bool bmc_covert::operator()()
               json_test.push_back(json_input);
             }
           }
-          if(test.source_code.length()!=0)
-          {
-            result["junit_test_case"]=json_stringt(test.source_code);
-          }
+        }
+        if(test.source_code.length()!=0)
+        {
+          result["junit_test_case"]=json_stringt(test.source_code);
         }
         json_arrayt &goal_refs=result["coveredGoals"].make_array();
         for(const auto & goal_id : test.covered_goals)

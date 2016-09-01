@@ -38,6 +38,8 @@ java_bytecode_parse_treet &java_class_loadert::operator()(
   // Always require java.lang.Object, as it is the base of
   // internal classes such as array types.
   queue.push("java.lang.Object");
+  // java.lang.String
+  queue.push("java.lang.String");
   queue.push(class_name);
 
   while(!queue.empty())

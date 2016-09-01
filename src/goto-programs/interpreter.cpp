@@ -1033,12 +1033,12 @@ typet interpretert::concretise_type(const typet &type) const
        computed_size[0]>0 &&
        computed_size[0]<=max_allowed_dynamic_array_size)
     {
-      std::cout << "Concretised array with size " << computed_size[0] << "\n";
+      message->result() << "Concretised array with size " << computed_size[0] << "\n" << messaget::eom;
       return array_typet(type.subtype(),
                          constant_exprt::integer_constant(computed_size[0].to_ulong()));
     }
     else {
-      std::cout << "Failed to concretise variable array\n";
+      message->error() << "Failed to concretise variable array\n" << messaget::eom;
     }
   }
   return type;

@@ -15,6 +15,7 @@ Author: Chris Smowton, chris@smowton.net
 void java_generate_opaque_method_stubs(
   symbol_tablet &symbol_table,
   bool assume_non_null,
-  int max_nondet_array_length);
+  int max_nondet_array_length,
+  const source_locationt &loc);
 
 #endif

@@ -764,11 +764,15 @@ void interpretert::evaluate(
         {
           const auto& ops=expr.op0().operands();
           assert(idx[0].is_long());
-          evaluate(ops[idx[0].to_long()],dest);
-          if(dest.size()!=0)
-            return;
+          if(idx[0] >= 0 && idx[0] < ops.size())
+          {
+            evaluate(ops[idx[0].to_long()],dest);
+            if(dest.size()!=0)
+              return;
+          }
         }
       }
+      evaluate_address(expr); // Evaluate again to print error message.
     }
     else if(!a.is_zero())
     {
@@ -776,7 +780,6 @@ void interpretert::evaluate(
       read(a, dest);
       return;
     }
-    evaluate_address(expr); // Evaluate again to print error message.
   }
   else if(expr.id()==ID_typecast)
   {

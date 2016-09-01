@@ -901,6 +901,9 @@ void goto_checkt::pointer_overflow_check(
   if(!enable_pointer_check)
     return;
 
+  if(mode==ID_java)
+    return;
+
   if(expr.id()==ID_plus ||
      expr.id()==ID_minus)
   {

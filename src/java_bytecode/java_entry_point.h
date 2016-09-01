@@ -18,4 +18,8 @@ bool java_entry_point(
   bool assume_init_pointers_not_null,
   int max_nondet_array_length);
 
+std::pair<symbolt, bool> get_main_symbol(symbol_tablet &symbol_table,
+                                           const irep_idt &main_class,
+                                           message_handlert &);
+
 #endif

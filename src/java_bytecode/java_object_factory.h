@@ -17,12 +17,14 @@ exprt object_factory(
   code_blockt &init_code,
   bool allow_null,
   symbol_tablet &symbol_table,
-  int max_nondet_array_length);
+  int max_nondet_array_length,
+  const source_locationt &);
 
 void gen_nondet_init(
   const exprt &expr,
   code_blockt &init_code,
   symbol_tablet &symbol_table,
+  const source_locationt &,
   bool skip_classid = false,
   bool create_dynamic_objects = false,
   bool assume_non_null = false,

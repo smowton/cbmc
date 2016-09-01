@@ -73,6 +73,7 @@ public:
   }
 
 protected:
+  irep_idt method_id;
   symbol_tablet &symbol_table;
 
   irep_idt current_method;
@@ -89,6 +90,8 @@ protected:
     variablet() : symbol_expr(), is_parameter(false), is_initialised(false) {}      
   };
 
+
+  
   typedef std::vector<variablet> variablest;
   expanding_vector<variablest> variables;
   std::set<symbol_exprt> used_local_names;
@@ -328,11 +331,15 @@ protected:
   // conversion
   void convert(const symbolt &class_symbol, const methodt &);
   void convert(const instructiont &);
-  
+
   codet convert_instructions(
     const instructionst &, const code_typet &);
 
   const bytecode_infot &get_bytecode_info(const irep_idt &statement);
+
+  void check_static_field_stub(const symbol_exprt& se,
+			       const irep_idt& basename);
+  
 };
 }
 
@@ -392,6 +399,7 @@ void java_bytecode_convert_methodt::convert(
 
   const irep_idt method_identifier=
     id2string(class_symbol.name)+"."+id2string(m.name)+":"+m.signature;
+  method_id = method_identifier;
 
   code_typet &code_type=to_code_type(member_type);
   method_return_type=code_type.return_type();
@@ -420,7 +428,6 @@ void java_bytecode_convert_methodt::convert(
   for(const auto & v : m.local_variable_table)
   {
     typet t=java_type_from_string(v.signature);
-    size_t unique_number=0;
     std::ostringstream id_oss;
     id_oss << method_identifier << "::" << v.start_pc << "::" << v.name;
     irep_idt identifier(id_oss.str());
@@ -531,8 +538,8 @@ void java_bytecode_convert_methodt::convert(
   method_symbol.name=method.get_name();
   method_symbol.base_name=method.get_base_name();
   method_symbol.mode=ID_java;
-  method_symbol.name=method.get_name();
-  method_symbol.base_name=method.get_base_name();
+  method_symbol.location=m.source_location;
+  method_symbol.location.set_function(method_identifier);
 
   if(method.get_base_name()=="<init>")
     method_symbol.pretty_name=id2string(class_symbol.pretty_name)+"."+
@@ -616,6 +623,43 @@ member_exprt to_member(const exprt &pointer, const exprt &fieldref)
   return member_exprt(
     obj_deref, fieldref.get(ID_component_name), fieldref.type());
 }
+
+codet get_array_bounds_check(const exprt &arraystruct, const exprt& idx)
+{
+  constant_exprt intzero=as_number(0,java_int_type());
+  binary_relation_exprt gezero(idx,ID_ge,intzero);
+  const member_exprt length_field(
+    arraystruct, "length", java_int_type());
+  binary_relation_exprt ltlength(idx,ID_lt,length_field);
+  code_blockt boundschecks;
+  boundschecks.add(code_assertt(gezero));
+  boundschecks.add(code_assertt(ltlength));
+  // TODO make this throw ArrayIndexOutOfBoundsException instead of asserting.
+  return boundschecks;
+}
+  
+}
+
+void java_bytecode_convert_methodt::check_static_field_stub(const symbol_exprt& se,
+							    const irep_idt& basename)
+{
+  const auto& id=se.get_identifier();
+  if(symbol_table.symbols.find(id)==symbol_table.symbols.end())
+  {
+    // Create a stub, to be overwritten if/when the real class is loaded.
+    symbolt new_symbol;
+    new_symbol.is_static_lifetime=true;
+    new_symbol.is_lvalue=true;
+    new_symbol.is_state_var=true;
+    new_symbol.name=id;
+    new_symbol.base_name=basename;
+    new_symbol.type=se.type();
+    new_symbol.pretty_name=new_symbol.name;
+    new_symbol.mode=ID_java;
+    new_symbol.is_type=false;  
+    new_symbol.value.make_nil();
+    symbol_table.add(new_symbol);
+  }
 }
 
 void replace_goto_target(codet& repl, const irep_idt& old_label, const irep_idt& new_label)
@@ -999,7 +1043,13 @@ codet java_bytecode_convert_methodt::convert_instructions(
       }
 
       code_function_callt call;
-      call.add_source_location()=i_it->source_location;
+
+      source_locationt loc;
+      loc = i_it->source_location;
+      loc.set_function(method_id);
+      source_locationt &dloc = loc;
+
+      call.add_source_location()=dloc;
       call.arguments() = pop(parameters.size());
 
       // double-check a bit      
@@ -1074,7 +1124,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
         call.function()=symbol_exprt(arg0.get(ID_identifier), arg0.type());
       }
 
-      call.function().add_source_location()=i_it->source_location;
+      call.function().add_source_location()=dloc;
       c = call;
     }
     else if(statement=="return")
@@ -1109,7 +1159,15 @@ codet java_bytecode_convert_methodt::convert_instructions(
       typet element_type=data_ptr.type().subtype();
       const dereference_exprt element(data_plus_offset, element_type);
 
-      c=code_assignt(element, op[2]);
+      code_blockt assert_and_put;
+      codet bounds_check=get_array_bounds_check(deref,op[1]);
+      bounds_check.add_source_location()=i_it->source_location;
+      assert_and_put.move_to_operands(bounds_check);
+      code_assignt array_put(element, op[2]);
+      array_put.add_source_location()=i_it->source_location;
+      assert_and_put.move_to_operands(array_put);
+      c=std::move(assert_and_put);
+      c.add_source_location()=i_it->source_location;
     }
     else if(statement==patternt("?store"))
     {
@@ -1119,6 +1177,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
       exprt var=variable(arg0, statement[0], i_it->address, /*do_cast=*/false);
 
       exprt toassign=op[0];
+      //toassign.add_source_location()=i_it->source_location;
       if('a'==statement[0] && toassign.type()!=var.type())
         toassign=typecast_exprt(toassign,var.type());
 
@@ -1142,6 +1201,9 @@ codet java_bytecode_convert_methodt::convert_instructions(
       typet element_type=data_ptr.type().subtype();
       dereference_exprt element(data_plus_offset, element_type);
 
+      codet bounds_check=get_array_bounds_check(deref,op[1]);
+      bounds_check.add_source_location()=i_it->source_location;
+      c=std::move(bounds_check);
       results[0]=java_bytecode_promotion(element);
     }
     else if(statement==patternt("?load"))
@@ -1509,7 +1571,9 @@ codet java_bytecode_convert_methodt::convert_instructions(
     {
       assert(op.empty() && results.size()==1);
       symbol_exprt symbol_expr(arg0.type());
-      symbol_expr.set_identifier(arg0.get_string(ID_class)+"."+arg0.get_string(ID_component_name));
+      const auto& fieldname=arg0.get_string(ID_component_name);
+      symbol_expr.set_identifier(arg0.get_string(ID_class)+"."+fieldname);
+      check_static_field_stub(symbol_expr,fieldname);
       results[0]=java_bytecode_promotion(symbol_expr);
     }
     else if(statement=="putfield")
@@ -1521,7 +1585,9 @@ codet java_bytecode_convert_methodt::convert_instructions(
     {
       assert(op.size()==1 && results.empty());
       symbol_exprt symbol_expr(arg0.type());
-      symbol_expr.set_identifier(arg0.get_string(ID_class)+"."+arg0.get_string(ID_component_name));
+      const auto& fieldname=arg0.get_string(ID_component_name);
+      symbol_expr.set_identifier(arg0.get_string(ID_class)+"."+fieldname);
+      check_static_field_stub(symbol_expr,fieldname);
       c=code_assignt(symbol_expr, op[0]);
     }
     else if(statement==patternt("?2?")) // i2c etc.
@@ -1585,8 +1651,15 @@ codet java_bytecode_convert_methodt::convert_instructions(
       if(!i_it->source_location.get_line().empty())
         java_new_array.add_source_location()=i_it->source_location;
 
+      // TODO make this throw NegativeArrayIndexException instead.
+      constant_exprt intzero=as_number(0,java_int_type());
+      binary_relation_exprt gezero(op[0],ID_ge,intzero);
+      code_blockt checkandcreate;
+      code_assertt check(gezero);
+      checkandcreate.move_to_operands(check);
       const exprt tmp=tmp_variable("newarray", ref_type);
-      c=code_assignt(tmp, java_new_array);
+      checkandcreate.copy_to_operands(code_assignt(tmp, java_new_array));
+      c=std::move(checkandcreate);
       results[0]=tmp;
     }
     else if(statement=="multianewarray")
@@ -1800,7 +1873,13 @@ codet java_bytecode_convert_methodt::convert_instructions(
   // temporaries; no scoping yet.
   for(const auto & var : tmp_vars)
   {
-    code.add(code_declt(var));
+    code_declt decl = code_declt(var);
+    code_declt &declaration = decl;
+    source_locationt loc = instructions.begin()->source_location;
+    source_locationt &dloc = loc;
+    dloc.set_function(method_id);
+    declaration.add_source_location() = dloc;
+    code.add(declaration);
   }
 
   // Add anonymous locals to the symtab, and declare at top:

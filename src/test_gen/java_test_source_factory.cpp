@@ -224,9 +224,10 @@ std::string &indent(std::string &result, const size_t num_indent=1u)
 
 void add_test_class_name(std::string &result, const std::string &func_name)
 {
-  result+="public class ";
-  result+=func_name;
-  result+="Test {\n";
+  //result+="public class ";
+  //result+=func_name;
+  //result+="Test {\n";
+  //indent(result)+="public void test";
   indent(result)+="@org.junit.Test public void test";
   result+=func_name;
   result+="() throws Exception {\n";
@@ -272,10 +273,11 @@ void reference_factoryt::add_value(std::string &result, const symbol_tablet &st,
   else expr2java(result, value, ns);
 }
 
-bool is_class_name_comp(const struct_typet::componentt &comp,
+bool is_synthetic_comp(const struct_typet::componentt &comp,
     const size_t index)
 {
-  return ID_string == comp.type().id() && index == 0;
+  return (ID_string == comp.type().id() && index == 0) ||
+    comp.get_name()=="@lock";
 }
 
 class member_factoryt
@@ -314,7 +316,7 @@ public:
     } else
     {
       const struct_typet::componentt &comp=comps[comp_index];
-      if (!is_class_name_comp(comp, comp_index))
+      if (!is_synthetic_comp(comp, comp_index))
       {
         indent(result, 2u)+="com.diffblue.java_testcase.Reflector.setInstanceField(";
         result+=this_name;
@@ -969,9 +971,19 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
     const auto findit=st.symbols.find(retval_symbol);
     if(is_constructor)
     {
-      const auto& thistype=to_code_type(func.type).parameters()[0].type();
-      add_decl_from_type(result,st,thistype);
-      result += " constructed = new ";
+      if(to_code_type(func.type).parameters().size()==0)
+      {
+        java_call_descriptor desc;
+        populate_descriptor_names(func,desc);
+        indent(result)+="// forcing instance to execute static initializer\n";
+        indent(result)+=desc.classname + " constructed = " + force_instantiate(desc.classname) + " // ";
+      }
+      else
+      {
+        const auto& thistype=to_code_type(func.type).parameters()[0].type();
+        add_decl_from_type(result,st,thistype);
+        result += " constructed = new ";
+      }
     }
     else if(findit!=st.symbols.end())
     {
@@ -996,8 +1008,9 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
       add_func_call(result,st,func_id);
   }
 
+  // closing the method
   indent(result)+="}\n";
-  return result+="}\n";
+  return result;
 
 }
 

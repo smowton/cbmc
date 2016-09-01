@@ -225,8 +225,15 @@ bool java_bytecode_languaget::final(symbol_tablet &symbol_table)
   */
   java_internal_additions(symbol_table);
 
+
+  std::pair<symbolt, bool> p = get_main_symbol(symbol_table, main_class, get_message_handler());
+  if(p.second)
+    return true;
+
+  symbolt entry = p.first;
+
   java_generate_opaque_method_stubs(symbol_table,assume_inputs_non_null,
-				    max_nondet_array_length);
+				    max_nondet_array_length, entry.location);
 
   if(java_entry_point(symbol_table,main_class,get_message_handler(),
 		      assume_inputs_non_null,max_nondet_array_length))
