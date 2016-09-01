@@ -1346,8 +1346,15 @@ codet java_bytecode_convert_methodt::convert_instructions(
       if(!i_it->source_location.get_line().empty())
         java_new_array.add_source_location()=i_it->source_location;
 
+      // TODO make this throw NegativeArrayIndexException instead.
+      constant_exprt intzero=as_number(0,java_int_type());
+      binary_relation_exprt gezero(op[0],ID_ge,intzero);
+      code_blockt checkandcreate;
+      code_assertt check(gezero);
+      checkandcreate.move_to_operands(check);
       const exprt tmp=tmp_variable("newarray", ref_type);
-      c=code_assignt(tmp, java_new_array);
+      checkandcreate.copy_to_operands(code_assignt(tmp, java_new_array));
+      c=std::move(checkandcreate);
       results[0]=tmp;
     }
     else if(statement=="multianewarray")
