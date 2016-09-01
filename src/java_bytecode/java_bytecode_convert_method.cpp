@@ -26,6 +26,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "java_types.h"
 
 #include <limits>
+#include <algorithm>
 
 namespace {
 class patternt
@@ -85,7 +86,8 @@ protected:
     size_t start_pc;
     size_t length;
     bool is_parameter;
-    variablet() : symbol_expr(), is_parameter(false) {}      
+    bool is_initialised;
+    variablet() : symbol_expr(), is_parameter(false), is_initialised(false) {}      
   };
 
 
@@ -102,14 +104,13 @@ protected:
   } instruction_sizet;
 
   // return corresponding reference of variable
-  variablet &find_variable_for_slot(unsigned number_int, size_t address,
-                                    variablest &var_list, instruction_sizet inst_size)
+  variablet &find_variable_for_slot(size_t address, variablest &var_list)
   {
     for(variablet &var : var_list)
     {
       size_t start_pc = var.start_pc;
       size_t length = var.length;
-      if (address + (size_t) inst_size >= start_pc && address < start_pc + length)
+      if (address >= start_pc && address < start_pc + length)
         return var;
     }
     // add unnamed local variable to end of list at this index
@@ -123,8 +124,10 @@ protected:
     return var_list[list_length];
   }
 
+
+
   // JVM local variables
-  const exprt variable(const exprt &arg, char type_char, size_t address, instruction_sizet inst_size, bool do_cast = true)
+  const exprt variable(const exprt &arg, char type_char, size_t address, bool do_cast = true)
   {
     irep_idt number=to_constant_expr(arg).get_value();
     
@@ -133,7 +136,7 @@ protected:
     variablest &var_list = variables[number_int];
 
     // search variable in list for correct frame / address if necessary
-    variablet &var = find_variable_for_slot(number_int, address, var_list, inst_size);
+    variablet &var = find_variable_for_slot(address, var_list);
 
     if(var.symbol_expr.get_identifier().empty())
     {
@@ -149,11 +152,80 @@ protected:
     else
     {
       exprt result=var.symbol_expr;
-      if(!var.is_parameter)
-        used_local_names.insert(to_symbol_expr(result));      
       if(do_cast && t!=result.type()) result=typecast_exprt(result, t);
       return result;
     }
+  }
+
+  static bool sort_pair_by_pc(const std::pair<unsigned,variablet*> lhs,
+                              const std::pair<unsigned,variablet*> rhs)
+  {
+    return lhs.second->start_pc < rhs.second->start_pc;
+  }
+ 
+  void find_trivial_initialisers(const methodt::instructionst& insts) {
+
+    // Make a sorted list of stack slots and variables by initialisation PC:
+    std::vector<std::pair<unsigned,variablet*> > vars_by_pc;
+    for(unsigned vlistidx=0, vlistlim=variables.size(); vlistidx!=vlistlim; ++vlistidx)
+    {
+      auto& vlist=variables[vlistidx];
+      for(auto& v : vlist)
+        vars_by_pc.push_back(std::make_pair(vlistidx,&v));
+    }
+    std::sort(vars_by_pc.begin(),vars_by_pc.end(),sort_pair_by_pc);
+
+    // For each variable, look for a trivial initialiser preceding its live range,
+    // such as:
+    // astore_2
+    // --- live range begins for slot 2 ---
+    // more instructions...
+    // If this pattern is found, allow the store to directly initialise the named variable
+    // and mark it initialised.
+    // Otherwise we'll initialise the local when recovering block structure and inserting
+    // decl instructions at the end of convert_instructions.
+    
+    auto varit=vars_by_pc.begin(),varend=vars_by_pc.end();
+
+    for(auto instit=insts.begin(),instend=insts.end(); instit!=instend; ++instit)
+    {
+      for(; varit!=varend && varit->second->start_pc<instit->address; ++varit) {}
+      for(; varit!=varend && varit->second->start_pc==instit->address; ++varit)
+      {
+        auto slotidx=varit->first;
+        auto& var=*(varit->second);
+        if(instit!=insts.begin())
+        {
+          auto previt=instit;
+          --previt;
+          auto& previnst=*previt;
+          const std::string prevstatement=id2string(previnst.statement);
+          if(prevstatement.size()>=1 && prevstatement.substr(1,5)=="store")
+          {
+            std::string storeslot;
+            if(previnst.args.size()==1)
+            {
+              const auto& arg=previnst.args[0];
+              storeslot=id2string(to_constant_expr(arg).get_value());
+            }
+            else
+            {
+              assert(prevstatement[6]=='_' && prevstatement.size()==8);
+              storeslot=prevstatement[7];
+              assert(isdigit(storeslot[0]));
+            }
+            auto storeslotidx=safe_string2unsigned(storeslot);
+            if(storeslotidx==slotidx)
+            {
+              // The instruction immediately prior to this is an initialiser.
+              var.is_initialised=true;
+              var.start_pc=previnst.address;
+            }
+          }
+        }
+      }
+    }
+  
   }
 
   // temporary variables
@@ -214,6 +286,48 @@ protected:
       stack[stack.size()-o.size()+i]=o[i];
   }
 
+  struct converted_instructiont
+  {
+    converted_instructiont(
+      const instructionst::const_iterator &it,
+      const codet &_code):source(it), code(_code), done(false)
+      {}
+
+    instructionst::const_iterator source;
+    std::list<unsigned> successors;
+    std::set<unsigned> predecessors;
+    codet code;
+    stackt stack;
+    bool done;
+  };
+
+  typedef std::map<unsigned, converted_instructiont> address_mapt;
+
+  struct block_tree_node {
+    bool leaf;
+    std::vector<unsigned> branch_addresses;
+    std::vector<block_tree_node> branch;
+    block_tree_node() : leaf(false) {}
+    block_tree_node(bool l) : leaf(l) {}
+    static block_tree_node get_leaf() { return block_tree_node(true); }
+  };
+
+  code_blockt& get_block_for_pcrange(
+    block_tree_node& tree,
+    code_blockt& this_block,
+    unsigned address_start,
+    unsigned address_limit,
+    unsigned next_block_start_address);
+
+  code_blockt& get_or_create_block_for_pcrange(
+    block_tree_node& tree,
+    code_blockt& this_block,
+    unsigned address_start,
+    unsigned address_limit,
+    unsigned next_block_start_address,
+    const address_mapt& amap,
+    bool allow_merge=true);
+  
   // conversion
   void convert(const symbolt &class_symbol, const methodt &);
   void convert(const instructiont &);
@@ -319,12 +433,27 @@ void java_bytecode_convert_methodt::convert(
     irep_idt identifier(id_oss.str());
     symbol_exprt result(identifier, t);
     result.set(ID_C_base_name, v.name);
-    size_t number_index_entries = variables[v.index].size();
-    variables[v.index].resize(number_index_entries + 1);
-    variables[v.index][number_index_entries].symbol_expr = result;
-    variables[v.index][number_index_entries].start_pc = v.start_pc;
-    variables[v.index][number_index_entries].length = v.length;
+
+    variables[v.index].push_back(variablet());
+    auto& newv=variables[v.index].back();
+    newv.symbol_expr = result;
+    newv.start_pc = v.start_pc;
+    newv.length = v.length;
+    
+    symbolt new_symbol;
+    new_symbol.name=identifier;
+    new_symbol.type=t;
+    new_symbol.base_name=v.name;
+    new_symbol.pretty_name=id2string(identifier).substr(6, std::string::npos);
+    new_symbol.mode=ID_java;
+    new_symbol.is_type=false;
+    new_symbol.is_file_local=true;
+    new_symbol.is_thread_local=true;
+    new_symbol.is_lvalue=true;
+    symbol_table.add(new_symbol);
   }
+
+  find_trivial_initialisers(m.instructions);
 
   // set up variables array
   for(std::size_t i=0, param_index=0;
@@ -533,7 +662,171 @@ void java_bytecode_convert_methodt::check_static_field_stub(const symbol_exprt& 
   }
 }
 
-/*******************************************************************\
+void replace_goto_target(codet& repl, const irep_idt& old_label, const irep_idt& new_label)
+{
+  const auto& stmt=repl.get_statement();
+  if(stmt==ID_goto)
+  {
+    auto& g=to_code_goto(repl);
+    if(g.get_destination()==old_label)
+      g.set_destination(new_label);
+  }
+  else {
+    for(auto& op : repl.operands())
+      if(op.id()==ID_code)
+        replace_goto_target(to_code(op),old_label,new_label);
+  }
+}
+
+code_blockt& java_bytecode_convert_methodt::get_block_for_pcrange(
+  struct block_tree_node& tree, code_blockt& this_block,
+  unsigned address_start, unsigned address_limit,
+  unsigned next_block_start_address)
+{
+  address_mapt dummy;
+  return get_or_create_block_for_pcrange(tree,this_block,address_start,address_limit,
+                                         next_block_start_address,dummy,false);
+}
+
+code_blockt& java_bytecode_convert_methodt::get_or_create_block_for_pcrange(
+  struct block_tree_node& tree, code_blockt& this_block,
+  unsigned address_start, unsigned address_limit,
+  unsigned next_block_start_address,
+  const address_mapt& amap,
+  bool allow_merge)
+{
+  assert(tree.branch.size()==tree.branch_addresses.size());
+  if(tree.leaf)
+    return this_block;
+  assert(tree.branch.size()!=0);
+  const auto afterstart=
+    std::upper_bound(tree.branch_addresses.begin(),tree.branch_addresses.end(),address_start);
+  assert(afterstart!=tree.branch_addresses.begin());
+  auto findstart=afterstart;
+  --findstart;
+  auto child_offset=std::distance(tree.branch_addresses.begin(),findstart);
+  auto findlim=
+    std::lower_bound(tree.branch_addresses.begin(),tree.branch_addresses.end(),address_limit);
+  unsigned findlim_block_start_address=
+    findlim==tree.branch_addresses.end() ?
+    next_block_start_address :
+    (*findlim);
+
+  if(findstart==tree.branch_addresses.begin() && findlim==tree.branch_addresses.end())
+    return this_block;
+
+  auto child_iter=this_block.operands().begin();
+  while(child_iter!=this_block.operands().end() && to_code(*child_iter).get_statement()==ID_decl)
+    ++child_iter;
+  assert(child_iter!=this_block.operands().end());
+  std::advance(child_iter,child_offset);
+  assert(child_iter!=this_block.operands().end());  
+  auto& child_label=to_code_label(to_code(*child_iter));
+  auto& child_block=to_code_block(child_label.code());
+      
+  bool single_child=afterstart==findlim;
+  if(single_child)
+  {
+    // Range wholly contained within a child block
+    return get_or_create_block_for_pcrange(tree.branch[child_offset],child_block,
+                                           address_start,address_limit,
+                                           findlim_block_start_address,amap,
+                                           allow_merge);
+  }
+
+  // Otherwise we're being asked for a range of subblocks, but not all of them.
+  // If it's legal to draw a new lexical scope around the requested subset, do so;
+  // otherwise just return this block.
+
+  // This can be a new lexical scope if all incoming edges target the new block header,
+  // or come from within the suggested new block.
+
+  if(!allow_merge)
+    return this_block;
+
+  auto checkit=amap.find(*findstart);
+  assert(checkit!=amap.end());
+  ++checkit; // Skip the header, which can have incoming edges from outside.
+  for(; checkit!=amap.end() && checkit->first < findlim_block_start_address; ++checkit)
+  {
+    for(auto p : checkit->second.predecessors)
+    {
+      if(p<(*findstart) || p>=findlim_block_start_address)
+      {
+        std::cout << "Warning: refusing to create lexical block spanning " <<
+          (*findstart) << "-" << findlim_block_start_address << " due to incoming edge " <<
+          p << " -> " << checkit->first << "\n";
+        return this_block;
+      }
+    }
+  }
+
+  // All incoming edges are acceptable! Create a new block wrapping the relevant children.
+  // Borrow the header block's label, and redirect any block-internal edges to target the inner
+  // header block.
+
+  const auto child_label_irep=child_label.get_label();
+  std::string new_label_str=as_string(child_label_irep);
+  new_label_str+='$';
+  irep_idt new_label_irep(new_label_str);
+
+  code_labelt newlabel(child_label_irep, code_blockt());
+  code_blockt& newblock=to_code_block(newlabel.code());
+  auto nblocks=std::distance(findstart,findlim);
+  assert(nblocks >= 2);
+  std::cout << "Combining " << std::distance(findstart,findlim) << " blocks for addresses " <<
+    (*findstart) << "-" << findlim_block_start_address << "\n";
+
+  // Make a new block containing every child of interest:
+  auto& this_block_children=this_block.operands();
+  assert(tree.branch.size()==this_block_children.size());
+  for(auto blockidx=child_offset, blocklim=child_offset+nblocks; blockidx!=blocklim; ++blockidx)
+    newblock.move_to_operands(this_block_children[blockidx]);
+
+  // Relabel the inner header:
+  to_code_label(to_code(newblock.operands()[0])).set_label(new_label_irep);
+  // Relabel internal gotos:
+  replace_goto_target(newblock,child_label_irep,new_label_irep);
+
+  // Remove the now-empty sibling blocks:
+  auto delfirst=this_block_children.begin();
+  std::advance(delfirst,child_offset+1);
+  auto dellim=delfirst;
+  std::advance(dellim,nblocks-1);
+  this_block_children.erase(delfirst,dellim);
+  this_block_children[child_offset].swap(newlabel);
+
+  // Perform the same transformation on the index tree:
+  block_tree_node newnode;
+  auto branchstart=tree.branch.begin();
+  std::advance(branchstart,child_offset);
+  auto branchlim=branchstart;
+  std::advance(branchlim,nblocks);
+  for(auto branchiter=branchstart; branchiter!=branchlim; ++branchiter)
+    newnode.branch.push_back(std::move(*branchiter));
+  ++branchstart;
+  tree.branch.erase(branchstart,branchlim);
+
+  assert(tree.branch.size()==this_block_children.size());
+
+  auto branchaddriter=tree.branch_addresses.begin();
+  std::advance(branchaddriter,child_offset);
+  auto branchaddrlim=branchaddriter;
+  std::advance(branchaddrlim,nblocks);
+  newnode.branch_addresses.insert(newnode.branch_addresses.begin(),
+                                  branchaddriter,branchaddrlim);
+  ++branchaddriter;
+  tree.branch_addresses.erase(branchaddriter,branchaddrlim);
+
+  tree.branch[child_offset]=std::move(newnode);
+
+  assert(tree.branch.size()==tree.branch_addresses.size());
+
+  return to_code_block(to_code_label(to_code(this_block_children[child_offset])).code());
+    
+}
+
+/*******************************************************************    \
 
 Function: java_bytecode_convert_methodt::convert_instructions
 
@@ -556,23 +849,6 @@ codet java_bytecode_convert_methodt::convert_instructions(
 
   // first pass: get targets and map addresses to instructions
   
-  struct converted_instructiont
-  {
-    converted_instructiont(
-      const instructionst::const_iterator &it,
-      const codet &_code):source(it), code(_code), done(false)
-    {
-    }
-
-    instructionst::const_iterator source;
-    std::list<unsigned> successors;
-    std::set<unsigned> predecessors;
-    codet code;
-    stackt stack;
-    bool done;
-  };
-
-  typedef std::map<unsigned, converted_instructiont> address_mapt;
   address_mapt address_map;
   std::set<unsigned> targets;
 
@@ -898,8 +1174,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
       // store value into some local variable
       assert(op.size()==1 && results.empty());
 
-      exprt var=variable(arg0, statement[0], i_it->address, INST_INDEX, /*do_cast=*/false);
-      //var.add_source_location()=i_it->source_location;
+      exprt var=variable(arg0, statement[0], i_it->address, /*do_cast=*/false);
 
       exprt toassign=op[0];
       //toassign.add_source_location()=i_it->source_location;
@@ -934,7 +1209,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
     else if(statement==patternt("?load"))
     {
       // load a value from a local variable
-      results[0]=variable(arg0, statement[0], i_it->address, INST_INDEX);
+      results[0]=variable(arg0, statement[0], i_it->address);
     }
     else if(statement=="ldc" || statement=="ldc_w" ||
             statement=="ldc2" || statement=="ldc2_w")
@@ -1097,10 +1372,9 @@ codet java_bytecode_convert_methodt::convert_instructions(
     else if(statement=="iinc")
     {
       code_assignt code_assign;
-      code_assign.lhs()=variable(arg0, 'i', i_it->address, INST_INDEX_CONST, /*do_cast=*/false);
-      code_assign.rhs()=plus_exprt(
-                                   variable(arg0, 'i', i_it->address, INST_INDEX_CONST),
-                          typecast_exprt(arg1, java_int_type()));
+      code_assign.lhs()=variable(arg0, 'i', i_it->address, /*do_cast=*/false);
+      code_assign.rhs()=plus_exprt(variable(arg0, 'i', i_it->address),
+                                   typecast_exprt(arg1, java_int_type()));
       c=code_assign;
     }
     else if(statement==patternt("?xor"))
@@ -1597,30 +1871,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
   // review successor computation of athrow!
   code_blockt code;
 
-  // locals
-  for(const auto & var : used_local_names)
-  {
-    code_declt decl = code_declt(var);
-    code_declt &declaration = decl;
-    source_locationt loc = instructions.begin()->source_location;
-    source_locationt &dloc = loc;
-    dloc.set_function(method_id);
-    declaration.add_source_location() = dloc;
-    code.add(declaration);
-
-    symbolt new_symbol;
-    new_symbol.name=var.get_identifier();
-    new_symbol.type=var.type();
-    new_symbol.base_name=var.get(ID_C_base_name);
-    new_symbol.pretty_name=id2string(var.get_identifier()).substr(6, std::string::npos);
-    new_symbol.mode=ID_java;
-    new_symbol.is_type=false;
-    new_symbol.is_file_local=true;
-    new_symbol.is_thread_local=true;
-    new_symbol.is_lvalue=true;
-    symbol_table.add(new_symbol);
-  }
-  // temporaries
+  // temporaries; no scoping yet.
   for(const auto & var : tmp_vars)
   {
     code_declt decl = code_declt(var);
@@ -1632,17 +1883,109 @@ codet java_bytecode_convert_methodt::convert_instructions(
     code.add(declaration);
   }
 
-  for(const auto & it : address_map)
+  // Add anonymous locals to the symtab, and declare at top:
+  for(const auto & var : used_local_names)
   {
+    auxiliary_symbolt new_symbol;
+    new_symbol.name=var.get_identifier();
+    new_symbol.type=var.type();
+    new_symbol.base_name=var.get(ID_C_base_name);
+    new_symbol.pretty_name=id2string(var.get_identifier()).substr(6, std::string::npos);
+    new_symbol.mode=ID_java;
+    new_symbol.is_type=false;
+    symbol_table.add(new_symbol);
+    code.add(code_declt(new_symbol.symbol_expr()));
+  }
+
+  // Try to recover block structure as indicated in the local variable table:
+
+  // The block tree node mirrors the block structure of root_block,
+  // indexing the Java PCs where each subblock starts and ends.
+  block_tree_node root;
+  code_blockt root_block;
+
+  // First create a simple flat list of basic blocks. We'll add lexical nesting
+  // constructs as variable live-ranges require next.
+  bool start_new_block=true;
+  for(auto ait=address_map.begin(), aend=address_map.end(); ait != aend; ++ait)
+  {
+    const auto& it=*ait;
     const unsigned address=it.first;
     assert(it.first==it.second.source->address);
     const codet &c=it.second.code;
 
-    if(targets.find(address)!=targets.end())
-      code.add(code_labelt(label(i2string(address)), c));
-    else if(c.get_statement()!=ID_skip)
-      code.add(c);
+    if(!start_new_block)
+      start_new_block=targets.find(address)!=targets.end();
+    if(!start_new_block)
+      start_new_block=it.second.predecessors.size()>1;
+
+    if(start_new_block)
+    {
+      code_labelt newlabel(label(i2string(address)), code_blockt());
+      root_block.move_to_operands(newlabel);
+      root.branch.push_back(block_tree_node::get_leaf());
+      assert((root.branch_addresses.size()==0 ||
+              root.branch_addresses.back()<address) &&
+             "Block addresses should be unique and increasing");
+      root.branch_addresses.push_back(address);
+    }
+
+    if(c.get_statement()!=ID_skip)
+    {
+      auto& lastlabel=to_code_label(to_code(root_block.operands().back()));
+      auto& add_to_block=to_code_block(lastlabel.code());
+      add_to_block.add(c);
+    }
+    start_new_block=it.second.successors.size()>1;
   }
+
+  for(const auto& vlist : variables)
+  {
+    for(const auto& v : vlist)
+    {
+      if(v.is_parameter)
+        continue;
+      // Merge lexical scopes as far as possible to allow us to
+      // declare these variable scopes faithfully.
+      // Don't insert yet, as for the time being the blocks' only
+      // operands must be other blocks.
+      get_or_create_block_for_pcrange(
+        root,
+        root_block,
+        v.start_pc,
+        v.start_pc+v.length,
+        std::numeric_limits<unsigned>::max(),
+        address_map);
+    }
+  }
+  for(const auto& vlist : variables)
+  {  
+    for(const auto& v : vlist)
+    {
+      if(v.is_parameter)
+        continue;
+      if(v.symbol_expr.get_identifier()==irep_idt())
+        continue;
+      auto& block=get_block_for_pcrange(
+        root,
+        root_block,
+        v.start_pc,
+        v.start_pc+v.length,
+        std::numeric_limits<unsigned>::max());
+      if(!v.is_initialised)
+      {
+        // This local isn't initialised as it is declared. We should inherit the prior
+        // value belonging to the same stack slot.
+        // Implement this if we ever encounter a wild example.
+        throw "TODO: Variable without a trivial initialiser.";
+      }
+      code_declt d(v.symbol_expr);
+      block.operands().insert(block.operands().begin(),d);
+    }
+  }
+
+  for(auto& block : root_block.operands())
+    code.move_to_operands(block);
 
   return code;
 }
