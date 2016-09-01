@@ -497,10 +497,11 @@ codet get_array_bounds_check(const exprt &arraystruct, const exprt& idx)
   const member_exprt length_field(
     arraystruct, "length", java_int_type());
   binary_relation_exprt ltlength(idx,ID_lt,length_field);
-  and_exprt boundsexpr(gezero,ltlength);
+  code_blockt boundschecks;
+  boundschecks.add(code_assertt(gezero));
+  boundschecks.add(code_assertt(ltlength));
   // TODO make this throw ArrayIndexOutOfBoundsException instead of asserting.
-  code_assertt boundscheck(boundsexpr);
-  return boundscheck;
+  return boundschecks;
 }
   
 }
