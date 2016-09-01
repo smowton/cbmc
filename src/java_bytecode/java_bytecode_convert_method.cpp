@@ -753,7 +753,7 @@ code_blockt& java_bytecode_convert_methodt::get_or_create_block_for_pcrange(
     {
       if(p<(*findstart) || p>=findlim_block_start_address)
       {
-        std::cout << "Warning: refusing to create lexical block spanning " <<
+        warning() << "Warning: refusing to create lexical block spanning " <<
           (*findstart) << "-" << findlim_block_start_address << " due to incoming edge " <<
           p << " -> " << checkit->first << "\n";
         return this_block;
@@ -774,7 +774,7 @@ code_blockt& java_bytecode_convert_methodt::get_or_create_block_for_pcrange(
   code_blockt& newblock=to_code_block(newlabel.code());
   auto nblocks=std::distance(findstart,findlim);
   assert(nblocks >= 2);
-  std::cout << "Combining " << std::distance(findstart,findlim) << " blocks for addresses " <<
+  debug() << "Combining " << std::distance(findstart,findlim) << " blocks for addresses " <<
     (*findstart) << "-" << findlim_block_start_address << "\n";
 
   // Make a new block containing every child of interest:
