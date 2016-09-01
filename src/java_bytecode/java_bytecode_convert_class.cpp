@@ -209,6 +209,11 @@ void java_bytecode_convert_classt::convert(
     new_symbol.is_type=false;  
     new_symbol.value=gen_zero(field_type);
 
+    // Do we have the static field symbol already?
+    const auto s_it=symbol_table.symbols.find(new_symbol.name);
+    if(s_it!=symbol_table.symbols.end())
+      symbol_table.symbols.erase(s_it); // erase, we stubbed it
+    
     if(symbol_table.add(new_symbol))
     {
       error() << "failed to add static field symbol" << eom;

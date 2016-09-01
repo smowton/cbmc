@@ -89,12 +89,14 @@ Function: java_static_lifetime_init
 bool java_static_lifetime_init(
   symbol_tablet &symbol_table,
   const source_locationt &source_location,
-  message_handlert &message_handler)
+  message_handlert &message_handler,
+  bool assume_init_pointers_not_null,
+  unsigned max_nondet_array_length)
 {
   symbolt &initialize_symbol=symbol_table.lookup(INITIALIZE);
   code_blockt &code_block=to_code_block(to_code(initialize_symbol.value));
   
-  // we need to zero out all static variables
+  // we need to zero out all static variables, or nondet-initialize if they're external.
   
   for(symbol_tablet::symbolst::const_iterator
       it=symbol_table.symbols.begin();
@@ -105,12 +107,25 @@ bool java_static_lifetime_init(
        it->second.is_lvalue &&
        it->second.is_state_var &&
        it->second.is_static_lifetime &&
-       it->second.value.is_not_nil() &&
        it->second.mode==ID_java)
     {
-      code_assignt assignment(it->second.symbol_expr(), it->second.value);
-      assignment.add_source_location()=source_location;
-      code_block.add(assignment);
+      if(it->second.value.is_nil() && it->second.type!=empty_typet())
+      {
+	auto newsym=object_factory(it->second.type, 
+				   code_block,
+				   !assume_init_pointers_not_null,
+				   symbol_table,
+				   max_nondet_array_length,
+				   source_location);
+	code_assignt assignment(it->second.symbol_expr(), newsym);
+	code_block.add(assignment);
+      }
+      else if(it->second.value.is_not_nil())
+      {
+	code_assignt assignment(it->second.symbol_expr(), it->second.value);
+	assignment.add_source_location()=source_location;
+	code_block.add(assignment);
+      }
     }
   }
   
@@ -132,7 +147,7 @@ bool java_static_lifetime_init(
       code_block.add(function_call);
     }
   }
-  
+
   return false;
 }
 
@@ -433,7 +448,8 @@ bool java_entry_point(
 
   create_initialize(symbol_table);
 
-  if(java_static_lifetime_init(symbol_table, symbol.location, message_handler))
+  if(java_static_lifetime_init(symbol_table, symbol.location, message_handler,
+			       assume_init_pointers_not_null, max_nondet_array_length))
     return true;
 
   code_blockt init_code;

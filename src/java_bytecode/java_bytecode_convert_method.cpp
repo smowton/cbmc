@@ -88,6 +88,8 @@ protected:
     variablet() : symbol_expr(), is_parameter(false) {}      
   };
 
+
+  
   typedef std::vector<variablet> variablest;
   expanding_vector<variablest> variables;
   std::set<symbol_exprt> used_local_names;
@@ -215,11 +217,15 @@ protected:
   // conversion
   void convert(const symbolt &class_symbol, const methodt &);
   void convert(const instructiont &);
-  
+
   codet convert_instructions(
     const instructionst &, const code_typet &);
 
   const bytecode_infot &get_bytecode_info(const irep_idt &statement);
+
+  void check_static_field_stub(const symbol_exprt& se,
+			       const irep_idt& basename);
+  
 };
 }
 
@@ -503,6 +509,28 @@ codet get_array_bounds_check(const exprt &arraystruct, const exprt& idx)
   return boundschecks;
 }
   
+}
+
+void java_bytecode_convert_methodt::check_static_field_stub(const symbol_exprt& se,
+							    const irep_idt& basename)
+{
+  const auto& id=se.get_identifier();
+  if(symbol_table.symbols.find(id)==symbol_table.symbols.end())
+  {
+    // Create a stub, to be overwritten if/when the real class is loaded.
+    symbolt new_symbol;
+    new_symbol.is_static_lifetime=true;
+    new_symbol.is_lvalue=true;
+    new_symbol.is_state_var=true;
+    new_symbol.name=id;
+    new_symbol.base_name=basename;
+    new_symbol.type=se.type();
+    new_symbol.pretty_name=new_symbol.name;
+    new_symbol.mode=ID_java;
+    new_symbol.is_type=false;  
+    new_symbol.value.make_nil();
+    symbol_table.add(new_symbol);
+  }
 }
 
 /*******************************************************************\
@@ -1269,7 +1297,9 @@ codet java_bytecode_convert_methodt::convert_instructions(
     {
       assert(op.empty() && results.size()==1);
       symbol_exprt symbol_expr(arg0.type());
-      symbol_expr.set_identifier(arg0.get_string(ID_class)+"."+arg0.get_string(ID_component_name));
+      const auto& fieldname=arg0.get_string(ID_component_name);
+      symbol_expr.set_identifier(arg0.get_string(ID_class)+"."+fieldname);
+      check_static_field_stub(symbol_expr,fieldname);
       results[0]=java_bytecode_promotion(symbol_expr);
     }
     else if(statement=="putfield")
@@ -1281,7 +1311,9 @@ codet java_bytecode_convert_methodt::convert_instructions(
     {
       assert(op.size()==1 && results.empty());
       symbol_exprt symbol_expr(arg0.type());
-      symbol_expr.set_identifier(arg0.get_string(ID_class)+"."+arg0.get_string(ID_component_name));
+      const auto& fieldname=arg0.get_string(ID_component_name);
+      symbol_expr.set_identifier(arg0.get_string(ID_class)+"."+fieldname);
+      check_static_field_stub(symbol_expr,fieldname);
       c=code_assignt(symbol_expr, op[0]);
     }
     else if(statement==patternt("?2?")) // i2c etc.
