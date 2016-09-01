@@ -489,6 +489,20 @@ member_exprt to_member(const exprt &pointer, const exprt &fieldref)
   return member_exprt(
     obj_deref, fieldref.get(ID_component_name), fieldref.type());
 }
+
+codet get_array_bounds_check(const exprt &arraystruct, const exprt& idx)
+{
+  constant_exprt intzero=as_number(0,java_int_type());
+  binary_relation_exprt gezero(idx,ID_ge,intzero);
+  const member_exprt length_field(
+    arraystruct, "length", java_int_type());
+  binary_relation_exprt ltlength(idx,ID_lt,length_field);
+  and_exprt boundsexpr(gezero,ltlength);
+  // TODO make this throw ArrayIndexOutOfBoundsException instead of asserting.
+  code_assertt boundscheck(boundsexpr);
+  return boundscheck;
+}
+  
 }
 
 /*******************************************************************\
@@ -841,7 +855,14 @@ codet java_bytecode_convert_methodt::convert_instructions(
       typet element_type=data_ptr.type().subtype();
       const dereference_exprt element(data_plus_offset, element_type);
 
-      c=code_assignt(element, op[2]);
+      code_blockt assert_and_put;
+      codet bounds_check=get_array_bounds_check(deref,op[1]);
+      bounds_check.add_source_location()=i_it->source_location;
+      assert_and_put.move_to_operands(bounds_check);
+      code_assignt array_put(element, op[2]);
+      array_put.add_source_location()=i_it->source_location;
+      assert_and_put.move_to_operands(array_put);
+      c=std::move(assert_and_put);
       c.add_source_location()=i_it->source_location;
     }
     else if(statement==patternt("?store"))
@@ -877,6 +898,9 @@ codet java_bytecode_convert_methodt::convert_instructions(
       typet element_type=data_ptr.type().subtype();
       dereference_exprt element(data_plus_offset, element_type);
 
+      codet bounds_check=get_array_bounds_check(deref,op[1]);
+      bounds_check.add_source_location()=i_it->source_location;
+      c=std::move(bounds_check);
       results[0]=java_bytecode_promotion(element);
     }
     else if(statement==patternt("?load"))
