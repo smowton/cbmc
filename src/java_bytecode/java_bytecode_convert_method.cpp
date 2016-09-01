@@ -308,7 +308,6 @@ void java_bytecode_convert_methodt::convert(
   for(const auto & v : m.local_variable_table)
   {
     typet t=java_type_from_string(v.signature);
-    size_t unique_number=0;
     std::ostringstream id_oss;
     id_oss << method_identifier << "::" << v.start_pc << "::" << v.name;
     irep_idt identifier(id_oss.str());
