@@ -111,9 +111,19 @@ bool java_static_lifetime_init(
     {
       if(it->second.value.is_nil() && it->second.type!=empty_typet())
       {
+        bool allow_null=!assume_init_pointers_not_null;
+        if(allow_null)
+        {
+          std::string namestr=id2string(it->second.symbol_expr().get_identifier());
+          const std::string suffix="@class_model";
+          // Static '.class' fields are always non-null.
+          if(namestr.size() >= suffix.size() &&
+             namestr.substr(namestr.size()-suffix.size()) == suffix)
+            allow_null=false;
+        }
 	auto newsym=object_factory(it->second.type, 
 				   code_block,
-				   !assume_init_pointers_not_null,
+				   allow_null,
 				   symbol_table,
 				   max_nondet_array_length,
 				   source_location);

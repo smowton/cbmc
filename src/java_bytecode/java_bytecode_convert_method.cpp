@@ -961,9 +961,10 @@ codet java_bytecode_convert_methodt::convert_instructions(
       {
         irep_idt class_id=arg0.type().get(ID_identifier);
         symbol_typet java_lang_Class("java::java.lang.Class");
-        symbol_exprt symbol_expr(id2string(class_id)+"@class_model", java_lang_Class);
-        address_of_exprt address_of_expr(symbol_expr);
-        results[0]=address_of_expr;
+        pointer_typet classptr(java_lang_Class);
+        symbol_exprt symbol_expr(id2string(class_id)+"@class_model", classptr);
+        check_static_field_stub(symbol_expr,symbol_expr.get_identifier());
+        results[0]=symbol_expr;
       }
       else if(arg0.id()==ID_constant)
       {
