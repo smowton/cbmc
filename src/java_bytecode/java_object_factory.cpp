@@ -341,8 +341,7 @@ void gen_nondet_state::gen_nondet_array_init(const exprt &expr, const source_loc
   java_new_array.set("skip_initialise",true);
   java_new_array.type().subtype().set(ID_C_element_type,element_type);
   codet assign = code_assignt(expr,java_new_array);
-  codet &cassign = assign;
-  cassign.add_source_location() = loc;
+  assign.add_source_location()=loc;
   init_code.copy_to_operands(assign);
 
   exprt init_array_expr=member_exprt(dereference_exprt(expr, expr.type().subtype()),
@@ -354,10 +353,9 @@ void gen_nondet_state::gen_nondet_array_init(const exprt &expr, const source_loc
   symbolt &array_init_symbol=new_tmp_symbol(symbol_table,"array_data_init");
   array_init_symbol.type=init_array_expr.type();
   const auto &array_init_symexpr=array_init_symbol.symbol_expr();
-  codet aassign = code_assignt(array_init_symexpr,init_array_expr);
-  codet &caassign = aassign;
-  cassign.add_source_location() = loc;
-  init_code.copy_to_operands(cassign);
+  codet data_assign = code_assignt(array_init_symexpr,init_array_expr);
+  data_assign.add_source_location() = loc;
+  init_code.copy_to_operands(data_assign);
 
   // Emit init loop for(array_init_iter=0; array_init_iter!=array.length; ++array_init_iter)
   //                  init(array[array_init_iter]);
