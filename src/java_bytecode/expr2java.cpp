@@ -475,7 +475,13 @@ std::string expr2javat::convert(
   else if(src.id()=="pod_constructor")
     return "pod_constructor";
   else if(src.id()==ID_virtual_function)
-    return convert_function(src, "VIRTUAL_FUNCTION", precedence=16);
+  {
+    return "VIRTUAL_FUNCTION(" +
+      id2string(src.get(ID_C_class)) +
+      "." +
+      id2string(src.get(ID_component_name)) +
+      ")";
+  }
   else if(src.id()==ID_java_string_literal)
     return '"'+id2string(src.get(ID_value))+'"'; // Todo: add escaping as needed
   else if(src.id()==ID_constant && (type.id()==ID_bool || type.id()==ID_c_bool))
