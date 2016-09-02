@@ -6,11 +6,10 @@ Author: Daniel Kroening, kroening@kroening.com
 
 \*******************************************************************/
 
-#include <sstream>
-
 #include <util/prefix.h>
 
 #include "class_hierarchy.h"
+#include "class_identifier.h"
 #include "remove_virtual_functions.h"
 
 /*******************************************************************\
@@ -52,15 +51,6 @@ protected:
   typedef std::vector<functiont> functionst;
   void get_functions(const exprt &, functionst &);
   exprt get_method(const irep_idt &class_id, const irep_idt &component_name);
-  
-  exprt build_class_identifier(const exprt &);
-  exprt get_clsid(exprt this_expr,
-                  const symbol_typet &suggested_type);
-  bool lower_instanceof(exprt& e, goto_programt &goto_program,
-                        goto_programt::targett this_inst);
-  bool lower_instanceof(goto_programt &goto_program,
-                        goto_programt::targett target);
-  
 };
 
 /*******************************************************************\
@@ -82,149 +72,6 @@ remove_virtual_functionst::remove_virtual_functionst(
   symbol_table(_symbol_table)
 {
   class_hierarchy(symbol_table);
-}
-
-/*******************************************************************\
-
-Function: remove_virtual_functionst::build_class_identifier
-
-  Inputs:
-
- Outputs:
-
- Purpose:
-
-\*******************************************************************/
-
-exprt remove_virtual_functionst::build_class_identifier(
-  const exprt &src)
-{
-  // the class identifier is in the root class
-  exprt e=src;
-  
-  while(1)
-  {
-    const typet &type=ns.follow(e.type());
-    assert(type.id()==ID_struct);
-    
-    const struct_typet &struct_type=to_struct_type(type);
-    const struct_typet::componentst &components=struct_type.components();
-    assert(!components.empty());
-    
-    member_exprt member_expr(
-      e, components.front().get_name(), components.front().type());
-    
-    if(components.front().get_name()=="@class_identifier")
-    {
-      // found it
-      return member_expr;
-    }
-    else
-    {
-      e=member_expr;
-    }
-  }
-}
-
-exprt remove_virtual_functionst::get_clsid(
-  exprt this_expr,
-  const symbol_typet &suggested_type)
-{
-  // Get a pointer from which we can extract a clsid.
-  // If it's already a pointer to an object of some sort, just use it;
-  // if it's void* then use the suggested type.
-  
-  assert(this_expr.type().id()==ID_pointer && "Non-pointer this-arg in remove-virtuals?");
-  const auto& points_to=this_expr.type().subtype();
-  if(points_to==empty_typet())
-    this_expr=typecast_exprt(this_expr, pointer_typet(suggested_type));
-  exprt deref=dereference_exprt(this_expr, this_expr.type().subtype());
-  return build_class_identifier(deref);
-}
-
-bool remove_virtual_functionst::lower_instanceof(
-  exprt& e,
-  goto_programt &goto_program,
-  goto_programt::targett this_inst)
-{
-  static int lowered_count=0;
-  bool changed=false;
- 
-  if(e.id()=="java_instanceof")
-  {
-    const exprt& check_ptr=e.op0();
-    assert(check_ptr.type().id()==ID_pointer);
-    const exprt& target_arg=e.op1();
-    assert(target_arg.id()==ID_type);
-    const typet& target_type=target_arg.type();
-
-    // Find all types we know about that satisfy the given requirement:
-    assert(target_type.id()==ID_symbol);
-    const irep_idt& target_name=to_symbol_type(target_type).get_identifier();
-    std::vector<irep_idt> children=class_hierarchy.get_children_trans(target_name);
-    children.push_back(target_name);
-
-    if(children.empty())
-    {
-      // We don't know about this type at all? Give in.
-      //warning() << "Unable to execute instanceof class " << target_name <<
-      //"; returning false" << eom;
-      e=false_exprt();
-      return true;      
-    }
-      
-    // Insert an instruction before this one that assigns the clsid we're checking
-    // against to a temporary, as GOTO program if-expressions should not contain derefs.
-
-    symbol_typet jlo("java::java.lang.Object");
-    exprt object_clsid=get_clsid(check_ptr,jlo);
-     
-    std::ostringstream symname;
-    symname << "instanceof_tmp::instanceof_tmp" << (++lowered_count);
-    auxiliary_symbolt newsym;
-    newsym.name=symname.str();
-    newsym.type=object_clsid.type();
-    newsym.base_name=newsym.name;
-    newsym.mode=ID_java;
-    newsym.is_type=false;
-    assert(!symbol_table.add(newsym));
-
-    code_assignt clsid_tmp(newsym.symbol_expr(),object_clsid);
-    auto newinst=goto_program.insert_before(this_inst);
-    newinst->make_assignment();
-    newinst->code=std::move(clsid_tmp);
-    newinst->source_location=this_inst->source_location;
-
-    // Replace the instanceof construct with a big-or.
-    or_exprt big_or;
-    for(const auto& clsname : children)
-    {
-      constant_exprt clsexpr(clsname,string_typet());
-      equal_exprt test(newsym.symbol_expr(),clsexpr);
-      big_or.move_to_operands(test);
-    }
-    if(big_or.operands().size()==1)
-      e=big_or.op0();
-    else
-      e=big_or;
-
-    changed=true;
-  }
-  else
-  {
-    Forall_operands(opiter,e)
-      changed|=lower_instanceof(*opiter,goto_program,this_inst);
-  }
-
-  return changed;
-}
- 
-bool remove_virtual_functionst::lower_instanceof(
-  goto_programt &goto_program,
-  goto_programt::targett target)
-{
-  return lower_instanceof(target->code,goto_program,target) |
-    lower_instanceof(target->guard,goto_program,target);
 }
 
 /*******************************************************************\
@@ -285,7 +132,7 @@ void remove_virtual_functionst::remove_virtual_function(
   // By the structure of get_functions, this is the parent of all other classes
   // under consideration.
   symbol_typet suggested_type(functions.back().class_id);
-  exprt c_id2=get_clsid(this_expr,suggested_type);
+  exprt c_id2=get_class_identifier_field(this_expr,suggested_type,ns);
   
   for(functionst::const_iterator
       it=functions.begin();
@@ -455,7 +302,6 @@ bool remove_virtual_functionst::remove_virtual_functions(
         did_something=true;
       }
     }
-    did_something|=lower_instanceof(goto_program, target);
   }
     
   if(did_something)
