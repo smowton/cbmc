@@ -965,7 +965,10 @@ mp_integer interpretert::evaluate_address(const exprt &expr, bool fail_quietly) 
   else if(expr.id()==ID_if)
   {
     std::vector<mp_integer> result;
-    evaluate(expr,result);
+    if_exprt address_cond(expr.op0(),
+                          address_of_exprt(expr.op1()),
+                          address_of_exprt(expr.op2()));
+    evaluate(address_cond,result);
     if(result.size()==1)
       return result[0];
   }
