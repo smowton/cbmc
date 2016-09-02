@@ -990,6 +990,8 @@ codet java_bytecode_convert_methodt::convert_instructions(
       // on stack to given type fails.
       // The stack isn't modified.
       assert(op.size()==1 && results.size()==1);
+      binary_predicate_exprt check(op[0], "java_instanceof", arg0);
+      c=code_assertt(check);
       results[0]=op[0];
     }
     else if(statement=="invokedynamic")
