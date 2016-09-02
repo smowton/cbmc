@@ -86,6 +86,21 @@ Function: java_static_lifetime_init
 
 \*******************************************************************/
 
+static bool should_init_symbol(const symbolt& sym)
+{
+  if(sym.type.id()!=ID_code &&
+     sym.is_lvalue &&
+     sym.is_state_var &&
+     sym.is_static_lifetime &&
+     sym.mode==ID_java)
+    return true;
+
+  if(has_prefix(id2string(sym.name),"java::java.lang.String.Literal"))
+    return true;
+  
+  return false;
+}
+
 bool java_static_lifetime_init(
   symbol_tablet &symbol_table,
   const source_locationt &source_location,
@@ -103,11 +118,7 @@ bool java_static_lifetime_init(
       it!=symbol_table.symbols.end();
       it++)
   {
-    if(it->second.type.id()!=ID_code &&
-       it->second.is_lvalue &&
-       it->second.is_state_var &&
-       it->second.is_static_lifetime &&
-       it->second.mode==ID_java)
+    if(should_init_symbol(it->second))
     {
       if(it->second.value.is_nil() && it->second.type!=empty_typet())
       {
@@ -119,6 +130,8 @@ bool java_static_lifetime_init(
           // Static '.class' fields are always non-null.
           if(namestr.size() >= suffix.size() &&
              namestr.substr(namestr.size()-suffix.size()) == suffix)
+            allow_null=false;
+          if(allow_null && has_prefix(namestr,"java::java.lang.String.Literal"))
             allow_null=false;
         }
 	auto newsym=object_factory(it->second.type, 
