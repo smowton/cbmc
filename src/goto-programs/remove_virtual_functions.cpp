@@ -6,6 +6,8 @@ Author: Daniel Kroening, kroening@kroening.com
 
 \*******************************************************************/
 
+#include <sstream>
+
 #include <util/prefix.h>
 
 #include "class_hierarchy.h"
@@ -23,7 +25,7 @@ class remove_virtual_functionst
 {
 public:
   remove_virtual_functionst(
-    const symbol_tablet &_symbol_table,
+    symbol_tablet &_symbol_table,
     const goto_functionst &goto_functions);
 
   void operator()(goto_functionst &goto_functions);
@@ -32,7 +34,7 @@ public:
 
 protected:
   const namespacet ns;
-  const symbol_tablet &symbol_table;
+  symbol_tablet &symbol_table;
   
   class_hierarchyt class_hierarchy;
 
@@ -52,6 +54,13 @@ protected:
   exprt get_method(const irep_idt &class_id, const irep_idt &component_name);
   
   exprt build_class_identifier(const exprt &);
+  exprt get_clsid(exprt this_expr,
+                  const symbol_typet &suggested_type);
+  bool lower_instanceof(exprt& e, goto_programt &goto_program,
+                        goto_programt::targett this_inst);
+  bool lower_instanceof(goto_programt &goto_program,
+                        goto_programt::targett target);
+  
 };
 
 /*******************************************************************\
@@ -67,7 +76,7 @@ Function: remove_virtual_functionst::remove_virtual_functionst
 \*******************************************************************/
 
 remove_virtual_functionst::remove_virtual_functionst(
-  const symbol_tablet &_symbol_table,
+  symbol_tablet &_symbol_table,
   const goto_functionst &goto_functions):
   ns(_symbol_table),
   symbol_table(_symbol_table)
@@ -115,6 +124,107 @@ exprt remove_virtual_functionst::build_class_identifier(
       e=member_expr;
     }
   }
+}
+
+exprt remove_virtual_functionst::get_clsid(
+  exprt this_expr,
+  const symbol_typet &suggested_type)
+{
+  // Get a pointer from which we can extract a clsid.
+  // If it's already a pointer to an object of some sort, just use it;
+  // if it's void* then use the suggested type.
+  
+  assert(this_expr.type().id()==ID_pointer && "Non-pointer this-arg in remove-virtuals?");
+  const auto& points_to=this_expr.type().subtype();
+  if(points_to==empty_typet())
+    this_expr=typecast_exprt(this_expr, pointer_typet(suggested_type));
+  exprt deref=dereference_exprt(this_expr, this_expr.type().subtype());
+  return build_class_identifier(deref);
+}
+
+bool remove_virtual_functionst::lower_instanceof(
+  exprt& e,
+  goto_programt &goto_program,
+  goto_programt::targett this_inst)
+{
+  static int lowered_count=0;
+  bool changed=false;
+ 
+  if(e.id()=="java_instanceof")
+  {
+    const exprt& check_ptr=e.op0();
+    assert(check_ptr.type().id()==ID_pointer);
+    const exprt& target_arg=e.op1();
+    assert(target_arg.id()==ID_type);
+    const typet& target_type=target_arg.type();
+
+    // Find all types we know about that satisfy the given requirement:
+    assert(target_type.id()==ID_symbol);
+    const irep_idt& target_name=to_symbol_type(target_type).get_identifier();
+    std::vector<irep_idt> children=class_hierarchy.get_children_trans(target_name);
+    children.push_back(target_name);
+
+    if(children.empty())
+    {
+      // We don't know about this type at all? Give in.
+      //warning() << "Unable to execute instanceof class " << target_name <<
+      //"; returning false" << eom;
+      e=false_exprt();
+      return true;      
+    }
+      
+    // Insert an instruction before this one that assigns the clsid we're checking
+    // against to a temporary, as GOTO program if-expressions should not contain derefs.
+
+    symbol_typet jlo("java::java.lang.Object");
+    exprt object_clsid=get_clsid(check_ptr,jlo);
+     
+    std::ostringstream symname;
+    symname << "instanceof_tmp::instanceof_tmp" << (++lowered_count);
+    auxiliary_symbolt newsym;
+    newsym.name=symname.str();
+    newsym.type=object_clsid.type();
+    newsym.base_name=newsym.name;
+    newsym.mode=ID_java;
+    newsym.is_type=false;
+    assert(!symbol_table.add(newsym));
+
+    code_assignt clsid_tmp(newsym.symbol_expr(),object_clsid);
+    auto newinst=goto_program.insert_before(this_inst);
+    newinst->make_assignment();
+    newinst->code=std::move(clsid_tmp);
+    newinst->source_location=this_inst->source_location;
+
+    // Replace the instanceof construct with a big-or.
+    or_exprt big_or;
+    for(const auto& clsname : children)
+    {
+      constant_exprt clsexpr(clsname,string_typet());
+      equal_exprt test(newsym.symbol_expr(),clsexpr);
+      big_or.move_to_operands(test);
+    }
+    if(big_or.operands().size()==1)
+      e=big_or.op0();
+    else
+      e=big_or;
+
+    changed=true;
+  }
+  else
+  {
+    Forall_operands(opiter,e)
+      changed|=lower_instanceof(*opiter,goto_program,this_inst);
+  }
+
+  return changed;
+}
+ 
+bool remove_virtual_functionst::lower_instanceof(
+  goto_programt &goto_program,
+  goto_programt::targett target)
+{
+  return lower_instanceof(target->code,goto_program,target) |
+    lower_instanceof(target->guard,goto_program,target);
 }
 
 /*******************************************************************\
@@ -170,21 +280,12 @@ void remove_virtual_functionst::remove_virtual_function(
   goto_programt new_code_calls;
   goto_programt new_code_gotos;
 
-  // Get a pointer from which we can extract a clsid.
-  // If it's already a pointer to an object of some sort, just use it;
-  // if it's void* then use the parent of all possible candidates,
-  // which by the nature of get_functions happens to be the last candidate.
-
-  exprt this_expr=code.arguments()[0];    
-  assert(this_expr.type().id()==ID_pointer && "Non-pointer this-arg in remove-virtuals?");
-  const auto& points_to=this_expr.type().subtype();
-  if(points_to==empty_typet())
-  {
-    symbol_typet symbol_type(functions.back().class_id);
-    this_expr=typecast_exprt(this_expr, pointer_typet(symbol_type));
-  }
-  exprt deref=dereference_exprt(this_expr, this_expr.type().subtype());
-  exprt c_id2=build_class_identifier(deref);
+  exprt this_expr=code.arguments()[0];
+  // If necessary, cast to the last candidate function to get the object's clsid.
+  // By the structure of get_functions, this is the parent of all other classes
+  // under consideration.
+  symbol_typet suggested_type(functions.back().class_id);
+  exprt c_id2=get_clsid(this_expr,suggested_type);
   
   for(functionst::const_iterator
       it=functions.begin();
@@ -342,6 +443,7 @@ bool remove_virtual_functionst::remove_virtual_functions(
   bool did_something=false;
 
   Forall_goto_program_instructions(target, goto_program)
+  {
     if(target->is_function_call())
     {
       const code_function_callt &code=
@@ -353,7 +455,9 @@ bool remove_virtual_functionst::remove_virtual_functions(
         did_something=true;
       }
     }
-
+    did_something|=lower_instanceof(goto_program, target);
+  }
+    
   if(did_something)
   {
     //remove_skip(goto_program);
@@ -407,7 +511,7 @@ Function: remove_virtual_functions
 \*******************************************************************/
 
 void remove_virtual_functions(
-  const symbol_tablet &symbol_table,
+  symbol_tablet &symbol_table,
   goto_functionst &goto_functions)
 {
   remove_virtual_functionst

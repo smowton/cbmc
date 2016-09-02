@@ -989,6 +989,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
       // checkcast throws an exception in case a cast of object
       // on stack to given type fails.
       // The stack isn't modified.
+      // TODO: convert assertions to exceptions.
       assert(op.size()==1 && results.size()==1);
       binary_predicate_exprt check(op[0], "java_instanceof", arg0);
       c=code_assertt(check);
