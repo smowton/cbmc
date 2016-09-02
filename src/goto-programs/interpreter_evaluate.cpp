@@ -519,19 +519,19 @@ void interpretert::evaluate(
     if(expr.operands().size()!=3)
       throw "if expects three operands";
       
-    std::vector<mp_integer> tmp0, tmp1, tmp2;
+    std::vector<mp_integer> tmp0, tmp1;
     evaluate(expr.op0(), tmp0);
-    evaluate(expr.op1(), tmp1);
-    evaluate(expr.op2(), tmp2);
 
-    if(tmp0.size()==1 && tmp1.size()==1 && tmp2.size()==1)
+    if(tmp0.size()==1)
     {
-      const mp_integer &op0=tmp0.front();
-      const mp_integer &op1=tmp1.front();
-      const mp_integer &op2=tmp2.front();
-
-      dest.push_back(op0!=0?op1:op2);    
+      if(tmp0.front()!=0)
+        evaluate(expr.op1(), tmp1);
+      else
+        evaluate(expr.op2(), tmp1);
     }
+
+    if(tmp1.size()==1)
+      dest.push_back(tmp1.front());    
 
     return;
   }
