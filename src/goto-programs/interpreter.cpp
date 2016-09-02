@@ -1837,8 +1837,6 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
       symbol_exprt symbol_expr=get_assigned_symbol(step);
       irep_idt id=symbol_expr.get_identifier();
 
-      std::cout << from_expr(step.full_lhs) << " <- " << from_expr(step.full_lhs_value) << "\n";
-      
       address=evaluate_address(step.full_lhs);
       if(address==0)
         address=build_memory_map(id,symbol_expr.type());
