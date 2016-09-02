@@ -78,4 +78,10 @@ void goto_symext::symex_dead(statet &state)
   if(state.level2.current_names.find(l1_identifier)!=
      state.level2.current_names.end())
     state.level2.increase_counter(l1_identifier);
+
+  // record
+  target.dead(
+    state.guard.as_expr(),
+    ssa_lhs,
+    state.source);
 }

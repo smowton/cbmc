@@ -130,6 +130,40 @@ void convert(
                        "actual-parameter":"variable");
       }
       break;
+
+    case goto_trace_stept::DEAD:
+      {
+        irep_idt identifier=it.lhs_object.get_identifier();
+
+        json_objectt &json_dead=dest_array.push_back().make_object();
+        json_dead["stepType"]=json_stringt("dead");
+
+        if(!json_location.is_null())
+          json_dead["sourceLocation"]=json_location;
+
+        std::string type_string, full_lhs_string;
+
+        if(it.full_lhs.is_not_nil())
+          full_lhs_string=from_expr(ns, identifier, it.full_lhs);
+
+        const symbolt *symbol;
+        irep_idt base_name, display_name;
+
+        if(!ns.lookup(identifier, symbol))
+        {
+          base_name=symbol->base_name;
+          display_name=symbol->display_name();
+          if(type_string=="")
+            type_string=from_type(ns, identifier, symbol->type);
+
+          json_dead["mode"]=json_stringt(id2string(symbol->mode));
+        }
+
+        json_dead["lhs"]=json_stringt(full_lhs_string);
+        json_dead["hidden"]=jsont::json_boolean(it.hidden);
+        json_dead["thread"]=json_numbert(i2string(it.thread_nr));
+      }
+      break;
       
     case goto_trace_stept::OUTPUT:
       {

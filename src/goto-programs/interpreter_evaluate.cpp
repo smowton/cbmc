@@ -422,8 +422,7 @@ void interpretert::evaluate(
     evaluate(expr.op1(), tmp1);
     if(tmp0.size()==1 && tmp1.size()==1)
     {
-      mp_integer final=arith_right_shift(tmp0.front(),tmp1.front(),get_size(expr.op0().type()));
-      dest.push_back(final);
+      dest.push_back(tmp0.front()/power(2, tmp1.front()));
       return;
     }
   }
@@ -818,20 +817,6 @@ void interpretert::evaluate(
         return;
       }
     }
-  }
-  else if(expr.id()==ID_ashr)
-  {
-    if(expr.operands().size()!=2)
-      throw "ashr expects two operands";
-
-    std::vector<mp_integer> tmp0, tmp1;
-    evaluate(expr.op0(), tmp0);
-    evaluate(expr.op1(), tmp1);
-
-    if(tmp0.size()==1 && tmp1.size()==1)
-      dest.push_back(tmp0.front()/power(2, tmp1.front()));
-
-    return;
   }
   else if ((expr.id()==ID_array) || (expr.id()==ID_array_of))
   {

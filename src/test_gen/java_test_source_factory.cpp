@@ -364,7 +364,7 @@ void reference_factoryt::add_value(std::string &result, const symbol_tablet &st,
     instance_expr = mockenv_builder.instantiate_mock(qualified_class_name, false);
   else
     instance_expr = force_instantiate(qualified_class_file_name);
-      
+
   result+='(' + qualified_class_name + ") " + instance_expr + ";\n";
 
   if(should_mock)
@@ -521,6 +521,9 @@ void reference_factoryt::add_global_state_assignments(std::string &result, const
     gather_referenced_symbols(symbol,in,st,needed);
   }
   std::set<irep_idt> already_done;
+
+  result+="\n";
+  indent(result,2u) += "// STEP: Populate class variables\n";
   for(const auto& symbol : needed)
   {
     if(!already_done.insert(symbol.name).second)
@@ -559,6 +562,9 @@ bool reference_factoryt::add_func_call_parameters(std::string &result, const sym
 {
   const symbolt &func=st.lookup(func_id);
   const std::vector<irep_idt> params(get_parameters(func));
+
+  result+="\n";
+  indent(result,2u) += "// STEP: initialize test parameters\n";
   for (const irep_idt &param : params)
   {
     const symbolt &symbol=st.lookup(param);
@@ -975,18 +981,21 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
       {
         java_call_descriptor desc;
         populate_descriptor_names(func,desc);
-        indent(result)+="// forcing instance to execute static initializer\n";
+        indent(result)+="// STEP: creating instance to execute static initializer\n";
         indent(result)+=desc.classname + " constructed = " + force_instantiate(desc.classname) + " // ";
       }
       else
       {
         const auto& thistype=to_code_type(func.type).parameters()[0].type();
+        result += "// STEP: creating new object to test contructor\n";
         add_decl_from_type(result,st,thistype);
         result += " constructed = new ";
       }
     }
     else if(findit!=st.symbols.end())
     {
+      result += "// STEP: call function under test\n";
+      indent(result,2u);
       add_decl_from_type(result,st,findit->second.type);
       result += " retval = ";
     }
