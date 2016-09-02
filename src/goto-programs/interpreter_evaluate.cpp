@@ -962,6 +962,13 @@ mp_integer interpretert::evaluate_address(const exprt &expr, bool fail_quietly) 
       }
     }    
   }
+  else if(expr.id()==ID_if)
+  {
+    std::vector<mp_integer> result;
+    evaluate(expr,result);
+    if(result.size()==1)
+      return result[0];
+  }
 
   if(!fail_quietly)
   {
