@@ -264,38 +264,40 @@ exprt flatten_byte_update(
       else // sub_size!=1
       {
         exprt result=src.op0();
-      
+        unsignedbv_typet byte_type(8);
+
         for(mp_integer i=0; i<element_size; ++i)
         {
           exprt new_value;
+          exprt i_expr=from_integer(i, ns.follow(src.op1().type()));
           
           if(element_size==1)
             new_value=src.op2();
           else
           {
-            exprt i_expr=from_integer(i, ns.follow(src.op1().type()));
-
             byte_extract_exprt byte_extract_expr(
               src.id()==ID_byte_update_little_endian?ID_byte_extract_little_endian:
               src.id()==ID_byte_update_big_endian?ID_byte_extract_big_endian:
               throw "unexpected src.id() in flatten_byte_update",
-              array_type.subtype());
+              byte_type);
             
             byte_extract_expr.op()=src.op2();
             byte_extract_expr.offset()=i_expr;
               
             new_value=byte_extract_expr;
           }
+
+          plus_exprt store_offset(src.op1(),i_expr);
           
-          div_exprt div_offset(src.op1(), from_integer(sub_size, src.op1().type()));
-          mod_exprt mod_offset(src.op1(), from_integer(sub_size, src.op1().type()));
+          div_exprt div_offset(store_offset, from_integer(sub_size, store_offset.type()));
+          mod_exprt mod_offset(store_offset, from_integer(sub_size, store_offset.type()));
         
-          index_exprt index_expr(src.op0(), div_offset, array_type.subtype());
+          index_exprt index_expr(result, div_offset, array_type.subtype());
           
-          byte_update_exprt byte_update_expr(src.id(), array_type.subtype());
-          byte_update_expr.op()=index_expr;
-          byte_update_expr.offset()=mod_offset;
-          byte_update_expr.value()=new_value;
+          byte_update_exprt byte_update_expr(src.id(),
+                                             index_expr,
+                                             mod_offset,
+                                             new_value);
 
           // Call recurisvely, the array is gone!            
           exprt flattened_byte_update_expr=
