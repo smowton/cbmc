@@ -1033,12 +1033,12 @@ typet interpretert::concretise_type(const typet &type) const
        computed_size[0]>0 &&
        computed_size[0]<=max_allowed_dynamic_array_size)
     {
-      message->result() << "Concretised array with size " << computed_size[0] << "\n" << messaget::eom;
+      message->result() << "Concretised array with size " << computed_size[0] << messaget::eom;
       return array_typet(type.subtype(),
                          constant_exprt::integer_constant(computed_size[0].to_ulong()));
     }
     else {
-      message->error() << "Failed to concretise variable array\n" << messaget::eom;
+      message->error() << "Failed to concretise variable array" << messaget::eom;
     }
   }
   return type;
@@ -1160,9 +1160,10 @@ unsigned interpretert::get_size(const typet &type) const
 
     unsigned subtype_size=get_size(type.subtype());
 
-    mp_integer i;
-    if(!to_integer(size_expr, i))
-      return subtype_size*integer2unsigned(i);
+    std::vector<mp_integer> i;
+    evaluate(size_expr,i);
+    if(i.size()==1)
+      return subtype_size*integer2unsigned(i[0]);
     else
       return subtype_size;
   }
