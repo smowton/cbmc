@@ -1,0 +1,19 @@
+/////////////////////////////////////////////////////////////////////
+//
+// Module: c_transitive_dependences
+// Author: Marek Trtik
+// Description:
+//
+//
+// @ Copyright DiffBlue, Ltd.
+//
+/////////////////////////////////////////////////////////////////////
+
+CORE
+main.c
+--incremental-check main.0
+^EXIT=0$
+^SIGNAL=0$
+^VERIFICATION FAILED$
+--
+^warning: ignoring
