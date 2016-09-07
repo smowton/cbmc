@@ -1844,6 +1844,14 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
 
       std::vector<mp_integer> rhs;
       evaluate(step.full_lhs_value,rhs);
+      if(rhs.size()==0)
+      {
+        evaluate(step.full_lhs,rhs);
+        if(rhs.size()!=0)
+        {
+          message->warning() << "symex::build_goto_trace couldn't evaluate this expression, but the interpreter could." << messaget::eom;
+        }
+      }
       assign(address,rhs);
 
       trace_eval.push_back(std::make_pair(address, rhs));
