@@ -1905,10 +1905,11 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
     else if(step.is_function_return())
     {
       outermost_constructor_depth=-1;
-      assert(trace_stack.size()>=2);
+      assert(trace_stack.size()>=1);
       const auto& ret_func=trace_stack.back();
       if(ret_func.capture_symbol!=irep_idt())
       {
+        assert(trace_stack.size()>=2);
 	// We must record the value of stub_capture_symbol now.
 	function_assignmentst defined;
 	get_value_tree(ret_func.capture_symbol,defined);
