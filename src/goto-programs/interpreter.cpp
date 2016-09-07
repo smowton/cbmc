@@ -1905,7 +1905,7 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
     else if(step.is_function_return())
     {
       outermost_constructor_depth=-1;
-      assert(trace_stack.size()!=0);
+      assert(trace_stack.size()>=2);
       const auto& ret_func=trace_stack.back();
       if(ret_func.capture_symbol!=irep_idt())
       {
@@ -1914,10 +1914,8 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
 	get_value_tree(ret_func.capture_symbol,defined);
 	if(defined.size()!=0) // Definition found?
 	{
-	  // Find our calling function:
-	  auto nextit=it; ++nextit;
-	  assert(nextit!=trace.steps.end());
-	  function_inputs[ret_func.func_name].push_front({ nextit->pc->function,defined });
+          const auto& caller=trace_stack[trace_stack.size()-2].func_name;
+	  function_inputs[ret_func.func_name].push_front({ caller,defined });
 	}
       }
       trace_stack.pop_back();
