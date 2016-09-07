@@ -417,10 +417,14 @@ symbol_exprt try_find_underlying_symbol_expr(exprt e)
 }
 
 void reference_factoryt::add_declare_and_assign_noarray(std::string &result, const symbol_tablet &st,
-                                                        const symbolt& symbol, const exprt& value,
+                                                        const symbolt& symbol, const exprt& _value,
                                                         bool should_declare)
 {
   if (should_declare) add_decl_with_init_prefix(result, st, symbol);
+  exprt value=_value;
+  if(value==irept() && symbol.type.id()==ID_array)
+    value=array_exprt(to_array_type(symbol.type));
+
   add_assign_value(result, st, symbol, value);
 }
 
