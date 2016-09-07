@@ -135,7 +135,7 @@ void java_bytecode_typecheckt::typecheck_expr_java_string_literal(exprt &expr)
     }
   }
   
-  expr=symbol_exprt(identifier, string_type);
+  expr=symbol_exprt(identifier, pointer_typet(string_type));
 }
 
 /*******************************************************************\
