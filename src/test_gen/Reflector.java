@@ -5,6 +5,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Optional;
 
 import javassist.CannotCompileException;
@@ -80,6 +81,9 @@ public final class Reflector
       return className;
   }
 
+  // keep a cache of created classes
+  static HashMap<String, Class<?>> classMap = new HashMap<>();
+
   /**
    * This forces the creation of an instance for a given class name.
    *
@@ -102,49 +106,60 @@ public final class Reflector
       String packageName = "com.diffblue.test_gen.";
       String newClassName = packageName + removePackageFromName(className);
 
-      CtClass implementation = pool.makeClass(newClassName + "_implementation");
+      CtClass implementation = pool.getOrNull(newClassName + "_implementation");
+      if(implementation == null)
+      {
+        implementation = pool.makeClass(newClassName + "_implementation");
 
-      if(c.isInterface())
-        implementation.setInterfaces(new CtClass[]{ c });
-      else
-        implementation.setSuperclass(c);
+        if(c.isInterface())
+          implementation.setInterfaces(new CtClass[]{ c });
+        else
+          implementation.setSuperclass(c);
 
-      // look for constructor
-      // create default constructor if none exists
-      boolean foundDefault = false;
-      if(!c.isInterface())
-        for(CtConstructor ctor : c.getConstructors())
-          if(ctor.getParameterTypes().length == 0 &&
-             (ctor.getModifiers() & javassist.Modifier.ABSTRACT) == 0 &&
-             !ctor.isEmpty())
+        // look for constructor
+        // create default constructor if none exists
+        boolean foundDefault = false;
+        if(!c.isInterface())
+          for(CtConstructor ctor : c.getConstructors())
+            if(ctor.getParameterTypes().length == 0 &&
+               (ctor.getModifiers() & javassist.Modifier.ABSTRACT) == 0 &&
+               !ctor.isEmpty())
             {
               foundDefault = true;
               break;
             }
-      if(!foundDefault)
-      {
-        CtConstructor newCtor = new CtConstructor(new CtClass[]{ }, implementation);
-        newCtor.setBody("{}");
-        implementation.addConstructor(newCtor);
-      }
-
-      // declared methods or only methods ?
-      for(CtMethod m : c.getDeclaredMethods())
-      {
-        if(isAbstract(m))
+        if(!foundDefault)
         {
-          CtMethod method = CtNewMethod.make(javassist.Modifier.PUBLIC,
-                                             m.getReturnType(),
-                                             m.getName(),
-                                             m.getParameterTypes(),
-                                             m.getExceptionTypes(),
-                                             null,
-                                             implementation);
-          implementation.addMethod(method);
+          CtConstructor newCtor = new CtConstructor(new CtClass[]{ }, implementation);
+          newCtor.setBody("{}");
+          implementation.addConstructor(newCtor);
         }
+
+        // declared methods or only methods ?
+        for(CtMethod m : c.getDeclaredMethods())
+        {
+          if(isAbstract(m))
+          {
+            CtMethod method = CtNewMethod.make(javassist.Modifier.PUBLIC,
+                                               m.getReturnType(),
+                                               m.getName(),
+                                               m.getParameterTypes(),
+                                               m.getExceptionTypes(),
+                                               null,
+                                               implementation);
+            implementation.addMethod(method);
+          }
+        }
+
+        Class<?> ic = pool.toClass(implementation);
+
+        classMap.put(newClassName + "_implementation", ic);
+        return forceInstance(ic);
       }
-      Class<?> ic = pool.toClass(implementation);
-      return forceInstance(ic);
+      else
+      {
+        return forceInstance((Class <?>) classMap.get(newClassName + "_implementation"));
+      }
     }
     else
       return forceInstance(Class.forName(className));

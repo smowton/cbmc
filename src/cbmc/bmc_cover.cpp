@@ -321,7 +321,11 @@ bool bmc_covert::operator()()
       std::vector<std::string> goal_names;
       for(const auto& goalid : test.covered_goals)
         goal_names.push_back(
-          as_string(goal_map.at(goalid).description));
+                             as_string(goal_map.at(goalid).description)
+                             + "\n    "
+                             + id2string(goal_map.at(goalid).source_location.get_file())
+                             + ":"
+                             + id2string(goal_map.at(goalid).source_location.get_line()));
       test.source_code=gen.generate_java_test_case(bmc.options,bmc.ns.get_symbol_table(),
                                                    goto_functions,test.goto_trace,
                                                    ++test_case_no,goal_names);

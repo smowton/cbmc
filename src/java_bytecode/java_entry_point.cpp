@@ -9,6 +9,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <algorithm>
 #include <set>
 #include <iostream>
+#include <tuple>
 
 #include <util/prefix.h>
 #include <util/std_types.h>
@@ -300,9 +301,9 @@ void java_record_outputs(
 }
 
 
-std::pair<symbolt, bool> get_main_symbol(symbol_tablet &symbol_table,
-                                           const irep_idt &main_class,
-                                           message_handlert &message_handler)
+std::tuple<symbolt, bool, bool> get_main_symbol(symbol_tablet &symbol_table,
+                                                const irep_idt &main_class,
+                                                message_handlert &message_handler)
 {
   symbolt symbol;
 
@@ -331,7 +332,7 @@ std::pair<symbolt, bool> get_main_symbol(symbol_tablet &symbol_table,
       {
         message.error() << "main symbol `" << config.main
                         << "' not found" << messaget::eom;
-        return std::make_pair(symbol, true);
+        return std::make_tuple(symbol, true, true);
       }
       else if(matches.size()==1)
       {
@@ -347,7 +348,7 @@ std::pair<symbolt, bool> get_main_symbol(symbol_tablet &symbol_table,
           message.error() << "  " << s << '\n';
         
         message.error() << messaget::eom;
-        return std::make_pair(symbol, true);
+        return std::make_tuple(symbol, true, true);
       }
     }
     else
@@ -359,7 +360,7 @@ std::pair<symbolt, bool> get_main_symbol(symbol_tablet &symbol_table,
       {
         message.error() << "main symbol `" << config.main
                         << "' not found" << messaget::eom;
-        return std::make_pair(symbol, true);
+        return std::make_tuple(symbol, true, true);
       }
     }
     // function symbol
@@ -369,7 +370,7 @@ std::pair<symbolt, bool> get_main_symbol(symbol_tablet &symbol_table,
     {
       message.error() << "main symbol `" << config.main
                       << "' not a function" << messaget::eom;
-      return std::make_pair(symbol, true);
+      return std::make_tuple(symbol, true, true);
     }
     
     // check if it has a body
@@ -377,7 +378,7 @@ std::pair<symbolt, bool> get_main_symbol(symbol_tablet &symbol_table,
     {
       message.error() << "main method `" << main_class
                       << "' has no body" << messaget::eom;
-      return std::make_pair(symbol, true);
+      return std::make_tuple(symbol, true, true);
     }
   }
   else
@@ -387,7 +388,7 @@ std::pair<symbolt, bool> get_main_symbol(symbol_tablet &symbol_table,
 
     // are we given a main class?
     if(main_class.empty())
-      return std::make_pair(symbol, false); // silently ignore
+      return std::make_tuple(symbol, false, true); // silently ignore
 
     std::string entry_method=
       id2string(main_class)+".main";
@@ -410,14 +411,14 @@ std::pair<symbolt, bool> get_main_symbol(symbol_tablet &symbol_table,
     if(matches.empty())
     {
       // Not found, silently ignore
-      return std::make_pair(symbol, false);
+      return std::make_tuple(symbol, false, true);
     }
 
     if(matches.size()>=2)
     {
       message.error() << "main method in `" << main_class
                       << "' is ambiguous" << messaget::eom;
-      return std::make_pair(symbol, true); // give up with error, no main
+      return std::make_tuple(symbol, true, true); // give up with error, no main
     }
 
     // function symbol
@@ -428,12 +429,12 @@ std::pair<symbolt, bool> get_main_symbol(symbol_tablet &symbol_table,
     {
       message.error() << "main method `" << main_class
                       << "' has no body" << messaget::eom;
-      return std::make_pair(symbol, true); // give up with error
+      return std::make_tuple(symbol, true, true); // give up with error
     }
   }
 
   //symbolt &main_symbol = symbol;
-  return std::make_pair(symbol, false);
+  return std::make_tuple(symbol, false, false);
 }
 
 /*******************************************************************\
@@ -461,10 +462,10 @@ bool java_entry_point(
     return false; // silently ignore
 
   messaget message(message_handler);
-  std::pair<symbolt, bool> p = get_main_symbol(symbol_table, main_class, message_handler);
-  if(p.second)
-    return true;
-  symbolt symbol = p.first;
+  std::tuple<symbolt, bool, bool> t = get_main_symbol(symbol_table, main_class, message_handler);
+  if(std::get<2>(t))
+    return std::get<2>(t);
+  symbolt symbol = std::get<0>(t);
 
   assert(!symbol.value.is_nil());
   assert(symbol.type.id()==ID_code);

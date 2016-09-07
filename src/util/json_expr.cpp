@@ -18,6 +18,59 @@ Author: Peter Schrammel
 
 #include "json_expr.h"
 #include <langapi/language_util.h>
+#include <java_bytecode/expr2java.h>
+/*******************************************************************\
+
+Function: simplify_json_expr
+
+  Inputs:
+
+ Outputs:
+
+ Purpose:
+
+\*******************************************************************/
+exprt simplify_json_expr(
+  const exprt &src,
+  const namespacet &ns)
+{
+  if(src.id()==ID_constant) 
+  {
+    const typet &type=ns.follow(src.type());
+    
+    if(type.id()==ID_pointer)
+    {
+      const irep_idt &value=to_constant_expr(src).get_value();
+    
+      if(value!=ID_NULL &&
+	 (value!=std::string(value.size(), '0') ||
+	  !config.ansi_c.NULL_is_zero) &&
+	 src.operands().size()==1 &&
+	 src.op0().id()!=ID_constant)
+	// try to simplify the constant pointer
+	return simplify_json_expr(src.op0(), ns);
+    }
+  }
+  else if(src.id()==ID_address_of &&
+  	  src.operands().size()==1 && 
+	  src.op0().id()==ID_member &&
+	  id2string(to_member_expr(src.op0()).
+		    get_component_name()).find("@")!=std::string::npos)
+  {
+    // simplify things of the form  &member_expr(object, @class_identifier)
+    return simplify_json_expr(src.op0(), ns);
+  }
+  else if(src.id()==ID_member &&
+	  src.operands().size()==1 &&
+	  id2string(to_member_expr(src).
+		    get_component_name()).find("@")!=std::string::npos)
+  {
+    // simplify things of the form  member_expr(object, @class_identifier)
+    return simplify_json_expr(src.op0(), ns);
+  }
+
+  return src;
+}
 
 /*******************************************************************\
 
@@ -257,9 +310,14 @@ json_objectt json(
     else if(type.id()==ID_pointer)
     {
       result["name"]=json_stringt("pointer");
-      result["obj"]=json_stringt(from_expr(ns, ID_pointer, expr));
-      if(expr.get(ID_value)==ID_NULL)
+      exprt simpl_expr = simplify_json_expr(expr, ns);
+      if(simpl_expr.get(ID_value)==ID_NULL || 
+         //remove typecast on NULL
+         (simpl_expr.id()==ID_constant && simpl_expr.type().id()==ID_pointer &&
+          simpl_expr.op0().get(ID_value)==ID_NULL))
         result["data"]=json_stringt("NULL");
+      else 
+        result["data"]=json_stringt(from_expr(ns, ID_pointer, simpl_expr));
     }
     else if(type.id()==ID_bool || type.id()==ID_c_bool)
     {

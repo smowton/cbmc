@@ -222,7 +222,7 @@ std::string &indent(std::string &result, const size_t num_indent=1u)
   return result;
 }
 
-void add_test_class_name(std::string &result, const std::string &func_name)
+void add_test_method_name(std::string &result, const std::string &func_name)
 {
   //result+="public class ";
   //result+=func_name;
@@ -318,7 +318,7 @@ public:
       const struct_typet::componentt &comp=comps[comp_index];
       if (!is_synthetic_comp(comp, comp_index))
       {
-        indent(result, 2u)+="com.diffblue.java_testcase.Reflector.setInstanceField(";
+        indent(result, 2u)+="Reflector.setInstanceField(";
         result+=this_name;
         result+=",\"";
         result+=id2string(comp.get_pretty_name());
@@ -343,7 +343,7 @@ const typet& reference_factoryt::get_symbol_type(const irep_idt& id)
 
 static std::string force_instantiate(const std::string& classname)
 {
-  return "com.diffblue.java_testcase.Reflector.forceInstance(\"" + classname + "\")";
+  return "Reflector.forceInstance(\"" + classname + "\")";
 }
   
 void reference_factoryt::add_value(std::string &result, const symbol_tablet &st,
@@ -365,7 +365,7 @@ void reference_factoryt::add_value(std::string &result, const symbol_tablet &st,
   else
     instance_expr = force_instantiate(qualified_class_file_name);
 
-  result+='(' + qualified_class_name + ") " + instance_expr + ";\n";
+  result+='(' + qualified_class_name + ") " + instance_expr;
 
   if(should_mock)
     result+=mockenv_builder.register_mock_instance(qualified_class_name, this_name);
@@ -523,7 +523,7 @@ void reference_factoryt::add_global_state_assignments(std::string &result, const
   std::set<irep_idt> already_done;
 
   result+="\n";
-  indent(result,2u) += "// STEP: Populate class variables\n";
+  indent(result,2u) += "/* Populate class variables */\n";
   for(const auto& symbol : needed)
   {
     if(!already_done.insert(symbol.name).second)
@@ -564,7 +564,7 @@ bool reference_factoryt::add_func_call_parameters(std::string &result, const sym
   const std::vector<irep_idt> params(get_parameters(func));
 
   result+="\n";
-  indent(result,2u) += "// STEP: initialize test parameters\n";
+  indent(result,2u) += "/* initialize test parameters */\n";
   for (const irep_idt &param : params)
   {
     const symbolt &symbol=st.lookup(param);
@@ -923,20 +923,22 @@ void reference_factoryt::add_mock_objects(const symbol_tablet &st,
 std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const irep_idt &func_id,
     bool enters_main, inputst inputs, const interpretert::list_input_varst& opaque_function_returns,
     const interpretert::input_var_functionst& input_defn_functions,
-    const interpretert::dynamic_typest& dynamic_types, bool disable_mocks,
+    const interpretert::dynamic_typest& dynamic_types,
+    const std::string &test_func_name, bool disable_mocks,
     const optionst::value_listt& mock_classes,
     const optionst::value_listt& no_mock_classes,            
     const std::vector<std::string>& goals_reached)
 {
   const symbolt &func=st.lookup(func_id);
-  const std::string func_name(get_escaped_func_name(func));
+  const std::string func_name(test_func_name);//get_escaped_func_name(func));
   std::string result;
 
   if(goals_reached.size()!=0)
   {
-    result="// This test case reaches the following goals:\n";
+    result="/** This test case reaches the following goals:\n";
     for(const auto& g : goals_reached)
-      result+=("//    " + g + "\n");
+      result+=("  " + g + "\n");
+    result+="*/\n";
   }
 
   // Do this first since the mock object creation can require annotations on the test class.
@@ -947,7 +949,7 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
   ref_factory.add_mock_objects(st, opaque_function_returns);
 
   result += ref_factory.mockenv_builder.get_class_annotations() + "\n";
-  add_test_class_name(result, func_name);
+  add_test_method_name(result, func_name);
 
   std::string post_mock_setup_result;
   
@@ -969,7 +971,7 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
   // may have generated mock objects.
   std::string mock_final = ref_factory.mockenv_builder.finalise_instance_calls();
   result += "\n" + ref_factory.mockenv_builder.get_mock_prelude() +
-    "\n\n" + post_mock_setup_result + "\n\n" + mock_final;
+    "\n" + post_mock_setup_result + "\n" + mock_final;
   if(exists_func_call)
   {
     bool is_constructor=func.type.get_bool(ID_constructor);
@@ -981,20 +983,20 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
       {
         java_call_descriptor desc;
         populate_descriptor_names(func,desc);
-        indent(result)+="// STEP: creating instance to execute static initializer\n";
-        indent(result)+=desc.classname + " constructed = " + force_instantiate(desc.classname) + " // ";
+        indent(result)+="/* creating instance to execute static initializer */\n";
+        indent(result)+=desc.classname + " constructed = (" + desc.classname + ") " + force_instantiate(desc.classname) + "; // ";
       }
       else
       {
         const auto& thistype=to_code_type(func.type).parameters()[0].type();
-        result += "// STEP: creating new object to test contructor\n";
+        result += "/* creating new object to test contructor */\n";
         add_decl_from_type(result,st,thistype);
         result += " constructed = new ";
       }
     }
     else if(findit!=st.symbols.end())
     {
-      result += "// STEP: call function under test\n";
+      result += "/* call function under test */\n";
       indent(result,2u);
       add_decl_from_type(result,st,findit->second.type);
       result += " retval = ";

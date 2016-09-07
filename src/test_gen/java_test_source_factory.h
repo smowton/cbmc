@@ -40,6 +40,7 @@ std::string generate_java_test_case_from_inputs(
     const interpretert::list_input_varst& opaque_function_returns,
     const interpretert::input_var_functionst& input_defn_functions,
     const interpretert::dynamic_typest& dynamic_types,
+    const std::string &,
     bool disable_mocks,
     const optionst::value_listt& mock_classes,
     const optionst::value_listt& no_mock_classes,                  

@@ -226,11 +226,11 @@ bool java_bytecode_languaget::final(symbol_tablet &symbol_table)
   java_internal_additions(symbol_table);
 
 
-  std::pair<symbolt, bool> p = get_main_symbol(symbol_table, main_class, get_message_handler());
-  if(p.second)
-    return true;
+  std::tuple<symbolt, bool, bool> t = get_main_symbol(symbol_table, main_class, get_message_handler());
+  if(std::get<2>(t))
+    return std::get<1>(t);
 
-  symbolt entry = p.first;
+  symbolt entry = std::get<0>(t);
 
   java_generate_opaque_method_stubs(symbol_table,assume_inputs_non_null,
 				    max_nondet_array_length, entry.location);
