@@ -1163,7 +1163,14 @@ unsigned interpretert::get_size(const typet &type) const
     std::vector<mp_integer> i;
     evaluate(size_expr,i);
     if(i.size()==1)
-      return subtype_size*integer2unsigned(i[0]);
+    {
+      // Go via the binary representation to reproduce any
+      // overflow behaviour.
+      exprt size_const=from_integer(i[0],size_expr.type());
+      mp_integer size_mp;
+      assert(!to_integer(size_const,size_mp));
+      return subtype_size*integer2unsigned(size_mp);
+    }
     else
       return subtype_size;
   }
