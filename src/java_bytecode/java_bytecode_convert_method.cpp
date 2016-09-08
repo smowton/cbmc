@@ -460,16 +460,17 @@ void java_bytecode_convert_methodt::merge_variable_live_ranges(local_variable_ta
     auto& v=vars[i];
     if(v.length==0)
     {
-      // Move to end.
+      // Move to end; consider the new element we've swapped in:
       ++toremove;
       if(i!=vars.size()-toremove) // Already where it needs to be?
         std::swap(v,vars[vars.size()-toremove]);
+      --i;
     }
   }
 
   // Remove un-needed entries.
   vars.resize(vars.size()-toremove);
-  
+
 }
 
 /*******************************************************************\
