@@ -97,6 +97,7 @@ protected:
   exprt get_value(const irep_idt &id);
   void get_value_tree(const irep_idt& capture_symbol, function_assignmentst& captured);
   void get_value_tree(const exprt& capture_expr, function_assignmentst& captured);
+  mp_integer get_this_address(const code_function_callt&);
   char is_opaque_function(const goto_programt::instructionst::const_iterator &it,irep_idt &function_id);
 
 
