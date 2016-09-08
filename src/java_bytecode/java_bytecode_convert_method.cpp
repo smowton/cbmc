@@ -27,6 +27,8 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <limits>
 #include <algorithm>
+#include <functional>
+#include <unordered_set>
 
 namespace {
 class patternt
@@ -66,6 +68,8 @@ public:
   typedef java_bytecode_parse_treet::methodt methodt;
   typedef java_bytecode_parse_treet::instructiont instructiont;
   typedef methodt::instructionst instructionst;
+  typedef methodt::local_variable_tablet local_variable_tablet;
+  typedef methodt::local_variablet local_variablet;
 
   void operator()(const symbolt &class_symbol, const methodt &method)
   {
@@ -89,8 +93,6 @@ protected:
     bool is_initialised;
     variablet() : symbol_expr(), is_parameter(false), is_initialised(false) {}      
   };
-
-
   
   typedef std::vector<variablet> variablest;
   expanding_vector<variablest> variables;
@@ -123,8 +125,6 @@ protected:
     var_list[list_length].length = std::numeric_limits<size_t>::max();
     return var_list[list_length];
   }
-
-
 
   // JVM local variables
   const exprt variable(const exprt &arg, char type_char, size_t address, bool do_cast = true)
@@ -227,6 +227,8 @@ protected:
     }
   
   }
+
+  void merge_variable_live_ranges(local_variable_tablet& vars);
 
   // temporary variables
   std::list<symbol_exprt> tmp_vars;
@@ -375,6 +377,101 @@ void cast_if_necessary(binary_relation_exprt &condition)
 }
 }
 
+struct hash_without_liverange {
+  size_t operator()(java_bytecode_convert_methodt::local_variablet* ptr) const
+  {
+    if(ptr==0)
+      return 0;
+    return std::hash<std::string>()(id2string(ptr->name)) ^
+      std::hash<std::string>()(ptr->signature) ^
+      std::hash<size_t>()(ptr->index);
+  }
+};
+
+struct eq_without_liverange {
+  size_t operator()(java_bytecode_convert_methodt::local_variablet* a,
+                    java_bytecode_convert_methodt::local_variablet* b) const
+  {
+    return ((!a) && (!b)) ||
+      (a->name==b->name &&
+       a->signature==b->signature &&
+       a->index == b->index);
+  }
+};
+
+namespace {
+  bool lt_start_pc(java_bytecode_convert_methodt::local_variablet* a,
+                   java_bytecode_convert_methodt::local_variablet* b)
+  {
+    if((!a) && b)
+      return true;
+    if(!b)
+      return false;
+    return a->start_pc < b->start_pc;
+  }
+
+}
+
+/*******************************************************************\
+
+Function: java_bytecode_convert_methodt::merge_variable_live_ranges
+
+  Inputs: Local variable table
+
+ Outputs: Same table, perhaps permuted, with entries with like signatures merged.
+
+ Purpose: Java variables can sometimes have disjoint live ranges. For the time being,
+          simply merge those ranges together.
+
+\*******************************************************************/
+
+void java_bytecode_convert_methodt::merge_variable_live_ranges(local_variable_tablet& vars)
+{
+
+  // Sort table entries by start PC:
+  std::vector<local_variablet*> sorted_by_startpc;
+  sorted_by_startpc.reserve(vars.size());
+  for(auto& v : vars)
+    sorted_by_startpc.push_back(&v);
+
+  std::sort(sorted_by_startpc.begin(),sorted_by_startpc.end(),lt_start_pc);
+  
+  std::unordered_set<local_variablet*,hash_without_liverange,eq_without_liverange> by_signature;
+
+  // Merge ranges with matching signatures (name, type and slot)
+  for(auto ptr : sorted_by_startpc)
+  {
+    auto insert_result=by_signature.insert(ptr);
+    if(!insert_result.second)
+    {
+      auto& existing_var=**insert_result.first;
+      warning() << "Merging live ranges for local variable '" << existing_var.name << "'" << eom;
+      assert(existing_var.start_pc < ptr->start_pc);
+      existing_var.length=(ptr->start_pc+ptr->length)-existing_var.start_pc;
+      ptr->length=0; // Mark for removal.
+    }
+      
+  }
+
+  // Remove records that have been merged with a predecessor.
+  size_t toremove=0;
+  for(size_t i=0; i<(vars.size()-toremove); ++i)
+  {
+    auto& v=vars[i];
+    if(v.length==0)
+    {
+      // Move to end.
+      ++toremove;
+      if(i!=vars.size()-toremove) // Already where it needs to be?
+        std::swap(v,vars[vars.size()-toremove]);
+    }
+  }
+
+  // Remove un-needed entries.
+  vars.resize(vars.size()-toremove);
+  
+}
+
 /*******************************************************************\
 
 Function: java_bytecode_convert_methodt::convert
@@ -417,6 +514,11 @@ void java_bytecode_convert_methodt::convert(
 
   variables.clear();
 
+  // Merge live ranges when a single variable appears in different places.
+  // Only alter our own private copy of the table:
+  local_variable_tablet merged_variable_table(m.local_variable_table);
+  merge_variable_live_ranges(merged_variable_table);
+
   // Do the parameters and locals in the variable table, which is available when
   // compiled with -g or for methods with many local variables in the latter
   // case, different variables can have the same index, depending on the
@@ -425,7 +527,7 @@ void java_bytecode_convert_methodt::convert(
   // to calculate which variable to use, one uses the address of the instruction
   // that uses the variable, the size of the instruction and the start_pc /
   // length values in the local variable table
-  for(const auto & v : m.local_variable_table)
+  for(const auto & v : merged_variable_table)
   {
     typet t=java_type_from_string(v.signature);
     std::ostringstream id_oss;
