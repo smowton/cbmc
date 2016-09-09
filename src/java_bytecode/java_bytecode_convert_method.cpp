@@ -532,6 +532,26 @@ void java_bytecode_convert_methodt::convert(
 
   variables.clear();
 
+  // find parameter names in the local variable table:
+  for(const auto & v : m.local_variable_table)
+  {
+    if(v.start_pc!=0) // Local?
+      continue;
+    
+    typet t=java_type_from_string(v.signature);
+    std::ostringstream id_oss;
+    id_oss << method_id << "::" << v.name;
+    irep_idt identifier(id_oss.str());
+    symbol_exprt result(identifier, t);
+    result.set(ID_C_base_name, v.name);
+
+    variables[v.index].push_back(variablet());
+    auto& newv=variables[v.index].back();
+    newv.symbol_expr = result;
+    newv.start_pc = v.start_pc;
+    newv.length = v.length;
+  }
+
   // set up variables array
   for(std::size_t i=0, param_index=0;
       i < parameters.size(); ++i)
@@ -661,7 +681,7 @@ void java_bytecode_convert_methodt::setup_local_variables(const methodt& m,
   std::sort(adjusted_variable_table.begin(),adjusted_variable_table.end(),lt_start_pc);
   find_initialisers(m.instructions,adjusted_variable_table,amap);
   
-  // Do the parameters and locals in the variable table, which is available when
+  // Do the locals and parameters in the variable table, which is available when
   // compiled with -g or for methods with many local variables in the latter
   // case, different variables can have the same index, depending on the
   // context.
@@ -671,6 +691,9 @@ void java_bytecode_convert_methodt::setup_local_variables(const methodt& m,
   // length values in the local variable table
   for(const auto & v : adjusted_variable_table)
   {
+    if(v.start_pc==0) // Parameter?
+      continue;
+    
     typet t=java_type_from_string(v.signature);
     std::ostringstream id_oss;
     id_oss << method_id << "::" << v.start_pc << "::" << v.name;
