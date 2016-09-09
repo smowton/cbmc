@@ -149,15 +149,23 @@ bool interpretert::extract_member_at(
   else if(source_type.id()==ID_array)
   {
     const auto& at=to_array_type(source_type);
+    if(at.size().id()!=ID_constant)
+      return false;
+    const auto& array_size_expr=to_constant_expr(at.size());
+    mp_integer array_size;
+    if(to_integer(array_size_expr,array_size))
+      return false;
     mp_integer elem_size=pointer_offset_size(at.subtype(),ns);
     if(elem_size==-1)
       return false;
-    while(offset>=0)
+    mp_integer array_idx=0;
+    while(offset>=0 && array_idx < array_size)
     {
       if(!extract_member_at(source_iter,source_end,at.subtype(),
                             offset,target_type,dest,return_this))
         return false;
       offset-=elem_size;
+      ++array_idx;
     }
   }
   else
@@ -170,6 +178,92 @@ bool interpretert::extract_member_at(
     ++source_iter;
   }
 
+  return true;
+  
+}
+
+/*******************************************************************\
+
+Function: interpretert::extract_member_at
+
+  Inputs:
+
+ Outputs:
+
+ Purpose:
+
+\*******************************************************************/
+
+bool interpretert::get_cell_byte_offset(
+  const typet& source_type,
+  mp_integer& cell_offset,
+  mp_integer& result) const
+{
+  if(source_type.id()==ID_struct)
+  {
+    const auto& st=to_struct_type(source_type);
+    const struct_typet::componentst &components=st.components();
+    member_offset_iterator offsets(st,ns);
+    while(offsets->first<components.size() && offsets->second!=-1)
+    {
+      if(!get_cell_byte_offset(components[offsets->first].type(),cell_offset,result))
+      {
+        if(result!=-1)
+          result+=offsets->second;
+        return false;
+      }
+      ++offsets;
+    }
+    if(offsets->second==-1)
+    {
+      result=-1;
+      return false;
+    }
+  }
+  else if(source_type.id()==ID_array)
+  {
+    const auto& at=to_array_type(source_type);
+    mp_integer elem_size=pointer_offset_size(at.subtype(),ns);
+    if(elem_size==-1)
+    {
+      result=-1;
+      return false;
+    }
+    if(at.size().id()!=ID_constant)
+      return false;
+    const auto& array_size_expr=to_constant_expr(at.size());
+    mp_integer array_size;
+    if(to_integer(array_size_expr,array_size))
+    {
+      result=-1;
+      return false;
+    }
+    
+    mp_integer array_idx;
+    while(cell_offset>=0 && array_idx<array_size)
+    {
+      if(!get_cell_byte_offset(at.subtype(),cell_offset,result))
+      {
+        if(result!=-1)
+          result+=(elem_size*array_idx);
+        return false;
+      }
+      ++array_idx;
+    }
+  }
+  else
+  {
+    // Primitive type.
+    if(cell_offset==0)
+    {
+      result=0;
+      return false;
+    }
+    else
+      --cell_offset;
+  }
+
+  // Ran off the end of a struct, array, or primitive -- keep walking:
   return true;
   
 }
@@ -691,39 +785,30 @@ void interpretert::evaluate(
   {
     if(expr.operands().size()!=1)
       throw "pointer_offset expects one operand";
-    bool has_symbolic_expr=expr.op0().id()==ID_constant &&
-      expr.op0().operands().size()!=0;
-    const exprt& symbolic_ptr=has_symbolic_expr ? expr.op0().op0() : expr.op0();
-    // TOCHECK: I think compute_pointer_offset wants a deref'd expression
-    // but pointer_offset takes a pointer operand.
-    // It can't cope with a deref operator, at least as currently written.
-    // TODO: generalise this.
-    mp_integer result=-1; 
-    if(symbolic_ptr.id()==ID_address_of)
+    if(expr.op0().type().id()!=ID_pointer)
+      throw "pointer_offset expects a pointer operand";
+    std::vector<mp_integer> result;
+    evaluate(expr.op0(),result);
+    if(result.size()==1)
     {
-      result=compute_pointer_offset(symbolic_ptr.op0(),ns);
-    }
-    else if(symbolic_ptr.id()==ID_symbol)
-      result=0;
-    else if(symbolic_ptr.id()==ID_plus)
-    {
-      // TODO: factor this into compute_pointer_offset?
-      assert(symbolic_ptr.operands().size()==2 && symbolic_ptr.op0().type().id()==ID_pointer);
-      std::vector<mp_integer> rhs_value;
-      evaluate(symbolic_ptr.op1(),rhs_value);
-      // Note lhs offset is ignored because pointer_offset appears to compute with
-      // respect to the LHS pointer not its underlying object.
-      if(rhs_value.size()==1)
+      // Return the distance, in bytes, between the address returned
+      // and the beginning of the underlying object.
+      mp_integer address=result[0];
+      if(address > 0 && address < memory.size())
       {
-        mp_integer ptr_subtype_size=pointer_offset_size(symbolic_ptr.op0().type().subtype(),ns);
-        result=ptr_subtype_size*rhs_value[0];
+        const auto& memory_record=memory[integer2unsigned(address)];
+        auto findit=dynamic_types.find(memory_record.identifier);
+        if(findit!=dynamic_types.end())
+        {
+          mp_integer offset=memory_record.offset;
+          mp_integer byte_offset=-1;
+          get_cell_byte_offset(findit->second,offset,byte_offset);
+          if(byte_offset!=-1)
+            dest.push_back(byte_offset);
+        }
       }
     }
-    if(result!=-1)
-    {
-      dest.push_back(result);
-      return;
-    }    
+    return;
   }
   else if(expr.id()==ID_byte_extract_little_endian ||
           expr.id()==ID_byte_extract_big_endian)
@@ -972,7 +1057,6 @@ mp_integer interpretert::evaluate_address(const exprt &expr, bool fail_quietly) 
     if(result.size()==1)
       return result[0];
   }
-
   if(!fail_quietly)
   {
     message->error() << "!! failed to evaluate address: "

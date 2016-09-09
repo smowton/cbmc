@@ -172,6 +172,11 @@ protected:
     const typet& target_type,
     std::vector<mp_integer> &dest,
     bool should_return_this) const;
+
+  bool get_cell_byte_offset(
+    const typet& source_type,
+    mp_integer& cell_offset,
+    mp_integer& result) const;
   
   void evaluate(
     const exprt &expr,
