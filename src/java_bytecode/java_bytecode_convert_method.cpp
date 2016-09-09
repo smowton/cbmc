@@ -664,8 +664,8 @@ void java_bytecode_convert_methodt::convert(
 }
 
 namespace {
-  bool lt_start_pc(java_bytecode_convert_methodt::local_variablet& a,
-                   java_bytecode_convert_methodt::local_variablet& b)
+  bool lt_start_pc(const java_bytecode_convert_methodt::local_variablet& a,
+                   const java_bytecode_convert_methodt::local_variablet& b)
   {
     return a.start_pc < b.start_pc;
   }
