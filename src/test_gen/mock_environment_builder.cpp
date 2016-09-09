@@ -1,4 +1,5 @@
 
+#include "java_test_source_factory.h"
 #include "mock_environment_builder.h"
 
 #include <iostream>
@@ -43,8 +44,9 @@ std::string mock_environment_builder::register_mock_instance(
 {
 
   std::string instanceList=tyname+"_instances";
+  qualified2identifier(instanceList);
   if(mock_instances_exist.insert(tyname).second)
-    mock_prelude << "java.util.ArrayList<" << tyname << ">" << instanceList
+    mock_prelude << "java.util.ArrayList<" << tyname << "> " << instanceList
 		 << "=new java.util.ArrayList<" << tyname << ">();"
 		 << prelude_newline;
   return prelude_newline+instanceList+".add("+instancename+");";
@@ -190,16 +192,19 @@ void mock_environment_builder::instance_call(
     al+="_answer_list";
     ao+="_answer_object";
 
+    qualified2identifier(al);
+    qualified2identifier(ao);
+
     insertresult.first->second=instance_method_answer(ao,al);
 
     std::string boxed_type=box_java_type(rettype);
 
-    mock_prelude << "final java.util.ArrayList<" << boxed_type << ">" << al
+    mock_prelude << "final java.util.ArrayList<" << boxed_type << "> " << al
 		 << "=new java.util.ArrayList<" << boxed_type << ">();"
 		 << prelude_newline
 		 << "final com.diffblue.java_testcase.IterAnswer " << ao
 		 << "=new com.diffblue.java_testcase.IterAnswer<"
-		 << boxed_type << ">(" << al << ");" << prelude_newline;
+		 << boxed_type << "> (" << al << ");" << prelude_newline;
   }
 
   // Add the desired return value to the list:
@@ -286,6 +291,9 @@ std::string mock_environment_builder::finalise_instance_calls()
 
     std::string instanceList=cname+"_instances";
     std::string instanceIter=cname+"_iter";
+
+    qualified2identifier(instanceList);
+    qualified2identifier(instanceIter);
 
     result << "for(" << cname << " " << instanceIter << " : " << instanceList
 	   << ')' << prelude_newline << "  ";

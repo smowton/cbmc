@@ -112,6 +112,7 @@ public:
     goto_tracet goto_trace;
     std::vector<irep_idt> covered_goals;
     std::string source_code;
+    std::string test_function_name;
   };
   
   inline irep_idt id(goto_programt::const_targett loc)
@@ -326,6 +327,8 @@ bool bmc_covert::operator()()
                              + id2string(goal_map.at(goalid).source_location.get_file())
                              + ":"
                              + id2string(goal_map.at(goalid).source_location.get_line()));
+      test.test_function_name=gen.generate_test_func_name(bmc.ns.get_symbol_table(),
+                                                          goto_functions, test_case_no);
       test.source_code=gen.generate_java_test_case(bmc.options,bmc.ns.get_symbol_table(),
                                                    goto_functions,test.goto_trace,
                                                    ++test_case_no,goal_names);
@@ -459,7 +462,8 @@ bool bmc_covert::operator()()
         }
         if(test.source_code.length()!=0)
         {
-          result["junit_test_case"]=json_stringt(test.source_code);
+          result["name"]=json_stringt(test.test_function_name);
+          result["test"]=json_stringt(test.source_code);
         }
         json_arrayt &goal_refs=result["coveredGoals"].make_array();
         for(const auto & goal_id : test.covered_goals)

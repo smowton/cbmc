@@ -41,11 +41,14 @@ std::string generate_java_test_case_from_inputs(
     const interpretert::input_var_functionst& input_defn_functions,
     const interpretert::dynamic_typest& dynamic_types,
     const std::string &,
+    const std::string &,
+    bool emitAssert,
     bool disable_mocks,
     const optionst::value_listt& mock_classes,
     const optionst::value_listt& no_mock_classes,                  
     const std::vector<std::string>& goals);
 
+void qualified2identifier(std::string &s, char search='.', char replace='_');
 std::string func_name(const symbolt &symbol);
 
 #endif /* JAVA_TEST_SOURCE_FACTORY_H_ */

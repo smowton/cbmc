@@ -14,7 +14,17 @@ public class IterAnswer<T> implements Answer<T> {
     }
     
     public T answer(InvocationOnMock invocation) {
-	return answers.get(idx++);
+        if(idx == answers.size())
+        {
+          System.out.println("WARNING: more answers than in trace " +
+                             (idx + 1) +
+                             " instead of just " + idx +
+                             " will restart with first");
+          idx = 0;
+        }
+        T result = answers.get(idx);
+        idx++;
+	return result;
     }    
 
 }

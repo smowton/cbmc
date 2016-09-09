@@ -4,6 +4,7 @@
 #include <util/message.h>
 #include <util/substitute.h>
 #include <cbmc/bmc.h>
+#include <ansi-c/expr2c_class.h>
 
 #include <java_bytecode/java_entry_point.h>
 #include <test_gen/java_test_source_factory.h>
@@ -61,6 +62,26 @@ const irep_idt &java_test_case_generatort::get_entry_function_id(const goto_func
   return to_symbol_expr(func_expr).get_identifier();
 }
 
+const std::string java_test_case_generatort::get_test_function_name(const symbol_tablet &st, const goto_functionst &gf, size_t test_idx)
+{
+  const irep_idt &entry_func_id=get_entry_function_id(gf);
+    // the key is an arbitrary test name
+  std::string entry_func_str=as_string(st.lookup(entry_func_id).pretty_name);
+  // remove ., <, > and substitute with _ to create valid Java identifiers
+  size_t paren_offset=entry_func_str.find('(');
+  if(paren_offset!=std::string::npos)
+    entry_func_str=entry_func_str.substr(0,paren_offset);
+  substitute(entry_func_str, ".", "_");
+  substitute(entry_func_str, "<", "_");
+  substitute(entry_func_str, ">", "_");
+  std::size_t h = std::hash<std::string>()(as_string(entry_func_id));
+  std::ostringstream testname;
+  testname << entry_func_str << "_" << std::hex << h << "_"
+           << std::setfill('0') << std::setw(3) << test_idx;
+  const std::string &unique_name = testname.str();
+  return unique_name;
+}
+
 const std::string java_test_case_generatort::generate_test_case(
   const optionst &options, const symbol_tablet &st,
   const goto_functionst &gf, const goto_tracet &trace,
@@ -90,23 +111,100 @@ const std::string java_test_case_generatort::generate_test_case(
     previous_function=step.pc->function;
   }
 
-  // the key is an arbitrary test name
-  std::string entry_func_str=as_string(st.lookup(entry_func_id).pretty_name);
-  // remove ., <, > and substitute with _ to create valid Java identifiers
-  size_t paren_offset=entry_func_str.find('(');
-  if(paren_offset!=std::string::npos)
-    entry_func_str=entry_func_str.substr(0,paren_offset);
-  substitute(entry_func_str, ".", "_");
-  substitute(entry_func_str, "<", "_");
-  substitute(entry_func_str, ">", "_");
-  std::size_t h = std::hash<std::string>()(as_string(entry_func_id));
-  std::ostringstream testname;
-  testname << entry_func_str << "_" << std::hex << h << "_"
-           << std::setfill('0') << std::setw(3) << test_idx;
-  const std::string unique_name = testname.str();
+  std::string assertCompare;
+  /* can we emit an assert, i.e., does the function return a non-void value? */
+  bool emitAssert = false;
+  /* does the trace cover a complete flow through the function, i.e., not just
+     an init block etc. */
+  bool coversCompleteFlow = false;
 
+  for(const auto& step : trace.steps)
+  {
+    if(step.type==goto_trace_stept::ASSIGNMENT)
+    {
+      irep_idt identifier=step.lhs_object.get_identifier();
+      const source_locationt &source_location=step.pc->source_location;
+
+      if(id2string(identifier)=="return'")
+      {
+        const exprt &expr = step.full_lhs_value;
+
+        // from json_expr.cpp
+        if(expr.id()==ID_constant)
+        {
+          status() << "FUNCTION: " << id2string(source_location.get_function()) << eom;
+          status() << "ID      : " << id2string(identifier) << eom;
+          status() << "VAL     : " << expr.get_string(ID_value) << eom;
+
+
+          const namespacet ns(st);
+          const typet &type=ns.follow(expr.type());
+
+          // no unsinged ints in Java
+          if(// type.id()==ID_unsignedbv ||
+             type.id()==ID_signedbv ||
+             type.id()==ID_c_bit_field)
+          {
+            std::size_t width = to_bitvector_type(type).get_width();
+            if(width==8 || width==16 || width==32 || width==64)
+            {
+              mp_integer i;
+              to_integer(expr, i);
+              assertCompare=(" == " + integer2string(i));
+              emitAssert = true;
+            }
+          }
+          else if(type.id()==ID_c_enum)
+          {
+            assertCompare=(" == " + expr.get_string(ID_value));
+            emitAssert = true;
+          }
+          else if(type.id()==ID_c_enum_tag)
+          {
+            assertCompare=(" == " + expr.get_string(ID_value));
+            emitAssert = true;
+          }
+          else if(type.id()==ID_floatbv)
+          {
+            std::size_t width = to_bitvector_type(type).get_width();
+            if(width==32 || width==64)
+            {
+              assertCompare=(" == " + expr.get_string(ID_value));
+              emitAssert = true;
+            }
+          }
+          else if(type.id()==ID_bool || type.id()==ID_c_bool)
+          {
+            if(expr.is_true())
+              assertCompare=(" == true");
+            else
+              assertCompare=(" == false");
+            emitAssert = true;
+          }
+          else if(type.id()==ID_string)
+          {
+            assertCompare=(".equals(" + expr.get_string(ID_value) +")");
+            emitAssert = true;
+          }
+          else
+          {
+            assertCompare=" != null";
+            emitAssert = true;
+          }
+        }
+      }
+    }
+    else if(step.type==goto_trace_stept::OUTPUT)
+      coversCompleteFlow = true;
+  }
+
+  if(!coversCompleteFlow)
+    return("/* test cases without return values are not generated */\n");
+
+  const std::string &unique_name = get_test_function_name(st, gf, test_idx);
   const std::string source(generate(st,entry_func_id,enters_main,inputs,opaque_function_returns,
                                     input_defn_functions,dynamic_types,unique_name,
+                                    assertCompare, emitAssert,
                                     options.get_bool_option("java-disable-mocks"),
                                     options.get_list_option("java-mock-class"),
                                     options.get_list_option("java-no-mock-class"),
@@ -157,6 +255,13 @@ const std::string  java_test_case_generatort::generate_java_test_case(const opti
 {
   const test_case_generatort source_gen=generate_java_test_case_from_inputs;
   return generate_test_case(options, st, gf, trace, source_gen, test_idx, goals_reached);
+}
+
+const std::string java_test_case_generatort::generate_test_func_name(const symbol_tablet &st,
+                                                                     const goto_functionst &gf,
+                                                                     const size_t test_idx)
+{
+  return get_test_function_name(st, gf, test_idx + 1);
 }
 
 int java_test_case_generatort::generate_java_test_case(optionst &o, const symbol_tablet &st,
