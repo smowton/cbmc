@@ -135,6 +135,8 @@ void remove_virtual_functionst::remove_virtual_function(
   // under consideration.
   symbol_typet suggested_type(functions.back().class_id);
   exprt c_id2=get_class_identifier_field(this_expr,suggested_type,ns);
+
+  goto_programt::targett last_function;
   
   for(functionst::const_iterator
       it=functions.begin();
@@ -157,6 +159,7 @@ void remove_virtual_functionst::remove_virtual_function(
       // No definition for this type; shouldn't be possible...
       t1->make_assertion(false_exprt());
     }
+    last_function=t1;
     
     // goto final
     goto_programt::targett t3=new_code_calls.add_instruction();
@@ -167,6 +170,11 @@ void remove_virtual_functionst::remove_virtual_function(
     goto_programt::targett t4=new_code_gotos.add_instruction();
     t4->make_goto(t1, equal_exprt(c_id1, c_id2));
   }
+
+  // In any other case (most likely a stub class) call the most basic
+  // version of the method we know to exist:
+  goto_programt::targett fallthrough=new_code_gotos.add_instruction();
+  fallthrough->make_goto(last_function);
 
   goto_programt new_code;
   
