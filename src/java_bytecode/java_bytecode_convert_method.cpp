@@ -59,9 +59,11 @@ class java_bytecode_convert_methodt:public messaget
 public:
   java_bytecode_convert_methodt(
     symbol_tablet &_symbol_table,
-    message_handlert &_message_handler):
+    message_handlert &_message_handler,
+    int _max_array_length):
     messaget(_message_handler),
-    symbol_table(_symbol_table)
+    symbol_table(_symbol_table),
+    max_array_length(_max_array_length)
   {
   }
 
@@ -79,6 +81,7 @@ public:
 protected:
   irep_idt method_id;
   symbol_tablet &symbol_table;
+  int max_array_length;
 
   irep_idt current_method;
   typet method_return_type;
@@ -1824,6 +1827,13 @@ codet java_bytecode_convert_methodt::convert_instructions(
       code_blockt checkandcreate;
       code_assertt check(gezero);
       checkandcreate.move_to_operands(check);
+      if(max_array_length!=0)
+      {
+        constant_exprt size_limit=as_number(max_array_length,java_int_type());
+        binary_relation_exprt le_max_size(op[0],ID_le,size_limit);
+        code_assumet assume_le_max_size(le_max_size);
+        checkandcreate.move_to_operands(assume_le_max_size);
+      }
       const exprt tmp=tmp_variable("newarray", ref_type);
       checkandcreate.copy_to_operands(code_assignt(tmp, java_new_array));
       c=std::move(checkandcreate);
@@ -2165,10 +2175,11 @@ void java_bytecode_convert_method(
   const symbolt &class_symbol,
   const java_bytecode_parse_treet::methodt &method,
   symbol_tablet &symbol_table,
-  message_handlert &message_handler)
+  message_handlert &message_handler,
+  int max_array_length)
 {
   java_bytecode_convert_methodt java_bytecode_convert_method(
-    symbol_table, message_handler);
+    symbol_table, message_handler, max_array_length);
 
   java_bytecode_convert_method(class_symbol, method);
 }

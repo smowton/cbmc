@@ -1030,8 +1030,7 @@ typet interpretert::concretise_type(const typet &type) const
     std::vector<mp_integer> computed_size;
     evaluate(size_expr,computed_size);
     if(computed_size.size()==1 &&
-       computed_size[0]>0 &&
-       computed_size[0]<=max_allowed_dynamic_array_size)
+       computed_size[0]>=0)
     {
       message->result() << "Concretised array with size " << computed_size[0] << messaget::eom;
       return array_typet(type.subtype(),
@@ -1876,6 +1875,10 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
 
       symbol_exprt symbol_expr=get_assigned_symbol(step);
       irep_idt id=symbol_expr.get_identifier();
+
+      #ifdef DEBUG
+      message->status() << it->pc->function << ": " << from_expr(ns,"",step.full_lhs) << " <- " << from_expr(ns,"",step.full_lhs_value) << messaget::eom;
+      #endif
 
       address=evaluate_address(step.full_lhs);
       if(address==0)
