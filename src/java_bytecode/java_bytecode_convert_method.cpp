@@ -90,8 +90,7 @@ protected:
     size_t start_pc;
     size_t length;
     bool is_parameter;
-    bool is_initialised;
-    variablet() : symbol_expr(), is_parameter(false), is_initialised(false) {}      
+    variablet() : symbol_expr(), is_parameter(false) {}      
   };
   
   typedef std::vector<variablet> variablest;
@@ -156,79 +155,6 @@ protected:
       return result;
     }
   }
-
-  static bool sort_pair_by_pc(const std::pair<unsigned,variablet*> lhs,
-                              const std::pair<unsigned,variablet*> rhs)
-  {
-    return lhs.second->start_pc < rhs.second->start_pc;
-  }
- 
-  void find_trivial_initialisers(const methodt::instructionst& insts) {
-
-    // Make a sorted list of stack slots and variables by initialisation PC:
-    std::vector<std::pair<unsigned,variablet*> > vars_by_pc;
-    for(unsigned vlistidx=0, vlistlim=variables.size(); vlistidx!=vlistlim; ++vlistidx)
-    {
-      auto& vlist=variables[vlistidx];
-      for(auto& v : vlist)
-        vars_by_pc.push_back(std::make_pair(vlistidx,&v));
-    }
-    std::sort(vars_by_pc.begin(),vars_by_pc.end(),sort_pair_by_pc);
-
-    // For each variable, look for a trivial initialiser preceding its live range,
-    // such as:
-    // astore_2
-    // --- live range begins for slot 2 ---
-    // more instructions...
-    // If this pattern is found, allow the store to directly initialise the named variable
-    // and mark it initialised.
-    // Otherwise we'll initialise the local when recovering block structure and inserting
-    // decl instructions at the end of convert_instructions.
-    
-    auto varit=vars_by_pc.begin(),varend=vars_by_pc.end();
-
-    for(auto instit=insts.begin(),instend=insts.end(); instit!=instend; ++instit)
-    {
-      for(; varit!=varend && varit->second->start_pc<instit->address; ++varit) {}
-      for(; varit!=varend && varit->second->start_pc==instit->address; ++varit)
-      {
-        auto slotidx=varit->first;
-        auto& var=*(varit->second);
-        if(instit!=insts.begin())
-        {
-          auto previt=instit;
-          --previt;
-          auto& previnst=*previt;
-          const std::string prevstatement=id2string(previnst.statement);
-          if(prevstatement.size()>=1 && prevstatement.substr(1,5)=="store")
-          {
-            std::string storeslot;
-            if(previnst.args.size()==1)
-            {
-              const auto& arg=previnst.args[0];
-              storeslot=id2string(to_constant_expr(arg).get_value());
-            }
-            else
-            {
-              assert(prevstatement[6]=='_' && prevstatement.size()==8);
-              storeslot=prevstatement[7];
-              assert(isdigit(storeslot[0]));
-            }
-            auto storeslotidx=safe_string2unsigned(storeslot);
-            if(storeslotidx==slotidx)
-            {
-              // The instruction immediately prior to this is an initialiser.
-              var.is_initialised=true;
-              var.start_pc=previnst.address;
-            }
-          }
-        }
-      }
-    }
-  
-  }
-
-  void merge_variable_live_ranges(local_variable_tablet& vars);
 
   // temporary variables
   std::list<symbol_exprt> tmp_vars;
@@ -305,6 +231,193 @@ protected:
 
   typedef std::map<unsigned, converted_instructiont> address_mapt;
 
+    struct hash_sig_endaddress {
+    size_t operator()(java_bytecode_convert_methodt::local_variablet* ptr) const
+      {
+        if(ptr==0)
+          return 0;
+        return std::hash<std::string>()(id2string(ptr->name)) ^
+          std::hash<std::string>()(ptr->signature) ^
+          std::hash<size_t>()(ptr->index) ^
+          std::hash<size_t>()(ptr->start_pc+ptr->length);
+      }
+  };
+
+  struct eq_sig_endaddress {
+    size_t operator()(java_bytecode_convert_methodt::local_variablet* a,
+                      java_bytecode_convert_methodt::local_variablet* b) const
+      {
+        return ((!a) && (!b)) ||
+          (a->name==b->name &&
+           a->signature==b->signature &&
+           a->index == b->index &&
+           (a->start_pc+a->length)==(b->start_pc+b->length));
+      }
+  };
+
+  bool find_trivial_initialiser(local_variablet& var,
+                                const methodt::instructionst& insts,
+                                methodt::instructionst::const_iterator instit)
+  {
+
+    // Look for a trivial initialiser preceding var's live range,
+    // such as:
+    // astore_2
+    // --- live range begins for slot 2 ---
+    // more instructions...
+    // If this pattern is found, allow the store to directly initialise the named variable.
+    // Otherwise we'll initialise the local when recovering block structure and inserting
+    // decl instructions at the end of convert_instructions.
+
+    // instit points to the instruction where var's annotated live range begins.
+    
+    auto slotidx=var.index;
+    if(instit==insts.begin())
+      return false;
+
+    auto previt=instit;
+    --previt;
+    auto& previnst=*previt;
+    const std::string prevstatement=id2string(previnst.statement);
+    if(!(prevstatement.size()>=1 && prevstatement.substr(1,5)=="store"))
+      return false;
+
+    std::string storeslot;
+    if(previnst.args.size()==1)
+    {
+      const auto& arg=previnst.args[0];
+      storeslot=id2string(to_constant_expr(arg).get_value());
+    }
+    else
+    {
+      assert(prevstatement[6]=='_' && prevstatement.size()==8);
+      storeslot=prevstatement[7];
+      assert(isdigit(storeslot[0]));
+    }
+    auto storeslotidx=safe_string2unsigned(storeslot);
+    if(storeslotidx==slotidx)
+    {
+      // The instruction immediately prior to this is an initialiser.
+      var.length+=(var.start_pc-previnst.address);
+      var.start_pc=previnst.address;
+      return true;
+    }
+
+    return false;
+
+  }
+
+  typedef std::unordered_map<local_variablet*,local_variablet*,
+                             hash_sig_endaddress, eq_sig_endaddress> by_sig_and_endaddresst;
+
+  bool find_split_initialiser(local_variablet& var,
+                              const address_mapt& amap,
+                              by_sig_and_endaddresst& by_sig_and_endaddress)
+  {
+    // Second chance: does the live range start at a block header?
+    // If so is there a single predecessor that has a live variable
+    // with like signature?
+    auto amap_iter=amap.find(var.start_pc);
+    assert(amap_iter!=amap.end() &&
+           "Live range doesn't start on an instruction boundary?");
+
+    if(amap_iter->second.predecessors.size()!=1)
+      return false;
+    
+    unsigned come_from_address=*(amap_iter->second.predecessors.begin());
+    // Try to find a variable like this one, but whose live range ends
+    // after the goto instruction at come_from_address:
+    auto goto_iter=amap.find(come_from_address);
+    assert(goto_iter!=amap.end() &&
+           "Predecessor that doesn't itself appear in the address map?");
+    ++goto_iter;
+    if(goto_iter==amap.end())
+      return false;
+
+    unsigned instruction_after_goto_address=goto_iter->first;
+    // Find a variable that ends there:
+    // (by the nature of the map we search, this will find anything with
+    //  this signature and end-address, not just the particular live range we
+    //  construct here)
+    local_variablet search_key=var;
+    search_key.start_pc=come_from_address;
+    search_key.length=instruction_after_goto_address-come_from_address;
+    auto find_var_iter=by_sig_and_endaddress.find(&search_key);
+
+    if(find_var_iter==by_sig_and_endaddress.end())
+      return false;
+    
+    // Extend the previous variable's live range to include this one:
+    auto& existing_var=*find_var_iter->second;
+    by_sig_and_endaddress.erase(find_var_iter);
+    by_sig_and_endaddress.erase(&var);
+    existing_var.length=(var.start_pc+var.length)-existing_var.start_pc;
+    // Update the previous variable's map entry:
+    by_sig_and_endaddress[&existing_var]=&existing_var;
+    // Mark this variable for deletion:
+    var.length=0;
+
+    status() << "Found split initialiser for variable " << var.name <<
+      " based on edge " << come_from_address << " -> " << var.start_pc << eom;
+
+    return true;
+    
+  }
+                                
+
+  void find_initialisers(const methodt::instructionst& insts,
+                         local_variable_tablet& vars,
+                         const address_mapt& amap)
+  {
+
+    // Note: vars is sorted by start_pc.
+
+    // Build a map indexing variables by their signature and the address where their
+    // range ends, for trying to pair up disjoint live ranges:
+
+    by_sig_and_endaddresst by_signature_and_endaddress;
+    for(auto& v : vars)
+      assert(by_signature_and_endaddress.insert(std::make_pair(&v,&v)).second);
+
+    auto variter=vars.begin(), varlim=vars.end();
+    for(auto instit=insts.begin(),instend=insts.end(); instit!=instend; ++instit)
+    {
+      for(; variter!=varlim && variter->start_pc<instit->address; ++variter) {}
+      for(; variter!=varlim && variter->start_pc==instit->address; ++variter)
+      {
+        auto& var=*variter;
+        if(var.start_pc==0) // Parameter
+          continue;
+        bool found_init=find_trivial_initialiser(var,insts,instit);
+        if(!found_init)
+          found_init=find_split_initialiser(var,amap,by_signature_and_endaddress);
+        assert(found_init && "Couldn't find an initialiser for local variable");
+      }
+    }
+
+    // Clean up removed records from the variable table:
+
+    size_t toremove=0;
+    for(size_t i=0; i<(vars.size()-toremove); ++i)
+    {
+      auto& v=vars[i];
+      if(v.length==0)
+      {
+        // Move to end; consider the new element we've swapped in:
+        ++toremove;
+        if(i!=vars.size()-toremove) // Already where it needs to be?
+          std::swap(v,vars[vars.size()-toremove]);
+        --i;
+      }
+    }
+
+    // Remove un-needed entries.
+    vars.resize(vars.size()-toremove);
+    
+  }
+
+  void setup_local_variables(const methodt& m, const address_mapt& amap);
+
   struct block_tree_node {
     bool leaf;
     std::vector<unsigned> branch_addresses;
@@ -335,7 +448,7 @@ protected:
   void convert(const instructiont &);
 
   codet convert_instructions(
-    const instructionst &, const code_typet &);
+    const methodt &, const code_typet &);
 
   const bytecode_infot &get_bytecode_info(const irep_idt &statement);
 
@@ -375,102 +488,6 @@ void cast_if_necessary(binary_relation_exprt &condition)
   if(lhs_type == rhs.type()) return;
   rhs = typecast_exprt(rhs, lhs_type);
 }
-}
-
-struct hash_without_liverange {
-  size_t operator()(java_bytecode_convert_methodt::local_variablet* ptr) const
-  {
-    if(ptr==0)
-      return 0;
-    return std::hash<std::string>()(id2string(ptr->name)) ^
-      std::hash<std::string>()(ptr->signature) ^
-      std::hash<size_t>()(ptr->index);
-  }
-};
-
-struct eq_without_liverange {
-  size_t operator()(java_bytecode_convert_methodt::local_variablet* a,
-                    java_bytecode_convert_methodt::local_variablet* b) const
-  {
-    return ((!a) && (!b)) ||
-      (a->name==b->name &&
-       a->signature==b->signature &&
-       a->index == b->index);
-  }
-};
-
-namespace {
-  bool lt_start_pc(java_bytecode_convert_methodt::local_variablet* a,
-                   java_bytecode_convert_methodt::local_variablet* b)
-  {
-    if((!a) && b)
-      return true;
-    if(!b)
-      return false;
-    return a->start_pc < b->start_pc;
-  }
-
-}
-
-/*******************************************************************\
-
-Function: java_bytecode_convert_methodt::merge_variable_live_ranges
-
-  Inputs: Local variable table
-
- Outputs: Same table, perhaps permuted, with entries with like signatures merged.
-
- Purpose: Java variables can sometimes have disjoint live ranges. For the time being,
-          simply merge those ranges together.
-
-\*******************************************************************/
-
-void java_bytecode_convert_methodt::merge_variable_live_ranges(local_variable_tablet& vars)
-{
-
-  // Sort table entries by start PC:
-  std::vector<local_variablet*> sorted_by_startpc;
-  sorted_by_startpc.reserve(vars.size());
-  for(auto& v : vars)
-    sorted_by_startpc.push_back(&v);
-
-  std::sort(sorted_by_startpc.begin(),sorted_by_startpc.end(),lt_start_pc);
-  
-  std::unordered_set<local_variablet*,hash_without_liverange,eq_without_liverange> by_signature;
-
-  // Merge ranges with matching signatures (name, type and slot)
-  for(auto ptr : sorted_by_startpc)
-  {
-    auto insert_result=by_signature.insert(ptr);
-    if(!insert_result.second)
-    {
-      auto& existing_var=**insert_result.first;
-      warning() << "Merging live ranges for local variable '" << existing_var.name << "'" << eom;
-      assert(existing_var.start_pc < ptr->start_pc);
-      existing_var.length=(ptr->start_pc+ptr->length)-existing_var.start_pc;
-      ptr->length=0; // Mark for removal.
-    }
-      
-  }
-
-  // Remove records that have been merged with a predecessor.
-  size_t toremove=0;
-  for(size_t i=0; i<(vars.size()-toremove); ++i)
-  {
-    auto& v=vars[i];
-    if(v.length==0)
-    {
-      // Move to end; consider the new element we've swapped in:
-      ++toremove;
-      if(i!=vars.size()-toremove) // Already where it needs to be?
-        std::swap(v,vars[vars.size()-toremove]);
-      --i;
-    }
-  }
-
-  // Remove un-needed entries.
-  vars.resize(vars.size()-toremove);
-
 }
 
 /*******************************************************************\
@@ -514,49 +531,6 @@ void java_bytecode_convert_methodt::convert(
   }
 
   variables.clear();
-
-  // Merge live ranges when a single variable appears in different places.
-  // Only alter our own private copy of the table:
-  local_variable_tablet merged_variable_table(m.local_variable_table);
-  merge_variable_live_ranges(merged_variable_table);
-
-  // Do the parameters and locals in the variable table, which is available when
-  // compiled with -g or for methods with many local variables in the latter
-  // case, different variables can have the same index, depending on the
-  // context.
-  //
-  // to calculate which variable to use, one uses the address of the instruction
-  // that uses the variable, the size of the instruction and the start_pc /
-  // length values in the local variable table
-  for(const auto & v : merged_variable_table)
-  {
-    typet t=java_type_from_string(v.signature);
-    std::ostringstream id_oss;
-    id_oss << method_identifier << "::" << v.start_pc << "::" << v.name;
-    irep_idt identifier(id_oss.str());
-    symbol_exprt result(identifier, t);
-    result.set(ID_C_base_name, v.name);
-
-    variables[v.index].push_back(variablet());
-    auto& newv=variables[v.index].back();
-    newv.symbol_expr = result;
-    newv.start_pc = v.start_pc;
-    newv.length = v.length;
-    
-    symbolt new_symbol;
-    new_symbol.name=identifier;
-    new_symbol.type=t;
-    new_symbol.base_name=v.name;
-    new_symbol.pretty_name=id2string(identifier).substr(6, std::string::npos);
-    new_symbol.mode=ID_java;
-    new_symbol.is_type=false;
-    new_symbol.is_file_local=true;
-    new_symbol.is_thread_local=true;
-    new_symbol.is_lvalue=true;
-    symbol_table.add(new_symbol);
-  }
-
-  find_trivial_initialisers(m.instructions);
 
   // set up variables array
   for(std::size_t i=0, param_index=0;
@@ -659,7 +633,7 @@ void java_bytecode_convert_methodt::convert(
 
   tmp_vars.clear();
   if(!m.is_abstract)
-    method_symbol.value=convert_instructions(m.instructions, code_type);
+    method_symbol.value=convert_instructions(m, code_type);
 
   // do we have the method symbol already?
   const auto s_it=symbol_table.symbols.find(method.get_name());
@@ -667,6 +641,62 @@ void java_bytecode_convert_methodt::convert(
     symbol_table.symbols.erase(s_it); // erase, we stubbed it
     
   symbol_table.add(method_symbol);
+}
+
+namespace {
+  bool lt_start_pc(java_bytecode_convert_methodt::local_variablet& a,
+                   java_bytecode_convert_methodt::local_variablet& b)
+  {
+    return a.start_pc < b.start_pc;
+  }
+}
+
+void java_bytecode_convert_methodt::setup_local_variables(const methodt& m,
+                                                          const address_mapt& amap)
+{
+
+  // Find out which local variables have initialisers (store instructions immediately
+  // preceding their stated live range), and where they do expand the live range to include local.
+  local_variable_tablet adjusted_variable_table(m.local_variable_table);
+  std::sort(adjusted_variable_table.begin(),adjusted_variable_table.end(),lt_start_pc);
+  find_initialisers(m.instructions,adjusted_variable_table,amap);
+  
+  // Do the parameters and locals in the variable table, which is available when
+  // compiled with -g or for methods with many local variables in the latter
+  // case, different variables can have the same index, depending on the
+  // context.
+  //
+  // to calculate which variable to use, one uses the address of the instruction
+  // that uses the variable, the size of the instruction and the start_pc /
+  // length values in the local variable table
+  for(const auto & v : adjusted_variable_table)
+  {
+    typet t=java_type_from_string(v.signature);
+    std::ostringstream id_oss;
+    id_oss << method_id << "::" << v.start_pc << "::" << v.name;
+    irep_idt identifier(id_oss.str());
+    symbol_exprt result(identifier, t);
+    result.set(ID_C_base_name, v.name);
+
+    variables[v.index].push_back(variablet());
+    auto& newv=variables[v.index].back();
+    newv.symbol_expr = result;
+    newv.start_pc = v.start_pc;
+    newv.length = v.length;
+    
+    symbolt new_symbol;
+    new_symbol.name=identifier;
+    new_symbol.type=t;
+    new_symbol.base_name=v.name;
+    new_symbol.pretty_name=id2string(identifier).substr(6, std::string::npos);
+    new_symbol.mode=ID_java;
+    new_symbol.is_type=false;
+    new_symbol.is_file_local=true;
+    new_symbol.is_thread_local=true;
+    new_symbol.is_lvalue=true;
+    symbol_table.add(new_symbol);
+  }
+
 }
 
 /*******************************************************************\
@@ -942,9 +972,12 @@ Function: java_bytecode_convert_methodt::convert_instructions
 \*******************************************************************/
 
 codet java_bytecode_convert_methodt::convert_instructions(
-  const instructionst &instructions,
+  const methodt &method,
   const code_typet &method_type)
 {
+
+  const instructionst& instructions=method.instructions;
+  
   // Run a worklist algorithm, assuming that the bytecode has not
   // been tampered with. See "Leroy, X. (2003). Java bytecode
   // verification: algorithms and formalizations. Journal of Automated
@@ -1026,6 +1059,10 @@ codet java_bytecode_convert_methodt::convert_instructions(
       a_it->second.predecessors.insert(it->first);
     }
   }
+
+  // Now that the control flow graph is built, set up our local variables
+  // (these require the graph to determine live ranges)
+  setup_local_variables(method,address_map);
 
   std::set<unsigned> working_set;
   if(!instructions.empty())
@@ -2078,13 +2115,6 @@ codet java_bytecode_convert_methodt::convert_instructions(
         v.start_pc,
         v.start_pc+v.length,
         std::numeric_limits<unsigned>::max());
-      if(!v.is_initialised)
-      {
-        // This local isn't initialised as it is declared. We should inherit the prior
-        // value belonging to the same stack slot.
-        // Implement this if we ever encounter a wild example.
-        throw "TODO: Variable without a trivial initialiser.";
-      }
       code_declt d(v.symbol_expr);
       block.operands().insert(block.operands().begin(),d);
     }
