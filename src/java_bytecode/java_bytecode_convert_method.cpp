@@ -318,50 +318,81 @@ protected:
                               by_sig_and_endaddresst& by_sig_and_endaddress)
   {
     // Second chance: does the live range start at a block header?
-    // If so is there a single predecessor that has a live variable
+    // If so can we find one or more predecessors with a live variable
     // with like signature?
     auto amap_iter=amap.find(var.start_pc);
     assert(amap_iter!=amap.end() &&
            "Live range doesn't start on an instruction boundary?");
 
-    if(amap_iter->second.predecessors.size()!=1)
-      return false;
-    
-    unsigned come_from_address=*(amap_iter->second.predecessors.begin());
-    // Try to find a variable like this one, but whose live range ends
-    // after the goto instruction at come_from_address:
-    auto goto_iter=amap.find(come_from_address);
-    assert(goto_iter!=amap.end() &&
-           "Predecessor that doesn't itself appear in the address map?");
-    ++goto_iter;
-    if(goto_iter==amap.end())
+    if(amap_iter->second.predecessors.size()==0)
       return false;
 
-    unsigned instruction_after_goto_address=goto_iter->first;
-    // Find a variable that ends there:
-    // (by the nature of the map we search, this will find anything with
-    //  this signature and end-address, not just the particular live range we
-    //  construct here)
-    local_variablet search_key=var;
-    search_key.start_pc=come_from_address;
-    search_key.length=instruction_after_goto_address-come_from_address;
-    auto find_var_iter=by_sig_and_endaddress.find(&search_key);
-
-    if(find_var_iter==by_sig_and_endaddress.end())
-      return false;
+    local_variablet* earliest_startpc=0;
+    std::vector<local_variablet> pred_keys;
+    std::vector<local_variablet*> preds;
     
-    // Extend the previous variable's live range to include this one:
-    auto& existing_var=*find_var_iter->second;
-    by_sig_and_endaddress.erase(find_var_iter);
-    by_sig_and_endaddress.erase(&var);
+    for(auto come_from_address : amap_iter->second.predecessors)
+    {
+    
+      // Try to find a variable like this one, but whose live range ends
+      // after the goto instruction at come_from_address:
+      auto goto_iter=amap.find(come_from_address);
+      assert(goto_iter!=amap.end() &&
+             "Predecessor that doesn't itself appear in the address map?");
+      ++goto_iter;
+      if(goto_iter==amap.end())
+        return false;
+
+      unsigned instruction_after_goto_address=goto_iter->first;
+      // Find a variable that ends there:
+      // (by the nature of the map we search, this will find anything with
+      //  this signature and end-address, not just the particular live range we
+      //  construct here)
+      local_variablet search_key=var;
+      search_key.start_pc=come_from_address;
+      search_key.length=instruction_after_goto_address-come_from_address;
+      auto find_var_iter=by_sig_and_endaddress.find(&search_key);
+
+      if(find_var_iter==by_sig_and_endaddress.end())
+        return false;
+
+      // TODO: handle backward jumps if we encounter code that inits
+      // variables after use in address order in the wild.
+      if(find_var_iter->second->start_pc >= var.start_pc)
+        return false;
+
+      // Find the predecessor with the lowest address:
+      if((!earliest_startpc) || earliest_startpc->start_pc > find_var_iter->second->start_pc)
+        earliest_startpc=find_var_iter->second;
+
+      preds.push_back(find_var_iter->second);
+      pred_keys.push_back(search_key);
+
+    }
+
+    // Remove all variables that will be modified from the end-address map
+    // before we alter their keys:
+    for(auto& key : pred_keys)
+      assert(by_sig_and_endaddress.erase(&key));
+    by_sig_and_endaddress.erase(&var);    
+   
+    // Extend the first predecessor's live range to span all live ranges found:
+    auto& existing_var=*earliest_startpc;
     existing_var.length=(var.start_pc+var.length)-existing_var.start_pc;
-    // Update the previous variable's map entry:
+    
+    // Update the first predecessor's map entry:
     by_sig_and_endaddress[&existing_var]=&existing_var;
+
     // Mark this variable for deletion:
     var.length=0;
+    // Mark all non-first preds for deletion too:
+    for(auto& pred : preds)
+      if(pred!=earliest_startpc)
+        pred->length=0;
 
     status() << "Found split initialiser for variable " << var.name <<
-      " based on edge " << come_from_address << " -> " << var.start_pc << eom;
+      " with " << preds.size() << " predecessors; new live range " <<
+      existing_var.start_pc << "-" << existing_var.start_pc+existing_var.length << eom;
 
     return true;
     
