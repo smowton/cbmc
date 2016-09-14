@@ -604,7 +604,21 @@ int cbmc_parse_optionst::doit()
     {
       bmc.set_ui(get_ui());
       java_test_case_generatort gen(ui_message_handler);
-      return gen.generate_java_test_case(options, symbol_table, goto_functions, bmc);
+      java_test_case_generatort::test_case_statust test_gen_retval =
+        gen.generate_java_test_case(options, symbol_table, goto_functions, bmc);
+      // we currently ignore the return value here, as success for test cases
+      // means somethin different than success for `do_bmc'
+      switch(test_gen_retval)
+      {
+        // Return 0 in case of test case generation. This differs from do_bmc
+        // which returns 0 in case of a valid property
+      case java_test_case_generatort::SUCCESS:
+        return 0;
+      case java_test_case_generatort::FAIL:
+      case java_test_case_generatort::ERROR:
+      default:
+        return 10;
+      }
     }
 
   // do actual BMC
