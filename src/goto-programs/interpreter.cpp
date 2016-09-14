@@ -1971,7 +1971,7 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
 	if(defined.size()!=0) // Definition found?
 	{
           const auto& caller=trace_stack[trace_stack.size()-2].func_name;
-	  function_inputs[ret_func.func_name].push_front({ caller,defined });
+	  function_inputs[ret_func.func_name].push_back({ caller,defined });
 	}
       }
       trace_stack.pop_back();
