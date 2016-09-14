@@ -250,6 +250,12 @@ void interpretert::evaluate(
       dest.push_back(f.get_value());
       return;
     }
+    else if(expr.type().id()==ID_c_bool)
+    {
+      const irep_idt &value=to_constant_expr(expr).get_value();
+      dest.push_back(binary2integer(id2string(value), false));
+      return;
+    }
     else if(expr.type().id()==ID_bool)
     {
       dest.push_back(expr.is_true());
@@ -811,7 +817,7 @@ void interpretert::evaluate(
         dest.push_back(binary2integer(s, false));        
         return;
       }
-      else if(expr.type().id()==ID_bool)
+      else if((expr.type().id()==ID_bool)||(expr.type().id()==ID_c_bool))
       {
         dest.push_back(value!=0);
         return;
