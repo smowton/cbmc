@@ -604,7 +604,7 @@ void add_func_call(std::string &result, const symbol_tablet &st,
   if(instance_method)
     result += '.' + symbol_to_function_name(s, instance_method);
   else
-    indent(result, 2u) += symbol_to_function_name(s, instance_method);
+    result += symbol_to_function_name(s, instance_method);
   result+='(';
   const std::vector<irep_idt> params(get_parameters(s));
   unsigned nparams = 0;
@@ -618,7 +618,7 @@ void add_func_call(std::string &result, const symbol_tablet &st,
       result+=", ";
     add_symbol(result, symbol);
   }
-  result+=");\n";
+  result+=");";
 }
 
 std::string get_escaped_func_name(const symbolt &symbol)
@@ -976,7 +976,8 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
     bool disable_mocks,
     const optionst::value_listt& mock_classes,
     const optionst::value_listt& no_mock_classes,            
-    const std::vector<std::string>& goals_reached)
+    const std::vector<std::string>& goals_reached,
+    const std::string& expect_exception)
 {
   const symbolt &func=st.lookup(func_id);
   std::string result;
@@ -1022,6 +1023,11 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
     "\n" + post_mock_setup_result + "\n" + mock_final;
   if(exists_func_call)
   {
+
+    std::string declared_type;
+    std::string declared_name;
+    std::string call_expression;
+    
     bool is_constructor=func.type.get_bool(ID_constructor);
     std::string retval_symbol=as_string(func.name)+RETURN_VALUE_SUFFIX;
     const auto findit=st.symbols.find(retval_symbol);
@@ -1032,24 +1038,29 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
         java_call_descriptor desc;
         populate_descriptor_names(func,desc);
         indent(result)+="/* creating instance to execute static initializer */\n";
-        indent(result)+=desc.classname + " constructed = (" + desc.classname + ") " + force_instantiate(desc.classname) + "; // ";
+        declared_type=desc.classname;
+        declared_name="constructed";
+        call_expression="(" + desc.classname + ") " + force_instantiate(desc.classname) + "; // ";
       }
       else
       {
         const auto& thistype=to_code_type(func.type).parameters()[0].type();
-        result += "/* creating new object to test contructor */\n";
-        indent(result,2u);
-        add_decl_from_type(result,st,thistype);
-        result += " constructed = new ";
+        indent(result) += "/* creating new object to test constructor */\n";
+        add_decl_from_type(declared_type,st,thistype);
+        declared_name="constructed";
+        call_expression="new ";
       }
     }
-    else if(findit!=st.symbols.end())
+    else
     {
-      result += "/* call function under test */\n";
-      indent(result,2u);
-      add_decl_from_type(result,st,findit->second.type);
-      result += " retval = ";
+      indent(result) += "/* call function under test */\n";      
+      if(findit!=st.symbols.end())
+      {
+        add_decl_from_type(declared_type,st,findit->second.type);
+        declared_name="retval";
+      }
     }
+
     if((!is_constructor) && is_instance_method(st, func_id))
     {
       for (const irep_idt &param : get_parameters(st.lookup(func_id)))
@@ -1059,14 +1070,36 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
         {
           const inputst::iterator value=inputs.find(param);
           const namespacet ns(st);
-          expr2java(result, value->second, ns);
+          expr2java(call_expression, value->second, ns);
         }
       }
-      add_func_call(result,st,func_id,true);
+      add_func_call(call_expression,st,func_id,true);
     }
     else
-      add_func_call(result,st,func_id);
+      add_func_call(call_expression,st,func_id);
 
+    if(declared_type.length()!=0)
+      indent(result,2)+=(declared_type + ' ' + declared_name + ";\n");
+
+    unsigned indent_call=2u;
+    
+    if(expect_exception.size()!=0)
+    {
+      indent(result,2)+="try {\n";
+      indent_call=4u;
+    }
+
+    indent(result,indent_call);
+    if(declared_type.length()!=0)
+      result+=(declared_name + " = ");
+    result+=(call_expression+'\n');
+
+    if(expect_exception.size()!=0)
+    {
+      indent(result,2)+="}\n";
+      indent(result,2)+=("catch("+expect_exception+" e) {} // Catch expected exception\n");
+    }
+    
     if(emitAssert)
     {
       result+="\n";
@@ -1076,11 +1109,13 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
     else
     {
       result+="\n";
-      indent(result,2u)+="/* no assert due to void return value */\n";
+      indent(result,2u)+="/* Method return type is void, or not expected to return */\n";
     }
   }
 
-  indent(result)+=ref_factory.verify_mock_objects(st,opaque_function_returns);
+  result+='\n';
+  indent(result,2)+="/* Verify that mock-object interactions were as expected: */\n";
+  indent(result,2)+=ref_factory.verify_mock_objects(st,opaque_function_returns);
 
   // closing the method
   indent(result)+="\n}\n";

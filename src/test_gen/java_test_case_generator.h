@@ -30,7 +30,8 @@ typedef std::function<
               bool,
               const optionst::value_listt&,
               const optionst::value_listt&,              
-              const std::vector<std::string>&)> test_case_generatort;
+              const std::vector<std::string>&,
+              const std::string&)> test_case_generatort;
 
 class java_test_case_generatort:public messaget
 {

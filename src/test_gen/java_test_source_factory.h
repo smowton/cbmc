@@ -46,7 +46,8 @@ std::string generate_java_test_case_from_inputs(
     bool disable_mocks,
     const optionst::value_listt& mock_classes,
     const optionst::value_listt& no_mock_classes,                  
-    const std::vector<std::string>& goals);
+    const std::vector<std::string>& goals,
+    const std::string& expect_exception);
 
 void qualified2identifier(std::string &s, char search='.', char replace='_');
 std::string func_name(const symbolt &symbol);
