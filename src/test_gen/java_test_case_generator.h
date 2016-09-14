@@ -17,12 +17,6 @@
 
 #include <test_gen/java_test_source_factory.h>
 
-#define TEST_CASE_SUCCESS 0
-#define TEST_CASE_FAIL 1
-#define TEST_CASE_ERROR 10
-
-//static int out_file_no = 0;
-
 #include <util/options.h>
 
 typedef std::function<
@@ -40,32 +34,16 @@ typedef std::function<
 
 class java_test_case_generatort:public messaget
 {
-  const std::string generate_test_case(const optionst &, const symbol_tablet &,
-                                       const goto_functionst &, const goto_tracet &,
-                                       const test_case_generatort, size_t=0,
-                                       std::vector<std::string> goals_reached=std::vector<std::string>());
-  int generate_test_case(optionst &, const symbol_tablet &,
-                         const goto_functionst &, bmct &, const test_case_generatort);
-
-  bool contains(const std::string &, const char * const);
-  bool is_meta(const irep_idt &);
-  inputst generate_inputs(const symbol_tablet &, const goto_functionst &,
-                          const goto_tracet &, interpretert::list_input_varst&,
-                          interpretert::input_var_functionst&,
-                          interpretert::dynamic_typest&,
-                          const optionst&);
-  const irep_idt &get_entry_function_id(const goto_functionst &gf);
-  const std::string get_test_function_name(const symbol_tablet &st, const goto_functionst &gf, size_t test_idx);
-
  public:
-  const std::string generate_test_func_name(const symbol_tablet &st,
-                                            const goto_functionst &gf,
-                                            const size_t test_idx);
  java_test_case_generatort(message_handlert &_message_handler):
   messaget(_message_handler)
   {
   }
 
+  typedef enum test_case_statust { SUCCESS, FAIL, ERROR } test_case_statust;
+  const std::string generate_test_func_name(const symbol_tablet &st,
+                                            const goto_functionst &gf,
+                                            const size_t test_idx);
 
   /**
    * @brief
@@ -79,7 +57,7 @@ class java_test_case_generatort:public messaget
    *
    * @return
    */
-  int generate_java_test_case(class optionst &options,
+  test_case_statust generate_java_test_case(class optionst &options,
                               const class symbol_tablet &st,
                               const class goto_functionst &gf,
                               class bmct &bmc);
@@ -101,5 +79,23 @@ class java_test_case_generatort:public messaget
                                             const class goto_tracet &trace,
                                             const size_t test_idx,
                                             const std::vector<std::string> &goals);
+
+private:
+  const std::string generate_test_case(const optionst &, const symbol_tablet &,
+                                       const goto_functionst &, const goto_tracet &,
+                                       const test_case_generatort, size_t=0,
+                                       std::vector<std::string> goals_reached=std::vector<std::string>());
+  test_case_statust generate_test_case(optionst &, const symbol_tablet &,
+                         const goto_functionst &, bmct &, const test_case_generatort);
+
+  bool contains(const std::string &, const char * const);
+  bool is_meta(const irep_idt &);
+  inputst generate_inputs(const symbol_tablet &, const goto_functionst &,
+                          const goto_tracet &, interpretert::list_input_varst&,
+                          interpretert::input_var_functionst&,
+                          interpretert::dynamic_typest&,
+                          const optionst&);
+  const irep_idt &get_entry_function_id(const goto_functionst &gf);
+  const std::string get_test_function_name(const symbol_tablet &st, const goto_functionst &gf, size_t test_idx);
 };
 #endif /* JAVA_TEST_CASE_GENERATOR_H_ */

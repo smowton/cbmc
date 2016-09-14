@@ -227,22 +227,22 @@ const std::string java_test_case_generatort::generate_test_case(
     }
 }
 
-int  java_test_case_generatort::generate_test_case(optionst &options, const symbol_tablet &st,
+java_test_case_generatort::test_case_statust java_test_case_generatort::generate_test_case(optionst &options, const symbol_tablet &st,
                                                    const goto_functionst &gf, bmct &bmc, const test_case_generatort generate)
 {
   options.set_option("stop-on-fail", true);
   switch (bmc.run(gf))
     {
     case safety_checkert::SAFE:
-      return TEST_CASE_FAIL;
+      return java_test_case_generatort::FAIL;
     case safety_checkert::ERROR:
-      return TEST_CASE_ERROR;
+      return java_test_case_generatort::ERROR;
     case safety_checkert::UNSAFE:
     default:
       {
         const goto_tracet &trace=bmc.safety_checkert::error_trace;
         status() << generate_test_case(options, st, gf, trace, generate) << eom;
-        return TEST_CASE_SUCCESS;
+        return java_test_case_generatort::SUCCESS;
       }
     }
 }
@@ -264,7 +264,7 @@ const std::string java_test_case_generatort::generate_test_func_name(const symbo
   return get_test_function_name(st, gf, test_idx + 1);
 }
 
-int java_test_case_generatort::generate_java_test_case(optionst &o, const symbol_tablet &st,
+java_test_case_generatort::test_case_statust java_test_case_generatort::generate_java_test_case(optionst &o, const symbol_tablet &st,
                                                        const goto_functionst &gf, bmct &bmc)
 {
   const test_case_generatort source_gen=generate_java_test_case_from_inputs;
