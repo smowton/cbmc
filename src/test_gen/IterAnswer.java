@@ -8,9 +8,11 @@ public class IterAnswer<T> implements Answer<T> {
 
     private int idx = 0;
     private ArrayList<T> answers;
+    public ArrayList<Object[]> callArguments;
 
     public IterAnswer(ArrayList<T> _answers) {
 	answers = _answers;
+	callArguments = new ArrayList<Object[]>();
     }
     
     public T answer(InvocationOnMock invocation) {
@@ -24,6 +26,7 @@ public class IterAnswer<T> implements Answer<T> {
         }
         T result = answers.get(idx);
         idx++;
+	callArguments.add(invocation.getArguments());
 	return result;
     }    
 

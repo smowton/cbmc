@@ -198,8 +198,8 @@ const std::string java_test_case_generatort::generate_test_case(
       coversCompleteFlow = true;
   }
 
-  if(!coversCompleteFlow)
-    return("/* test cases without return values are not generated */\n");
+//  if(!coversCompleteFlow)
+//    return("/* test cases without return values are not generated */\n");
 
   const std::string &unique_name = get_test_function_name(st, gf, test_idx);
   const std::string source(generate(st,entry_func_id,enters_main,inputs,opaque_function_returns,

@@ -215,7 +215,7 @@ void mock_environment_builder::instance_call(
 
 /*******************************************************************\
 
-Function: generate_arg_matchers
+Function: generate_when_statement
 
   Inputs: Description of a call to targetclass.methodname(argtypes)
 
@@ -226,13 +226,8 @@ Function: generate_arg_matchers
 \*******************************************************************/
 
 static void generate_arg_matchers(std::ostringstream &printto,
-                                  const std::string &targetclass,
-                                  const std::string &methodname,
                                   const std::vector<java_type> &argtypes)
 {
-
-  printto << "org.mockito.Mockito.when(" << targetclass << "." << methodname
-	  << "(";
 
   for(unsigned int i=0,ilim=argtypes.size(); i<ilim; ++i)
   {
@@ -251,6 +246,29 @@ static void generate_arg_matchers(std::ostringstream &printto,
       printto << "org.mockito.Matchers.isA(" << arg.classname << ".class)";
   }
 
+}
+
+/*******************************************************************\
+
+Function: generate_when_statement
+
+  Inputs: Description of a call to targetclass.methodname(argtypes)
+
+ Outputs: Mockito argument matching spec
+
+ Purpose: Generates a mockito statement like when(A.f(anyInt()))
+
+\*******************************************************************/
+
+static void generate_when_statement(std::ostringstream &printto,
+                                    const std::string &targetclass,
+                                    const std::string &methodname,
+                                    const std::vector<java_type> &argtypes)
+{
+
+  printto << "org.mockito.Mockito.when(" << targetclass << "." << methodname
+	  << "(";
+  generate_arg_matchers(printto,argtypes);
   printto << "))";
 }
 
@@ -297,7 +315,7 @@ std::string mock_environment_builder::finalise_instance_calls()
 
     result << "for(" << cname << " " << instanceIter << " : " << instanceList
 	   << ')' << prelude_newline << "  ";
-    generate_arg_matchers(result,instanceIter,iter.first.methodname,
+    generate_when_statement(result,instanceIter,iter.first.methodname,
                           iter.first.argtypes);
     result << ".thenAnswer(" << iter.second.answer_object << ");"
 	   << prelude_newline;
@@ -319,7 +337,7 @@ std::string mock_environment_builder::finalise_instance_calls()
 
     result << "for(" << cname << " " << instanceIter << " : " << instanceList
 	   << ')' << prelude_newline << "  ";
-    generate_arg_matchers(result,instanceIter,iter.methodname,
+    generate_when_statement(result,instanceIter,iter.methodname,
                           iter.argtypes);
     result << ".thenCallRealMethod();"
 	   << prelude_newline;
@@ -349,7 +367,7 @@ void mock_environment_builder::static_call(
     mock_prelude << "org.powermock.api.mockito.PowerMockito.mockStatic("
 		 << targetclass << ".class);" << prelude_newline;
 
-  generate_arg_matchers(mock_prelude,targetclass,methodname,argtypes);
+  generate_when_statement(mock_prelude,targetclass,methodname,argtypes);
 
   mock_prelude << ".thenReturn(" << retval << ");" << prelude_newline;
 }
@@ -391,6 +409,32 @@ std::string mock_environment_builder::get_class_annotations()
   return out.str();
 }
 
+void mock_environment_builder::print_statements(
+  const std::vector<init_statement>&statements,
+  std::ostringstream &printto)
+{
+
+  for(const auto &s : statements)
+  {
+    switch(s.type)
+    {
+    case init_statement::SCOPE_OPEN:
+      printto << '{';
+      prelude_newline+="  ";
+      printto << prelude_newline;
+      break;
+    case init_statement::SCOPE_CLOSE:
+      //printto << "\b\b";
+      if(prelude_newline.length()>=3)
+        prelude_newline.erase(prelude_newline.length() - 2,2);
+      printto << '}' << prelude_newline;
+      break;
+    case init_statement::STATEMENT:
+      printto << s.statementText << ';' << prelude_newline;
+    }
+  }
+}
+
 /*******************************************************************\
 
 Function: add_to_prelude
@@ -405,26 +449,68 @@ Function: add_to_prelude
 \*******************************************************************/
 
 void mock_environment_builder::add_to_prelude(
-    const std::vector<init_statement>&statements)
+  const std::vector<init_statement>&statements)
 {
-
-  for(const auto &s : statements)
-  {
-    switch(s.type)
-    {
-    case init_statement::SCOPE_OPEN:
-      mock_prelude << '{';
-      prelude_newline+="  ";
-      mock_prelude << prelude_newline;
-      break;
-    case init_statement::SCOPE_CLOSE:
-      //mock_prelude << "\b\b";
-      if(prelude_newline.length()>=3)
-        prelude_newline.erase(prelude_newline.length() - 2,2);
-      mock_prelude << '}' << prelude_newline;
-      break;
-    case init_statement::STATEMENT:
-      mock_prelude << s.statementText << ';' << prelude_newline;
-    }
-  }
+  print_statements(statements,mock_prelude);
 }
+
+void mock_environment_builder::verify_static_calls(
+  const std::string& targetclass,
+  const std::string& methodname,
+  const std::vector<java_type>& argtypes,
+  size_t ncalls,
+  std::vector<init_statement>& stmts)
+{
+  std::ostringstream prep_call;
+  prep_call << "org.powermock.api.mockito.PowerMockito.verifyStatic(" <<
+    "org.mockito.Mockito.times(" << ncalls << "))";
+  
+  stmts.push_back(init_statement::statement(prep_call.str()));
+
+  std::ostringstream static_call;
+  static_call << targetclass << '.' << methodname << '(';
+  generate_arg_matchers(static_call,argtypes);
+  static_call << ')';
+
+  stmts.push_back(init_statement::statement(static_call.str())); 
+}
+
+void mock_environment_builder::verify_constructor_calls(
+  const std::string& targetclass,
+  const std::string& methodname,
+  const std::vector<java_type>& argtypes,
+  size_t ncalls,
+  std::vector<init_statement>& stmts)
+{
+  std::ostringstream constructor_call;
+  constructor_call << "org.powermock.api.mockito.PowerMockito.verifyNew(" <<
+    targetclass << ".class, org.mockito.Mockito.times(" << ncalls << "))";
+  if(argtypes.size()==0)
+    constructor_call << ".withNoArguments()";
+  else
+  {
+    constructor_call << ".withArguments(";
+    generate_arg_matchers(constructor_call,argtypes);
+    constructor_call << ')';
+  }
+  stmts.push_back(init_statement::statement(constructor_call.str()));
+}
+
+void mock_environment_builder::verify_instance_calls(
+  const std::string& targetclass,
+  const std::string& methodname,
+  const std::vector<java_type>& argtypes,
+  size_t ncalls,
+  std::vector<init_statement>& stmts)
+{
+  std::ostringstream instance_call;
+
+  method_signature sig(targetclass,methodname,argtypes);
+  const auto& answer_record=instance_method_answers.at(sig);
+  
+  // For the time being, just check that a call happened at all:
+  instance_call << "assert(" << answer_record.answer_object << ".callArguments.size()"
+                << " == " << ncalls << ')';
+  stmts.push_back(init_statement::statement(instance_call.str()));
+}
+    

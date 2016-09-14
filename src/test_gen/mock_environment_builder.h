@@ -139,6 +139,7 @@ class mock_environment_builder {
   std::string get_class_annotations();
 
   void add_to_prelude(const std::vector<init_statement>&);
+  void print_statements(const std::vector<init_statement>&,std::ostringstream&);
   
   // Return the mock setup code that should directly precede the test entry point.
   std::string get_mock_prelude() { return mock_prelude.str(); }
@@ -148,6 +149,13 @@ class mock_environment_builder {
 				       const std::vector<java_type>& ats) {
     elaborated_instance_methods.push_back(method_signature(cn,mn,ats));
   }
+
+  // Verify functions, similar to call statements above:
+  void verify_static_calls(const std::string& targetclass,const std::string& methodname,const std::vector<java_type>& argtypes, size_t ncalls, std::vector<init_statement>& stmts);
+
+  void verify_constructor_calls(const std::string& targetclass,const std::string& methodname,const std::vector<java_type>& argtypes, size_t ncalls, std::vector<init_statement>& stmts);
+
+  void verify_instance_calls(const std::string& targetclass,const std::string& methodname,const std::vector<java_type>& argtypes, size_t ncalls, std::vector<init_statement>& stmts);
   
 };
 

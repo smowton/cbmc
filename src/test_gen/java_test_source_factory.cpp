@@ -83,6 +83,8 @@ public:
                                  std::vector<symbolt>& needed);
   void gather_referenced_symbols(const symbolt& symbol, inputst& in, const symbol_tablet&,
                                  std::vector<symbolt>& needed);
+  std::string verify_mock_objects(const symbol_tablet &st,
+                                  const interpretert::list_input_varst& opaque_function_returns);
 
 };
 
@@ -915,6 +917,53 @@ void reference_factoryt::add_mock_objects(const symbol_tablet &st,
 
 }
 
+std::string reference_factoryt::verify_mock_objects(const symbol_tablet &st,
+  const interpretert::list_input_varst& opaque_function_returns)
+{
+
+  std::vector<init_statement> verify_statements;
+  
+  for(auto fn_and_returns : opaque_function_returns)
+  {
+
+    const symbolt &func=st.lookup(fn_and_returns.first);    
+    struct java_call_descriptor desc;
+    populate_descriptor_names(func,desc);
+
+    if(shouldnt_mock_class(desc.classname))
+      continue;
+
+    assert(fn_and_returns.second.size() != 0);
+    // Get type from replacement value,
+    // as remove_returns passlet has scrubbed the function return type by this point.
+    const auto& last_definition_list=fn_and_returns.second.back().assignments;
+    const auto& last_toplevel_assignment=last_definition_list.back().value;
+    
+    populate_descriptor_types(func,last_toplevel_assignment.type(),desc,st);
+
+    // For now just check that call counts meet our expectations.
+
+    bool is_static=!desc.original_type.has_this();
+    bool is_constructor=desc.original_type.get_bool(ID_constructor);
+
+    if(is_static)
+      mockenv_builder.verify_static_calls(desc.classname,desc.funcname,desc.java_arg_types,
+                                          fn_and_returns.second.size(),verify_statements);
+    else if(is_constructor)
+      mockenv_builder.verify_constructor_calls(desc.classname,desc.funcname,desc.java_arg_types,
+                                               fn_and_returns.second.size(),verify_statements);
+    else
+      mockenv_builder.verify_instance_calls(desc.classname,desc.funcname,desc.java_arg_types,
+                                            fn_and_returns.second.size(),verify_statements);
+
+  }
+
+  std::ostringstream statement_stream;
+  mockenv_builder.print_statements(verify_statements,statement_stream);
+  return statement_stream.str();
+  
+}
+  
 } // End of anonymous namespace
 
 std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const irep_idt &func_id,
@@ -958,8 +1007,8 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
   else
   {
     indent(post_mock_setup_result) += "// NOTE: the given entry-point is not called, perhaps because\n";
-    indent(post_mock_setup_result) += "we encountered a fault during static initialisation. Instantiating\n";
-    indent(post_mock_setup_result) += "the target class to cause static initialisers run.\n\n";
+    indent(post_mock_setup_result) += "// we encountered a fault during static initialisation. Instantiating\n";
+    indent(post_mock_setup_result) += "// the target class to cause static initialisers run.\n\n";
     java_call_descriptor desc;
     populate_descriptor_names(func,desc);
     indent(post_mock_setup_result)+=force_instantiate(desc.classname);
@@ -1030,8 +1079,10 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
     }
   }
 
+  indent(result)+=ref_factory.verify_mock_objects(st,opaque_function_returns);
+
   // closing the method
-  indent(result)+="}\n";
+  indent(result)+="\n}\n";
   return result;
 
 }
