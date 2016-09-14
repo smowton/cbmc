@@ -827,7 +827,8 @@ void reference_factoryt::add_mock_call(
   bool is_constructor=desc.original_type.get_bool(ID_constructor);
       
   if(is_static)
-    mockenv_builder.static_call(desc.classname, desc.funcname, desc.java_arg_types, return_value);
+    mockenv_builder.static_call(desc.classname, desc.funcname, desc.java_arg_types,
+                                desc.java_ret_type, return_value);
   else if(is_constructor)
   {
     std::string caller=as_string(defined_symbols_context.calling_function);

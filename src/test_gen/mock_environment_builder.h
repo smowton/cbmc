@@ -66,15 +66,16 @@ namespace std {
   };
 }
 
-struct instance_method_answer {
+struct method_answer {
 
   std::string answer_object;
   std::string answer_list;
+  bool is_static;
 
-  instance_method_answer() = default;
+  method_answer() = default;
   
-instance_method_answer(const std::string& ao,const std::string& al) :
-  answer_object(ao),answer_list(al) {}
+method_answer(const std::string& ao,const std::string& al, bool is) :
+  answer_object(ao),answer_list(al),is_static(is) {}
   
 };
 
@@ -95,8 +96,8 @@ class mock_environment_builder {
   // and answer object connections.
   std::unordered_set<std::string> mock_instances_exist;
 
-  // Track class instance methods that have an answer object set up.
-  std::unordered_map<method_signature,instance_method_answer> instance_method_answers;
+  // Track methods that have an answer object set up.
+  std::unordered_map<method_signature,method_answer> answer_objects;
 
   // Build up a set of classes that need PowerMock setup (those whose constructors and/or static methods we need to intercept)
   std::set<std::string> powermock_classes;
@@ -122,6 +123,8 @@ class mock_environment_builder {
 
   // Intercept the next constructor call to tyname and return a fresh mock instance.
   std::string instantiate_mock(const std::string& tyname,bool is_constructor);
+
+  method_answer* static_or_instance_call(const std::string& targetclass,const std::string& methodname,const std::vector<java_type>& argtypes,const java_type& rettype,const std::string& retval,bool is_static);
   
   // Intercept the next instance call to targetobj.methodname(paramtype0,paramtype1,...) and return retval.
   void instance_call(const std::string& targetclass,const std::string& methodname,const std::vector<java_type>& argtypes,const java_type& rettype,const std::string& retval);
@@ -130,7 +133,7 @@ class mock_environment_builder {
   std::string finalise_instance_calls();
   
   // Intercept the next static call to targetclass.methodname(argtypes...) and return retval.
-  void static_call(const std::string& targetclass,const std::string& methodname,const std::vector<java_type>& argtypes,const std::string& retval);
+  void static_call(const std::string& targetclass,const std::string& methodname,const std::vector<java_type>& argtypes,const java_type& rettype,const std::string& retval);
 
   // Return retval the next time a targetclass is constructed.
   void constructor_call(const std::string& callingclass,const std::string& targetclass,const std::vector<java_type>& argtypes,const std::string& retval);

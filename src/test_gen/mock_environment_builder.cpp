@@ -164,17 +164,17 @@ Function: instance_call
 // Intercept the next instance call to targetclass::methodname(paramtype0,
 // paramtype1,...) and return retval.
 // At the moment we don't care which instance of targetclass was called against.
-void mock_environment_builder::instance_call(
+method_answer* mock_environment_builder::static_or_instance_call(
     const std::string &targetclass,const std::string &methodname,
     const std::vector<java_type> &argtypes,const java_type &rettype,
-    const std::string &retval)
+    const std::string &retval,bool is_static)
 {
 
   method_signature sig(targetclass,methodname,argtypes);
-  instance_method_answer dummy_ans;
+  method_answer dummy_ans;
 
   auto insertresult=
-    instance_method_answers.insert(std::make_pair(sig,dummy_ans));
+    answer_objects.insert(std::make_pair(sig,dummy_ans));
 
   if(insertresult.second)
   {
@@ -195,7 +195,7 @@ void mock_environment_builder::instance_call(
     qualified2identifier(al);
     qualified2identifier(ao);
 
-    insertresult.first->second=instance_method_answer(ao,al);
+    insertresult.first->second=method_answer(ao,al,is_static);
 
     std::string boxed_type=box_java_type(rettype);
 
@@ -208,9 +208,19 @@ void mock_environment_builder::instance_call(
   }
 
   // Add the desired return value to the list:
-  auto found=insertresult.first->second;
+  auto& found=insertresult.first->second;
   mock_prelude << found.answer_list << ".add(" << retval << ");"
 	       << prelude_newline;
+
+  return insertresult.second ? &found : 0;
+}
+
+void mock_environment_builder::instance_call(
+    const std::string &targetclass,const std::string &methodname,
+    const std::vector<java_type> &argtypes,const java_type &rettype,
+    const std::string &retval)
+{
+  static_or_instance_call(targetclass,methodname,argtypes,rettype,retval,false);
 }
 
 /*******************************************************************\
@@ -297,8 +307,11 @@ std::string mock_environment_builder::finalise_instance_calls()
   std::ostringstream result;
   result << prelude_newline;
 
-  for(auto iter : instance_method_answers)
+  for(auto iter : answer_objects)
   {
+
+    if(iter.second.is_static)
+      continue;
 
     const auto &cname=iter.first.classname;
     if(!mock_instances_exist.count(cname))
@@ -329,7 +342,7 @@ std::string mock_environment_builder::finalise_instance_calls()
       continue;
     
     // An elaborated method may be mocked if it has an opaque super call:
-    if(instance_method_answers.count(iter))
+    if(answer_objects.count(iter))
       continue;
 
     std::string instanceList=cname+"_instances";
@@ -356,7 +369,8 @@ As instance_call above, but for Java static methods.
 
 void mock_environment_builder::static_call(
     const std::string &targetclass,const std::string &methodname,
-    const std::vector<java_type> &argtypes,const std::string &retval)
+    const std::vector<java_type> &argtypes,const java_type &rettype,
+    const std::string &retval)
 {
 
   // Intercepting static calls needs PowerMockito setup:
@@ -367,9 +381,14 @@ void mock_environment_builder::static_call(
     mock_prelude << "org.powermock.api.mockito.PowerMockito.mockStatic("
 		 << targetclass << ".class);" << prelude_newline;
 
-  generate_when_statement(mock_prelude,targetclass,methodname,argtypes);
+  auto addresult=static_or_instance_call(targetclass,methodname,argtypes,rettype,retval,true);
+  if(addresult)
+  {
+    // Attach the answer object the first time a given *method* is called:
+    generate_when_statement(mock_prelude,targetclass,methodname,argtypes);
+    mock_prelude << ".thenAnswer(" << addresult->answer_object << ");" << prelude_newline;
+  }
 
-  mock_prelude << ".thenReturn(" << retval << ");" << prelude_newline;
 }
 
 /*******************************************************************\
@@ -506,7 +525,7 @@ void mock_environment_builder::verify_instance_calls(
   std::ostringstream instance_call;
 
   method_signature sig(targetclass,methodname,argtypes);
-  const auto& answer_record=instance_method_answers.at(sig);
+  const auto& answer_record=answer_objects.at(sig);
   
   // For the time being, just check that a call happened at all:
   instance_call << "assert(" << answer_record.answer_object << ".callArguments.size()"
