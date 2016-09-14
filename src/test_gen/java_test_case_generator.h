@@ -40,7 +40,7 @@ class java_test_case_generatort:public messaget
   {
   }
 
-  typedef enum test_case_statust { SUCCESS, FAIL, ERROR } test_case_statust;
+  typedef enum { SUCCESS, FAIL, ERROR } test_case_statust;
   const std::string generate_test_func_name(const symbol_tablet &st,
                                             const goto_functionst &gf,
                                             const size_t test_idx);
