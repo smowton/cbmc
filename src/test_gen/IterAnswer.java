@@ -34,15 +34,15 @@ public class IterAnswer<T> implements Answer<T> {
 	assert(expected.length==actual.length);
 	for(int i = 0; i < expected.length; ++i)
 	{
-	  if(expected[i]==null) continue;
-	  if(!expected[i].equals(actual[i]))
-	  {
+	  try {
+	    CompareWithFieldList.compare(actual[i], expected[i], "");
+	  }
+	  catch(UnexpectedMockParameterException e) {
 	    String errormsg="Mocked class " + classname +
 	      " method " + methodname +
 	      " invocation " + (idx+1) +
 	      " parameter " + (i+1) +
-	      " expected " + expected[i].toString +
-	      " actual " + (actual[i] == null ? "null" : actual[i].toString());
+	      ": " + e.getMessage();
 	    throw new UnexpectedMockParameterException(errormsg);
 	  }
 	}
@@ -54,7 +54,5 @@ public class IterAnswer<T> implements Answer<T> {
 
 }
 
-class UnexpectedMockParameterException extends RuntimeException {
-  public UnexpectedMockParameterException(String m) { super(m); }
-}
+
 
