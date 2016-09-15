@@ -954,6 +954,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
       {
         codet bounds_check=get_array_bounds_check(deref,op[1]);
         bounds_check.add_source_location()=i_it->source_location;
+	c=std::move(bounds_check);
       }
       results[0]=java_bytecode_promotion(element);
     }
