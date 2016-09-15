@@ -1038,7 +1038,12 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
   // may have generated mock objects.
   std::string mock_final = ref_factory.mockenv_builder.finalise_instance_calls();
   result += "\n" + ref_factory.mockenv_builder.get_mock_prelude() +
-    "\n" + post_mock_setup_result + "\n" + mock_final;
+    "\n" + post_mock_setup_result + "\n" + mock_final + '\n';
+
+  indent(result,2)+="/* Verify that mock-object interactions were as expected: */\n";
+  indent(result,2)+=ref_factory.verify_mock_objects(st,opaque_function_returns);
+  result+='\n';
+  
   if(exists_func_call)
   {
 
@@ -1132,9 +1137,6 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
   }
 
   result+='\n';
-  indent(result,2)+="/* Verify that mock-object interactions were as expected: */\n";
-  indent(result,2)+=ref_factory.verify_mock_objects(st,opaque_function_returns);
-
   // closing the method
   indent(result)+="\n}\n";
   return result;

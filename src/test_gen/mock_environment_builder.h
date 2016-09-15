@@ -70,12 +70,13 @@ struct method_answer {
 
   std::string answer_object;
   std::string answer_list;
+  std::string expectation_list;
   bool is_static;
 
   method_answer() = default;
   
-method_answer(const std::string& ao,const std::string& al, bool is) :
-  answer_object(ao),answer_list(al),is_static(is) {}
+method_answer(const std::string& ao,const std::string& al, const std::string& el, bool is) :
+  answer_object(ao),answer_list(al),expectation_list(el),is_static(is) {}
   
 };
 

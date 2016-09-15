@@ -194,13 +194,16 @@ method_answer* mock_environment_builder::add_to_answer_list(
 
     std::string al=answerlist.str();
     std::string ao=answerlist.str();
+    std::string el=answerlist.str();
     al+="_answer_list";
     ao+="_answer_object";
+    el+="_expectation_list";
 
     qualified2identifier(al);
     qualified2identifier(ao);
+    qualified2identifier(el);
 
-    insertresult.first->second=method_answer(ao,al,is_static);
+    insertresult.first->second=method_answer(ao,al,el,is_static);
 
     std::string boxed_type=box_java_type(rettype);
 
@@ -209,7 +212,8 @@ method_answer* mock_environment_builder::add_to_answer_list(
 		 << prelude_newline
 		 << "final com.diffblue.java_testcase.IterAnswer " << ao
 		 << "=new com.diffblue.java_testcase.IterAnswer<"
-		 << boxed_type << "> (" << al << ");" << prelude_newline;
+		 << boxed_type << "> (" << targetclass << ", "
+                 << methodname << ", " << al << ", " << el << ");" << prelude_newline;
   }
 
   // Add the desired return value to the list:
@@ -512,16 +516,23 @@ void mock_environment_builder::verify_instance_calls(
 
   for(size_t callidx=0, calllim=calls.size(); callidx!=calllim; ++callidx)
   {
+    stmts.push_back(init_statement::scopeOpen());
     const auto& call = calls[callidx];
+    std::ostringstream decl_statement;
+    decl_statement << "Object[] expected = new Object[" << argtypes.size() << "]";
+    stmts.push_back(init_statement::statement(decl_statement.str()));
     for(size_t argidx=0, arglim=argtypes.size(); argidx!=arglim; ++argidx)
     {
       if(!argtypes[argidx].is_primitive)
         continue;
-      std::ostringstream assert_statement;
-      assert_statement << "assert(" << answer_record.answer_object << ".callArguments.get(" <<
-        callidx << ")[" << argidx << "].equals(" << call[argidx] << "))";
-      stmts.push_back(init_statement::statement(assert_statement.str()));
+      std::ostringstream set_statement;
+      set_statement << "expected[" << argidx << "] = " << call[argidx];
+      stmts.push_back(init_statement::statement(set_statement.str()));
     }
+    std::ostringstream add_statement;
+    add_statement << answer_record.expectation_list << ".add(expected)";
+    stmts.push_back(init_statement::statement(add_statement.str()));
+    stmts.push_back(init_statement::scopeClose());
   }
   
 }
