@@ -477,21 +477,11 @@ void mock_environment_builder::verify_static_calls(
   const std::string& targetclass,
   const std::string& methodname,
   const std::vector<java_type>& argtypes,
-  size_t ncalls,
+  const std::vector<std::vector<std::string> >& calls,  
   std::vector<init_statement>& stmts)
 {
-  std::ostringstream prep_call;
-  prep_call << "org.powermock.api.mockito.PowerMockito.verifyStatic(" <<
-    "org.mockito.Mockito.times(" << ncalls << "))";
-  
-  stmts.push_back(init_statement::statement(prep_call.str()));
-
-  std::ostringstream static_call;
-  static_call << targetclass << '.' << methodname << '(';
-  generate_arg_matchers(static_call,argtypes);
-  static_call << ')';
-
-  stmts.push_back(init_statement::statement(static_call.str())); 
+  verify_instance_calls(targetclass,methodname,
+                        argtypes,calls,stmts);
 }
 
 void mock_environment_builder::verify_constructor_calls(
