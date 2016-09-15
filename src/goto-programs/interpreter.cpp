@@ -929,8 +929,8 @@ void interpretert::execute_function_call()
     {
       std::vector<mp_integer> value;
       assert(it->second.size()!=0);
-      assert(it->second.front().assignments.size()!=0);
-      evaluate(it->second.front().assignments.back().value,value);
+      assert(it->second.front().return_assignments.size()!=0);
+      evaluate(it->second.front().return_assignments.back().value,value);
       if (return_value_address>0)
       {
         assign(return_value_address,value);
@@ -1471,15 +1471,15 @@ void interpretert::prune_inputs(input_varst &inputs,list_input_varst& function_i
 {
   for(list_input_varst::iterator it=function_inputs.begin(); it!=function_inputs.end();it++) {
     const exprt size=from_integer(it->second.size(), integer_typet());
-    assert(it->second.front().assignments.size()!=0);
-    const auto& first_function_assigns=it->second.front().assignments;
+    assert(it->second.front().return_assignments.size()!=0);
+    const auto& first_function_assigns=it->second.front().return_assignments;
     const auto& toplevel_definition=first_function_assigns.back().value;
     array_typet type=array_typet(toplevel_definition.type(),size);
     array_exprt list(type);
     list.reserve_operands(it->second.size());
     for(auto l_it : it->second)
     {
-      list.copy_to_operands(l_it.assignments.back().value);
+      list.copy_to_operands(l_it.return_assignments.back().value);
     }
     inputs[it->first]=list;
   }
@@ -1999,7 +1999,8 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
 	if(defined.size()!=0) // Definition found?
 	{
           const auto& caller=trace_stack[trace_stack.size()-2].func_name;
-	  function_inputs[ret_func.func_name].push_back({ caller,defined });
+	  function_inputs[ret_func.func_name].push_back({
+              caller,std::move(defined),std::move(trace_stack.back().param_values)});
 	}
       }
       trace_stack.pop_back();

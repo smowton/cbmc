@@ -51,7 +51,8 @@ public:
   // An assignment list annotated with the calling context.
   struct function_assignments_contextt {
     irep_idt calling_function;
-    function_assignmentst assignments;
+    function_assignmentst return_assignments;
+    function_assignmentst param_assignments;
   };
   
   // list_input_varst maps function identifiers onto a vector of [name = value] assignments

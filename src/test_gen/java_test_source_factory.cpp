@@ -772,7 +772,7 @@ void reference_factoryt::add_mock_call(
   const symbol_tablet& st)
 {
 
-  const auto& defined_symbols=defined_symbols_context.assignments;
+  const auto& defined_symbols=defined_symbols_context.return_assignments;
   std::string return_value;
   assert(defined_symbols.size()!=0);
       
@@ -882,7 +882,7 @@ void reference_factoryt::add_mock_objects(const symbol_tablet &st,
     assert(fn_and_returns.second.size() != 0);
     // Get type from replacement value,
     // as remove_returns passlet has scrubbed the function return type by this point.
-    const auto& last_definition_list=fn_and_returns.second.back().assignments;
+    const auto& last_definition_list=fn_and_returns.second.back().return_assignments;
     const auto& last_toplevel_assignment=last_definition_list.back().value;
     
     populate_descriptor_types(func,last_toplevel_assignment.type(),desc,st);
@@ -937,7 +937,7 @@ std::string reference_factoryt::verify_mock_objects(const symbol_tablet &st,
     assert(fn_and_returns.second.size() != 0);
     // Get type from replacement value,
     // as remove_returns passlet has scrubbed the function return type by this point.
-    const auto& last_definition_list=fn_and_returns.second.back().assignments;
+    const auto& last_definition_list=fn_and_returns.second.back().return_assignments;
     const auto& last_toplevel_assignment=last_definition_list.back().value;
     
     populate_descriptor_types(func,last_toplevel_assignment.type(),desc,st);
