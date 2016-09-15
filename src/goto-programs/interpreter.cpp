@@ -1864,6 +1864,7 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
   std::vector<std::pair<mp_integer, std::vector<mp_integer> > > trace_eval;
   std::vector<trace_stack_entry> trace_stack;
   int outermost_constructor_depth=-1;
+  int expect_parameter_assignments=0;
 
   trace_stack.push_back({goto_functionst::entry_point(),0,irep_idt(),false,{}});
   
@@ -1897,6 +1898,43 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
       }
       assign(address,rhs);
 
+      if(expect_parameter_assignments!=0)
+      {
+        if(!--expect_parameter_assignments)
+        {
+          // Just executed the last parameter assignment for a function we just entered.
+          // Capture the arguments of *every* call as it is entered,
+          // because we might need them for verification if it happens to call a super-method later.
+          std::vector<function_assignmentt> actual_params;
+          const auto& this_function=trace_stack.back().func_name;
+          const auto& formal_params=
+            to_code_type(symbol_table.lookup(this_function).type).parameters();
+          std::vector<function_assignmentt> direct_params;
+      
+          for(const auto& fp : formal_params)
+          {        
+            // Note this will record the actual parameter values as well as anything
+            // reachable from them. We use a single actual_params list for all parameters
+            // to avoid redundancy e.g. if parameters or objects reachable from them alias,
+            // we only need to capture that subtree once.
+            get_value_tree(fp.get_identifier(),actual_params);
+            // Set the actual direct params aside, so we can keep them in order at the back.
+            direct_params.push_back(std::move(actual_params.back()));
+            actual_params.pop_back();
+          }
+
+          // Put the direct params back on the end of the list:
+          actual_params.insert(actual_params.end(),direct_params.begin(),direct_params.end());
+#ifdef DEBUG
+          for(const auto& id_expr : actual_params)
+            message->status() << "Param " << id_expr.id << " = " <<
+              from_expr(ns,"",id_expr.value) << messaget::eom;
+#endif
+          trace_stack.back().param_values=std::move(actual_params);
+
+        }
+      }
+
       trace_eval.push_back(std::make_pair(address, rhs));
     }
     else if(step.is_function_call())
@@ -1913,34 +1951,13 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
 
       mp_integer this_address=get_this_address(to_code_function_call(step.pc->code));
 
-      // Capture the arguments of *every* call as it is entered,
-      // because we might need them for verification if it happens to call a super-method later.
-      std::vector<function_assignmentt> actual_params;
-      const auto& formal_params=
-        to_code_type(to_code_function_call(step.pc->code).function().type()).parameters();
-      std::vector<function_assignmentt> direct_params;
-      
-      for(const auto& fp : formal_params)
-      {        
-        // Note this will record the actual parameter values as well as anything
-        // reachable from them. We use a single actual_params list for all parameters
-        // to avoid redundancy e.g. if parameters or objects reachable from them alias,
-        // we only need to capture that subtree once.
-        get_value_tree(fp.get_identifier(),actual_params);
-        // Set the actual direct params aside, so we can keep them in order at the back.
-        direct_params.push_back(std::move(actual_params.back()));
-        actual_params.pop_back();
-      }
+      trace_stack.push_back({called,this_address,irep_idt(),false,{}});
 
-      // Put the direct params back on the end of the list:
-      actual_params.insert(actual_params.end(),direct_params.begin(),direct_params.end());
-
-      #ifdef DEBUG
-      for(const auto& id_expr : actual_params)
-        message->status() << "Param " << id_expr.id << " = " << from_expr(ns,"",id_expr.value) << messaget::eom;
-      #endif
-      
-      trace_stack.push_back({called,this_address,irep_idt(),false,std::move(actual_params)});
+      assert(expect_parameter_assignments==0 &&
+             "Entered another function before the parameter assignment chain was done?");
+      // Capture upcoming parameter assignments:
+      expect_parameter_assignments=
+        to_code_type(to_code_function_call(step.pc->code).function().type()).parameters().size();
       
       bool is_super=(!is_cons) &&
                     trace_stack.size()!=0 &&
@@ -1989,6 +2006,8 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
     {
       outermost_constructor_depth=-1;
       assert(trace_stack.size()>=1);
+      assert(expect_parameter_assignments==0 &&
+             "Exited function before the parameter assignment chain was done?");
       const auto& ret_func=trace_stack.back();
       if(ret_func.capture_symbol!=irep_idt())
       {
