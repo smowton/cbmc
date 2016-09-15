@@ -82,9 +82,14 @@ void mock_environment_builder::constructor_call(
   // Note that the *caller* (not the callee) needs PrepareForTest.
   powermock_classes.insert(callingclass);
 
-  mock_prelude << "org.powermock.api.mockito.PowerMockito.whenNew("
-	       << targetclass << ".class).withAnyArguments().thenReturn("
-	       << retval << ");" << prelude_newline;
+  auto addresult=add_to_answer_list(targetclass,targetclass,argtypes,
+                                         {targetclass,false},retval,true);
+  if(addresult)
+  {
+    mock_prelude << "org.powermock.api.mockito.PowerMockito.whenNew("
+                 << targetclass << ".class).withAnyArguments().thenAnswer("
+                 << addresult->answer_object << ");" << prelude_newline;
+  }
 }
 
 /*******************************************************************\
@@ -164,7 +169,7 @@ Function: instance_call
 // Intercept the next instance call to targetclass::methodname(paramtype0,
 // paramtype1,...) and return retval.
 // At the moment we don't care which instance of targetclass was called against.
-method_answer* mock_environment_builder::static_or_instance_call(
+method_answer* mock_environment_builder::add_to_answer_list(
     const std::string &targetclass,const std::string &methodname,
     const std::vector<java_type> &argtypes,const java_type &rettype,
     const std::string &retval,bool is_static)
@@ -220,7 +225,7 @@ void mock_environment_builder::instance_call(
     const std::vector<java_type> &argtypes,const java_type &rettype,
     const std::string &retval)
 {
-  static_or_instance_call(targetclass,methodname,argtypes,rettype,retval,false);
+  add_to_answer_list(targetclass,methodname,argtypes,rettype,retval,false);
 }
 
 /*******************************************************************\
@@ -381,7 +386,7 @@ void mock_environment_builder::static_call(
     mock_prelude << "org.powermock.api.mockito.PowerMockito.mockStatic("
 		 << targetclass << ".class);" << prelude_newline;
 
-  auto addresult=static_or_instance_call(targetclass,methodname,argtypes,rettype,retval,true);
+  auto addresult=add_to_answer_list(targetclass,methodname,argtypes,rettype,retval,true);
   if(addresult)
   {
     // Attach the answer object the first time a given *method* is called:

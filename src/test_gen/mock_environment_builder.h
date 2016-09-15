@@ -124,7 +124,7 @@ class mock_environment_builder {
   // Intercept the next constructor call to tyname and return a fresh mock instance.
   std::string instantiate_mock(const std::string& tyname,bool is_constructor);
 
-  method_answer* static_or_instance_call(const std::string& targetclass,const std::string& methodname,const std::vector<java_type>& argtypes,const java_type& rettype,const std::string& retval,bool is_static);
+  method_answer* add_to_answer_list(const std::string& targetclass,const std::string& methodname,const std::vector<java_type>& argtypes,const java_type& rettype,const std::string& retval,bool is_static);
   
   // Intercept the next instance call to targetobj.methodname(paramtype0,paramtype1,...) and return retval.
   void instance_call(const std::string& targetclass,const std::string& methodname,const std::vector<java_type>& argtypes,const java_type& rettype,const std::string& retval);
