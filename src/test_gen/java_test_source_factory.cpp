@@ -801,14 +801,11 @@ void reference_factoryt::struct_to_fieldlist(
   const auto& ops=in_struct.operands();
   assert(comps.size()==ops.size());
       
-  std::ostringstream new_statement;
-  new_statement << "FieldList " << listname << " = new FieldList()";
-  statements.push_back(init_statement::statement(new_statement.str()));
   for(size_t fieldidx=0,fieldlim=ops.size(); fieldidx!=fieldlim; ++fieldidx)
   {
     std::string compname=id2string(comps[fieldidx].get_pretty_name());
     assert(compname.size()>=1);
-    if(comps[fieldidx].type().id()==ID_struct)
+    if(ns.follow(comps[fieldidx].type()).id()==ID_struct)
     {
       // Superclass, I hope.
       assert(compname[0]=='@');
@@ -819,17 +816,19 @@ void reference_factoryt::struct_to_fieldlist(
       // Internal detail, do not check
       continue;
     }
+    else {
 
-    std::string valstr;
-    std::string empty;
-    add_value(valstr, st, ops[fieldidx], empty);
+      std::string valstr;
+      std::string empty;
+      add_value(valstr, st, ops[fieldidx], empty);
         
-    std::ostringstream add_field_statement;
-    add_field_statement << listname << ".add(" <<
-      id2string(comps[fieldidx].get_pretty_name()) << ", " <<
-      valstr << ")";
+      std::ostringstream add_field_statement;
+      add_field_statement << listname << ".add(" <<
+        id2string(comps[fieldidx].get_pretty_name()) << ", " <<
+        valstr << ")";
 
-    statements.push_back(init_statement::statement(add_field_statement.str()));
+      statements.push_back(init_statement::statement(add_field_statement.str()));
+    }
   }
 }
   
@@ -847,6 +846,9 @@ void reference_factoryt::defined_symbols_to_java_fieldlists(
 
     if(use_symbol.type.id()==ID_struct)
     {
+      std::ostringstream new_statement;
+      new_statement << "FieldList " << pretty_name << " = new FieldList()";
+      statements.push_back(init_statement::statement(new_statement.str()));
       struct_to_fieldlist(pretty_name,to_struct_expr(defined.value),st,statements);
     }
     else {
