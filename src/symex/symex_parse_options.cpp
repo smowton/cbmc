@@ -32,6 +32,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-programs/remove_complex.h>
 #include <goto-programs/remove_vector.h>
 #include <goto-programs/remove_virtual_functions.h>
+#include <goto-programs/remove_instanceof.h>
 
 #include <goto-instrument/cover.h>
 
@@ -61,8 +62,7 @@ Function: symex_parse_optionst::symex_parse_optionst
 symex_parse_optionst::symex_parse_optionst(int argc, const char **argv):
   parse_options_baset(SYMEX_OPTIONS, argc, argv),
   language_uit(cmdline, ui_message_handler),
-  ui_message_handler(language_uit::get_ui_cmdline(cmdline),
-                     "Symex " CBMC_VERSION)
+  ui_message_handler(cmdline, "Symex " CBMC_VERSION)
 {
 }
   
@@ -407,6 +407,7 @@ bool symex_parse_optionst::process_goto_program(const optionst &options)
     remove_complex(goto_model);
     remove_vector(goto_model);
     remove_virtual_functions(goto_model);
+    remove_instanceof(goto_model);
     
     // recalculate numbers, etc.
     goto_model.goto_functions.update();

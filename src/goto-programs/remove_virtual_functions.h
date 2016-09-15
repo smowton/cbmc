@@ -19,7 +19,7 @@ void remove_virtual_functions(
   goto_modelt &goto_model);
 
 void remove_virtual_functions(
-  const symbol_tablet &symbol_table,
+  symbol_tablet &symbol_table,
   goto_functionst &goto_functions);
 
 #endif
