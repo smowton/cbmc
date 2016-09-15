@@ -1910,9 +1910,14 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
           const auto& formal_params=
             to_code_type(symbol_table.lookup(this_function).type).parameters();
           std::vector<function_assignmentt> direct_params;
+          bool is_constructor=id2string(this_function).find("<init>")!=std::string::npos;
       
           for(const auto& fp : formal_params)
-          {        
+          {
+            // Don't capture 'this' on entering a constructor, as it's uninitialised
+            // at this point.
+            if(is_constructor && fp.get_this())
+              continue;
             // Note this will record the actual parameter values as well as anything
             // reachable from them. We use a single actual_params list for all parameters
             // to avoid redundancy e.g. if parameters or objects reachable from them alias,

@@ -1054,7 +1054,7 @@ std::string reference_factoryt::verify_mock_objects(const symbol_tablet &st,
                              first_direct);
 
       // Omit implicit 'this' argument for now:
-      if(!is_static)
+      if((!is_static) && !is_constructor)
       {
         assert(param_offset>0);
         aux_assignments.pop_back();
