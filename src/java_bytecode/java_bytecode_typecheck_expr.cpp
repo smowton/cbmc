@@ -120,12 +120,13 @@ void java_bytecode_typecheckt::typecheck_expr_java_string_literal(exprt &expr)
     // no, create the symbol
     symbolt new_symbol;
     new_symbol.name=identifier;
-    new_symbol.type=string_type;
+    new_symbol.type=pointer_typet(string_type);
     new_symbol.base_name="Literal";
     new_symbol.pretty_name=value;
     new_symbol.mode=ID_java;
     new_symbol.is_type=false;
     new_symbol.is_lvalue=true;
+    new_symbol.is_static_lifetime=true; // These are basically const global data.
     
     if(symbol_table.add(new_symbol))
     {
@@ -134,8 +135,7 @@ void java_bytecode_typecheckt::typecheck_expr_java_string_literal(exprt &expr)
     }
   }
   
-  expr=address_of_exprt(
-    symbol_exprt(identifier, string_type));
+  expr=symbol_exprt(identifier, pointer_typet(string_type));
 }
 
 /*******************************************************************\

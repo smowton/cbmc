@@ -3,5 +3,5 @@ TestGenTest.class
 --stop-on-fail --gen-java-test-case --function TestGenTest.test
 ^EXIT=0$
 ^SIGNAL=0$
-com.diffblue.java_testcase.Reflector.setInstanceField(dynamic_object.*,"x",1);
-com.diffblue.java_testcase.Reflector.setInstanceField(dynamic_object.*,"y",2);
+Reflector.setInstanceField(dynamic_object.*,"x",1);
+Reflector.setInstanceField(dynamic_object.*,"y",2);

@@ -26,6 +26,9 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "java_types.h"
 
 #include <limits>
+#include <algorithm>
+#include <functional>
+#include <unordered_set>
 
 namespace {
 class patternt
@@ -56,15 +59,19 @@ class java_bytecode_convert_methodt:public messaget
 public:
   java_bytecode_convert_methodt(
     symbol_tablet &_symbol_table,
-    message_handlert &_message_handler):
+    message_handlert &_message_handler,
+    int _max_array_length):
     messaget(_message_handler),
-    symbol_table(_symbol_table)
+    symbol_table(_symbol_table),
+    max_array_length(_max_array_length)
   {
   }
 
   typedef java_bytecode_parse_treet::methodt methodt;
   typedef java_bytecode_parse_treet::instructiont instructiont;
   typedef methodt::instructionst instructionst;
+  typedef methodt::local_variable_tablet local_variable_tablet;
+  typedef methodt::local_variablet local_variablet;
 
   void operator()(const symbolt &class_symbol, const methodt &method)
   {
@@ -74,6 +81,7 @@ public:
 protected:
   irep_idt method_id;
   symbol_tablet &symbol_table;
+  int max_array_length;
 
   irep_idt current_method;
   typet method_return_type;
@@ -87,8 +95,6 @@ protected:
     bool is_parameter;
     variablet() : symbol_expr(), is_parameter(false) {}      
   };
-
-
   
   typedef std::vector<variablet> variablest;
   expanding_vector<variablest> variables;
@@ -102,14 +108,13 @@ protected:
   } instruction_sizet;
 
   // return corresponding reference of variable
-  variablet &find_variable_for_slot(unsigned number_int, size_t address,
-                                    variablest &var_list, instruction_sizet inst_size)
+  variablet &find_variable_for_slot(size_t address, variablest &var_list)
   {
     for(variablet &var : var_list)
     {
       size_t start_pc = var.start_pc;
       size_t length = var.length;
-      if (address + (size_t) inst_size >= start_pc && address < start_pc + length)
+      if (address >= start_pc && address < start_pc + length)
         return var;
     }
     // add unnamed local variable to end of list at this index
@@ -124,7 +129,7 @@ protected:
   }
 
   // JVM local variables
-  const exprt variable(const exprt &arg, char type_char, size_t address, instruction_sizet inst_size, bool do_cast = true)
+  const exprt variable(const exprt &arg, char type_char, size_t address, bool do_cast = true)
   {
     irep_idt number=to_constant_expr(arg).get_value();
     
@@ -133,7 +138,7 @@ protected:
     variablest &var_list = variables[number_int];
 
     // search variable in list for correct frame / address if necessary
-    variablet &var = find_variable_for_slot(number_int, address, var_list, inst_size);
+    variablet &var = find_variable_for_slot(address, var_list);
 
     if(var.symbol_expr.get_identifier().empty())
     {
@@ -149,8 +154,6 @@ protected:
     else
     {
       exprt result=var.symbol_expr;
-      if(!var.is_parameter)
-        used_local_names.insert(to_symbol_expr(result));      
       if(do_cast && t!=result.type()) result=typecast_exprt(result, t);
       return result;
     }
@@ -214,12 +217,272 @@ protected:
       stack[stack.size()-o.size()+i]=o[i];
   }
 
- // conversion
+  struct converted_instructiont
+  {
+    converted_instructiont(
+      const instructionst::const_iterator &it,
+      const codet &_code):source(it), code(_code), done(false)
+      {}
+
+    instructionst::const_iterator source;
+    std::list<unsigned> successors;
+    std::set<unsigned> predecessors;
+    codet code;
+    stackt stack;
+    bool done;
+  };
+
+  typedef std::map<unsigned, converted_instructiont> address_mapt;
+
+    struct hash_sig_endaddress {
+    size_t operator()(java_bytecode_convert_methodt::local_variablet* ptr) const
+      {
+        if(ptr==0)
+          return 0;
+        return std::hash<std::string>()(id2string(ptr->name)) ^
+          std::hash<std::string>()(ptr->signature) ^
+          std::hash<size_t>()(ptr->index) ^
+          std::hash<size_t>()(ptr->start_pc+ptr->length);
+      }
+  };
+
+  struct eq_sig_endaddress {
+    size_t operator()(java_bytecode_convert_methodt::local_variablet* a,
+                      java_bytecode_convert_methodt::local_variablet* b) const
+      {
+        return ((!a) && (!b)) ||
+          (a->name==b->name &&
+           a->signature==b->signature &&
+           a->index == b->index &&
+           (a->start_pc+a->length)==(b->start_pc+b->length));
+      }
+  };
+
+  bool find_trivial_initialiser(local_variablet& var,
+                                const methodt::instructionst& insts,
+                                methodt::instructionst::const_iterator instit)
+  {
+
+    // Look for a trivial initialiser preceding var's live range,
+    // such as:
+    // astore_2
+    // --- live range begins for slot 2 ---
+    // more instructions...
+    // If this pattern is found, allow the store to directly initialise the named variable.
+    // Otherwise we'll initialise the local when recovering block structure and inserting
+    // decl instructions at the end of convert_instructions.
+
+    // instit points to the instruction where var's annotated live range begins.
+    
+    auto slotidx=var.index;
+    if(instit==insts.begin())
+      return false;
+
+    auto previt=instit;
+    --previt;
+    auto& previnst=*previt;
+    const std::string prevstatement=id2string(previnst.statement);
+    if(!(prevstatement.size()>=1 && prevstatement.substr(1,5)=="store"))
+      return false;
+
+    std::string storeslot;
+    if(previnst.args.size()==1)
+    {
+      const auto& arg=previnst.args[0];
+      storeslot=id2string(to_constant_expr(arg).get_value());
+    }
+    else
+    {
+      assert(prevstatement[6]=='_' && prevstatement.size()==8);
+      storeslot=prevstatement[7];
+      assert(isdigit(storeslot[0]));
+    }
+    auto storeslotidx=safe_string2unsigned(storeslot);
+    if(storeslotidx==slotidx)
+    {
+      // The instruction immediately prior to this is an initialiser.
+      var.length+=(var.start_pc-previnst.address);
+      var.start_pc=previnst.address;
+      return true;
+    }
+
+    return false;
+
+  }
+
+  typedef std::unordered_map<local_variablet*,local_variablet*,
+                             hash_sig_endaddress, eq_sig_endaddress> by_sig_and_endaddresst;
+
+  bool find_split_initialiser(local_variablet& var,
+                              const address_mapt& amap,
+                              by_sig_and_endaddresst& by_sig_and_endaddress)
+  {
+    // Second chance: does the live range start at a block header?
+    // If so can we find one or more predecessors with a live variable
+    // with like signature?
+    auto amap_iter=amap.find(var.start_pc);
+    assert(amap_iter!=amap.end() &&
+           "Live range doesn't start on an instruction boundary?");
+
+    if(amap_iter->second.predecessors.size()==0)
+      return false;
+
+    local_variablet* earliest_startpc=0;
+    std::vector<local_variablet> pred_keys;
+    std::vector<local_variablet*> preds;
+    
+    for(auto come_from_address : amap_iter->second.predecessors)
+    {
+    
+      // Try to find a variable like this one, but whose live range ends
+      // after the goto instruction at come_from_address:
+      auto goto_iter=amap.find(come_from_address);
+      assert(goto_iter!=amap.end() &&
+             "Predecessor that doesn't itself appear in the address map?");
+      ++goto_iter;
+      if(goto_iter==amap.end())
+        return false;
+
+      unsigned instruction_after_goto_address=goto_iter->first;
+      // Find a variable that ends there:
+      // (by the nature of the map we search, this will find anything with
+      //  this signature and end-address, not just the particular live range we
+      //  construct here)
+      local_variablet search_key=var;
+      search_key.start_pc=come_from_address;
+      search_key.length=instruction_after_goto_address-come_from_address;
+      auto find_var_iter=by_sig_and_endaddress.find(&search_key);
+
+      if(find_var_iter==by_sig_and_endaddress.end())
+        return false;
+
+      // TODO: handle backward jumps if we encounter code that inits
+      // variables after use in address order in the wild.
+      if(find_var_iter->second->start_pc >= var.start_pc)
+        return false;
+
+      // Find the predecessor with the lowest address:
+      if((!earliest_startpc) || earliest_startpc->start_pc > find_var_iter->second->start_pc)
+        earliest_startpc=find_var_iter->second;
+
+      preds.push_back(find_var_iter->second);
+      pred_keys.push_back(search_key);
+
+    }
+
+    // Remove all variables that will be modified from the end-address map
+    // before we alter their keys:
+    for(auto& key : pred_keys)
+      assert(by_sig_and_endaddress.erase(&key));
+    by_sig_and_endaddress.erase(&var);    
+   
+    // Extend the first predecessor's live range to span all live ranges found:
+    auto& existing_var=*earliest_startpc;
+    existing_var.length=(var.start_pc+var.length)-existing_var.start_pc;
+    
+    // Update the first predecessor's map entry:
+    by_sig_and_endaddress[&existing_var]=&existing_var;
+
+    // Mark this variable for deletion:
+    var.length=0;
+    // Mark all non-first preds for deletion too:
+    for(auto& pred : preds)
+      if(pred!=earliest_startpc)
+        pred->length=0;
+
+    status() << "Found split initialiser for variable " << var.name <<
+      " with " << preds.size() << " predecessors; new live range " <<
+      existing_var.start_pc << "-" << existing_var.start_pc+existing_var.length << eom;
+
+    return true;
+    
+  }
+                                
+
+  void find_initialisers(const methodt::instructionst& insts,
+                         local_variable_tablet& vars,
+                         const address_mapt& amap)
+  {
+
+    // Note: vars is sorted by start_pc.
+
+    // Build a map indexing variables by their signature and the address where their
+    // range ends, for trying to pair up disjoint live ranges:
+
+    by_sig_and_endaddresst by_signature_and_endaddress;
+    for(auto& v : vars)
+      assert(by_signature_and_endaddress.insert(std::make_pair(&v,&v)).second);
+
+    auto variter=vars.begin(), varlim=vars.end();
+    for(auto instit=insts.begin(),instend=insts.end(); instit!=instend; ++instit)
+    {
+      for(; variter!=varlim && variter->start_pc<instit->address; ++variter) {}
+      for(; variter!=varlim && variter->start_pc==instit->address; ++variter)
+      {
+        auto& var=*variter;
+        if(var.start_pc==0) // Parameter
+          continue;
+        bool found_init=find_trivial_initialiser(var,insts,instit);
+        if(!found_init)
+          found_init=find_split_initialiser(var,amap,by_signature_and_endaddress);
+        assert(found_init && "Couldn't find an initialiser for local variable");
+      }
+    }
+
+    // Clean up removed records from the variable table:
+
+    size_t toremove=0;
+    for(size_t i=0; i<(vars.size()-toremove); ++i)
+    {
+      auto& v=vars[i];
+      if(v.length==0)
+      {
+        // Move to end; consider the new element we've swapped in:
+        ++toremove;
+        if(i!=vars.size()-toremove) // Already where it needs to be?
+          std::swap(v,vars[vars.size()-toremove]);
+        --i;
+      }
+    }
+
+    // Remove un-needed entries.
+    vars.resize(vars.size()-toremove);
+    
+  }
+
+  void setup_local_variables(const methodt& m, const address_mapt& amap);
+
+  struct block_tree_node {
+    bool leaf;
+    std::vector<unsigned> branch_addresses;
+    std::vector<block_tree_node> branch;
+    block_tree_node() : leaf(false) {}
+    block_tree_node(bool l) : leaf(l) {}
+    static block_tree_node get_leaf() { return block_tree_node(true); }
+  };
+
+  code_blockt& get_block_for_pcrange(
+    block_tree_node& tree,
+    code_blockt& this_block,
+    unsigned address_start,
+    unsigned address_limit,
+    unsigned next_block_start_address);
+
+  code_blockt& get_or_create_block_for_pcrange(
+    block_tree_node& tree,
+    code_blockt& this_block,
+    unsigned address_start,
+    unsigned address_limit,
+    unsigned next_block_start_address,
+    const address_mapt& amap,
+    bool allow_merge=true);
+  
+  // conversion
   void convert(const symbolt &class_symbol, const methodt &);
   void convert(const instructiont &);
 
   codet convert_instructions(
-    const instructionst &, const code_typet &);
+    const methodt &, const code_typet &);
 
   const bytecode_infot &get_bytecode_info(const irep_idt &statement);
 
@@ -303,27 +566,24 @@ void java_bytecode_convert_methodt::convert(
 
   variables.clear();
 
-  // Do the parameters and locals in the variable table, which is available when
-  // compiled with -g or for methods with many local variables in the latter
-  // case, different variables can have the same index, depending on the
-  // context.
-  //
-  // to calculate which variable to use, one uses the address of the instruction
-  // that uses the variable, the size of the instruction and the start_pc /
-  // length values in the local variable table
+  // find parameter names in the local variable table:
   for(const auto & v : m.local_variable_table)
   {
+    if(v.start_pc!=0) // Local?
+      continue;
+    
     typet t=java_type_from_string(v.signature);
     std::ostringstream id_oss;
-    id_oss << method_identifier << "::" << v.start_pc << "::" << v.name;
+    id_oss << method_id << "::" << v.name;
     irep_idt identifier(id_oss.str());
     symbol_exprt result(identifier, t);
     result.set(ID_C_base_name, v.name);
-    size_t number_index_entries = variables[v.index].size();
-    variables[v.index].resize(number_index_entries + 1);
-    variables[v.index][number_index_entries].symbol_expr = result;
-    variables[v.index][number_index_entries].start_pc = v.start_pc;
-    variables[v.index][number_index_entries].length = v.length;
+
+    variables[v.index].push_back(variablet());
+    auto& newv=variables[v.index].back();
+    newv.symbol_expr = result;
+    newv.start_pc = v.start_pc;
+    newv.length = v.length;
   }
 
   // set up variables array
@@ -427,7 +687,7 @@ void java_bytecode_convert_methodt::convert(
 
   tmp_vars.clear();
   if(!m.is_abstract)
-    method_symbol.value=convert_instructions(m.instructions, code_type);
+    method_symbol.value=convert_instructions(m, code_type);
 
   // do we have the method symbol already?
   const auto s_it=symbol_table.symbols.find(method.get_name());
@@ -435,6 +695,65 @@ void java_bytecode_convert_methodt::convert(
     symbol_table.symbols.erase(s_it); // erase, we stubbed it
     
   symbol_table.add(method_symbol);
+}
+
+namespace {
+  bool lt_start_pc(const java_bytecode_convert_methodt::local_variablet& a,
+                   const java_bytecode_convert_methodt::local_variablet& b)
+  {
+    return a.start_pc < b.start_pc;
+  }
+}
+
+void java_bytecode_convert_methodt::setup_local_variables(const methodt& m,
+                                                          const address_mapt& amap)
+{
+
+  // Find out which local variables have initialisers (store instructions immediately
+  // preceding their stated live range), and where they do expand the live range to include local.
+  local_variable_tablet adjusted_variable_table(m.local_variable_table);
+  std::sort(adjusted_variable_table.begin(),adjusted_variable_table.end(),lt_start_pc);
+  find_initialisers(m.instructions,adjusted_variable_table,amap);
+  
+  // Do the locals and parameters in the variable table, which is available when
+  // compiled with -g or for methods with many local variables in the latter
+  // case, different variables can have the same index, depending on the
+  // context.
+  //
+  // to calculate which variable to use, one uses the address of the instruction
+  // that uses the variable, the size of the instruction and the start_pc /
+  // length values in the local variable table
+  for(const auto & v : adjusted_variable_table)
+  {
+    if(v.start_pc==0) // Parameter?
+      continue;
+    
+    typet t=java_type_from_string(v.signature);
+    std::ostringstream id_oss;
+    id_oss << method_id << "::" << v.start_pc << "::" << v.name;
+    irep_idt identifier(id_oss.str());
+    symbol_exprt result(identifier, t);
+    result.set(ID_C_base_name, v.name);
+
+    variables[v.index].push_back(variablet());
+    auto& newv=variables[v.index].back();
+    newv.symbol_expr = result;
+    newv.start_pc = v.start_pc;
+    newv.length = v.length;
+    
+    symbolt new_symbol;
+    new_symbol.name=identifier;
+    new_symbol.type=t;
+    new_symbol.base_name=v.name;
+    new_symbol.pretty_name=id2string(identifier).substr(6, std::string::npos);
+    new_symbol.mode=ID_java;
+    new_symbol.is_type=false;
+    new_symbol.is_file_local=true;
+    new_symbol.is_thread_local=true;
+    new_symbol.is_lvalue=true;
+    symbol_table.add(new_symbol);
+  }
+
 }
 
 /*******************************************************************\
@@ -533,7 +852,171 @@ void java_bytecode_convert_methodt::check_static_field_stub(const symbol_exprt& 
   }
 }
 
-/*******************************************************************\
+void replace_goto_target(codet& repl, const irep_idt& old_label, const irep_idt& new_label)
+{
+  const auto& stmt=repl.get_statement();
+  if(stmt==ID_goto)
+  {
+    auto& g=to_code_goto(repl);
+    if(g.get_destination()==old_label)
+      g.set_destination(new_label);
+  }
+  else {
+    for(auto& op : repl.operands())
+      if(op.id()==ID_code)
+        replace_goto_target(to_code(op),old_label,new_label);
+  }
+}
+
+code_blockt& java_bytecode_convert_methodt::get_block_for_pcrange(
+  struct block_tree_node& tree, code_blockt& this_block,
+  unsigned address_start, unsigned address_limit,
+  unsigned next_block_start_address)
+{
+  address_mapt dummy;
+  return get_or_create_block_for_pcrange(tree,this_block,address_start,address_limit,
+                                         next_block_start_address,dummy,false);
+}
+
+code_blockt& java_bytecode_convert_methodt::get_or_create_block_for_pcrange(
+  struct block_tree_node& tree, code_blockt& this_block,
+  unsigned address_start, unsigned address_limit,
+  unsigned next_block_start_address,
+  const address_mapt& amap,
+  bool allow_merge)
+{
+  assert(tree.branch.size()==tree.branch_addresses.size());
+  if(tree.leaf)
+    return this_block;
+  assert(tree.branch.size()!=0);
+  const auto afterstart=
+    std::upper_bound(tree.branch_addresses.begin(),tree.branch_addresses.end(),address_start);
+  assert(afterstart!=tree.branch_addresses.begin());
+  auto findstart=afterstart;
+  --findstart;
+  auto child_offset=std::distance(tree.branch_addresses.begin(),findstart);
+  auto findlim=
+    std::lower_bound(tree.branch_addresses.begin(),tree.branch_addresses.end(),address_limit);
+  unsigned findlim_block_start_address=
+    findlim==tree.branch_addresses.end() ?
+    next_block_start_address :
+    (*findlim);
+
+  if(findstart==tree.branch_addresses.begin() && findlim==tree.branch_addresses.end())
+    return this_block;
+
+  auto child_iter=this_block.operands().begin();
+  while(child_iter!=this_block.operands().end() && to_code(*child_iter).get_statement()==ID_decl)
+    ++child_iter;
+  assert(child_iter!=this_block.operands().end());
+  std::advance(child_iter,child_offset);
+  assert(child_iter!=this_block.operands().end());  
+  auto& child_label=to_code_label(to_code(*child_iter));
+  auto& child_block=to_code_block(child_label.code());
+      
+  bool single_child=afterstart==findlim;
+  if(single_child)
+  {
+    // Range wholly contained within a child block
+    return get_or_create_block_for_pcrange(tree.branch[child_offset],child_block,
+                                           address_start,address_limit,
+                                           findlim_block_start_address,amap,
+                                           allow_merge);
+  }
+
+  // Otherwise we're being asked for a range of subblocks, but not all of them.
+  // If it's legal to draw a new lexical scope around the requested subset, do so;
+  // otherwise just return this block.
+
+  // This can be a new lexical scope if all incoming edges target the new block header,
+  // or come from within the suggested new block.
+
+  if(!allow_merge)
+    return this_block;
+
+  auto checkit=amap.find(*findstart);
+  assert(checkit!=amap.end());
+  ++checkit; // Skip the header, which can have incoming edges from outside.
+  for(; checkit!=amap.end() && checkit->first < findlim_block_start_address; ++checkit)
+  {
+    for(auto p : checkit->second.predecessors)
+    {
+      if(p<(*findstart) || p>=findlim_block_start_address)
+      {
+        warning() << "Warning: refusing to create lexical block spanning " <<
+          (*findstart) << "-" << findlim_block_start_address << " due to incoming edge " <<
+          p << " -> " << checkit->first << "\n";
+        return this_block;
+      }
+    }
+  }
+
+  // All incoming edges are acceptable! Create a new block wrapping the relevant children.
+  // Borrow the header block's label, and redirect any block-internal edges to target the inner
+  // header block.
+
+  const auto child_label_irep=child_label.get_label();
+  std::string new_label_str=as_string(child_label_irep);
+  new_label_str+='$';
+  irep_idt new_label_irep(new_label_str);
+
+  code_labelt newlabel(child_label_irep, code_blockt());
+  code_blockt& newblock=to_code_block(newlabel.code());
+  auto nblocks=std::distance(findstart,findlim);
+  assert(nblocks >= 2);
+  debug() << "Combining " << std::distance(findstart,findlim) << " blocks for addresses " <<
+    (*findstart) << "-" << findlim_block_start_address << "\n";
+
+  // Make a new block containing every child of interest:
+  auto& this_block_children=this_block.operands();
+  assert(tree.branch.size()==this_block_children.size());
+  for(auto blockidx=child_offset, blocklim=child_offset+nblocks; blockidx!=blocklim; ++blockidx)
+    newblock.move_to_operands(this_block_children[blockidx]);
+
+  // Relabel the inner header:
+  to_code_label(to_code(newblock.operands()[0])).set_label(new_label_irep);
+  // Relabel internal gotos:
+  replace_goto_target(newblock,child_label_irep,new_label_irep);
+
+  // Remove the now-empty sibling blocks:
+  auto delfirst=this_block_children.begin();
+  std::advance(delfirst,child_offset+1);
+  auto dellim=delfirst;
+  std::advance(dellim,nblocks-1);
+  this_block_children.erase(delfirst,dellim);
+  this_block_children[child_offset].swap(newlabel);
+
+  // Perform the same transformation on the index tree:
+  block_tree_node newnode;
+  auto branchstart=tree.branch.begin();
+  std::advance(branchstart,child_offset);
+  auto branchlim=branchstart;
+  std::advance(branchlim,nblocks);
+  for(auto branchiter=branchstart; branchiter!=branchlim; ++branchiter)
+    newnode.branch.push_back(std::move(*branchiter));
+  ++branchstart;
+  tree.branch.erase(branchstart,branchlim);
+
+  assert(tree.branch.size()==this_block_children.size());
+
+  auto branchaddriter=tree.branch_addresses.begin();
+  std::advance(branchaddriter,child_offset);
+  auto branchaddrlim=branchaddriter;
+  std::advance(branchaddrlim,nblocks);
+  newnode.branch_addresses.insert(newnode.branch_addresses.begin(),
+                                  branchaddriter,branchaddrlim);
+  ++branchaddriter;
+  tree.branch_addresses.erase(branchaddriter,branchaddrlim);
+
+  tree.branch[child_offset]=std::move(newnode);
+
+  assert(tree.branch.size()==tree.branch_addresses.size());
+
+  return to_code_block(to_code_label(to_code(this_block_children[child_offset])).code());
+    
+}
+
+/*******************************************************************    \
 
 Function: java_bytecode_convert_methodt::convert_instructions
 
@@ -546,9 +1029,12 @@ Function: java_bytecode_convert_methodt::convert_instructions
 \*******************************************************************/
 
 codet java_bytecode_convert_methodt::convert_instructions(
-  const instructionst &instructions,
+  const methodt &method,
   const code_typet &method_type)
 {
+
+  const instructionst& instructions=method.instructions;
+  
   // Run a worklist algorithm, assuming that the bytecode has not
   // been tampered with. See "Leroy, X. (2003). Java bytecode
   // verification: algorithms and formalizations. Journal of Automated
@@ -556,23 +1042,6 @@ codet java_bytecode_convert_methodt::convert_instructions(
 
   // first pass: get targets and map addresses to instructions
   
-  struct converted_instructiont
-  {
-    converted_instructiont(
-      const instructionst::const_iterator &it,
-      const codet &_code):source(it), code(_code), done(false)
-    {
-    }
-
-    instructionst::const_iterator source;
-    std::list<unsigned> successors;
-    std::set<unsigned> predecessors;
-    codet code;
-    stackt stack;
-    bool done;
-  };
-
-  typedef std::map<unsigned, converted_instructiont> address_mapt;
   address_mapt address_map;
   std::set<unsigned> targets;
 
@@ -647,6 +1116,10 @@ codet java_bytecode_convert_methodt::convert_instructions(
       a_it->second.predecessors.insert(it->first);
     }
   }
+
+  // Now that the control flow graph is built, set up our local variables
+  // (these require the graph to determine live ranges)
+  setup_local_variables(method,address_map);
 
   std::set<unsigned> working_set;
   bool assertion_failure = false;
@@ -725,7 +1198,10 @@ codet java_bytecode_convert_methodt::convert_instructions(
       // checkcast throws an exception in case a cast of object
       // on stack to given type fails.
       // The stack isn't modified.
+      // TODO: convert assertions to exceptions.
       assert(op.size()==1 && results.size()==1);
+      binary_predicate_exprt check(op[0], "java_instanceof", arg0);
+      c=code_assertt(check);
       results[0]=op[0];
     }
     else if(statement=="invokedynamic")
@@ -916,8 +1392,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
       // store value into some local variable
       assert(op.size()==1 && results.empty());
 
-      exprt var=variable(arg0, statement[0], i_it->address, INST_INDEX, /*do_cast=*/false);
-      //var.add_source_location()=i_it->source_location;
+      exprt var=variable(arg0, statement[0], i_it->address, /*do_cast=*/false);
 
       exprt toassign=op[0];
       //toassign.add_source_location()=i_it->source_location;
@@ -952,7 +1427,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
     else if(statement==patternt("?load"))
     {
       // load a value from a local variable
-      results[0]=variable(arg0, statement[0], i_it->address, INST_INDEX);
+      results[0]=variable(arg0, statement[0], i_it->address);
     }
     else if(statement=="ldc" || statement=="ldc_w" ||
             statement=="ldc2" || statement=="ldc2_w")
@@ -1115,10 +1590,9 @@ codet java_bytecode_convert_methodt::convert_instructions(
     else if(statement=="iinc")
     {
       code_assignt code_assign;
-      code_assign.lhs()=variable(arg0, 'i', i_it->address, INST_INDEX_CONST, /*do_cast=*/false);
-      code_assign.rhs()=plus_exprt(
-                                   variable(arg0, 'i', i_it->address, INST_INDEX_CONST),
-                          typecast_exprt(arg1, java_int_type()));
+      code_assign.lhs()=variable(arg0, 'i', i_it->address, /*do_cast=*/false);
+      code_assign.rhs()=plus_exprt(variable(arg0, 'i', i_it->address),
+                                   typecast_exprt(arg1, java_int_type()));
       c=code_assign;
     }
     else if(statement==patternt("?xor"))
@@ -1411,6 +1885,13 @@ codet java_bytecode_convert_methodt::convert_instructions(
       code_blockt checkandcreate;
       code_assertt check(gezero);
       checkandcreate.move_to_operands(check);
+      if(max_array_length!=0)
+      {
+        constant_exprt size_limit=as_number(max_array_length,java_int_type());
+        binary_relation_exprt le_max_size(op[0],ID_le,size_limit);
+        code_assumet assume_le_max_size(le_max_size);
+        checkandcreate.move_to_operands(assume_le_max_size);
+      }
       const exprt tmp=tmp_variable("newarray", ref_type);
       checkandcreate.copy_to_operands(code_assignt(tmp, java_new_array));
       c=std::move(checkandcreate);
@@ -1624,30 +2105,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
   // review successor computation of athrow!
   code_blockt code;
 
-  // locals
-  for(const auto & var : used_local_names)
-  {
-    code_declt decl = code_declt(var);
-    code_declt &declaration = decl;
-    source_locationt loc = instructions.begin()->source_location;
-    source_locationt &dloc = loc;
-    dloc.set_function(method_id);
-    declaration.add_source_location() = dloc;
-    code.add(declaration);
-
-    symbolt new_symbol;
-    new_symbol.name=var.get_identifier();
-    new_symbol.type=var.type();
-    new_symbol.base_name=var.get(ID_C_base_name);
-    new_symbol.pretty_name=id2string(var.get_identifier()).substr(6, std::string::npos);
-    new_symbol.mode=ID_java;
-    new_symbol.is_type=false;
-    new_symbol.is_file_local=true;
-    new_symbol.is_thread_local=true;
-    new_symbol.is_lvalue=true;
-    symbol_table.add(new_symbol);
-  }
-  // temporaries
+  // temporaries; no scoping yet.
   for(const auto & var : tmp_vars)
   {
     code_declt decl = code_declt(var);
@@ -1659,17 +2117,102 @@ codet java_bytecode_convert_methodt::convert_instructions(
     code.add(declaration);
   }
 
-  for(const auto & it : address_map)
+  // Add anonymous locals to the symtab, and declare at top:
+  for(const auto & var : used_local_names)
   {
+    auxiliary_symbolt new_symbol;
+    new_symbol.name=var.get_identifier();
+    new_symbol.type=var.type();
+    new_symbol.base_name=var.get(ID_C_base_name);
+    new_symbol.pretty_name=id2string(var.get_identifier()).substr(6, std::string::npos);
+    new_symbol.mode=ID_java;
+    new_symbol.is_type=false;
+    symbol_table.add(new_symbol);
+    code.add(code_declt(new_symbol.symbol_expr()));
+  }
+
+  // Try to recover block structure as indicated in the local variable table:
+
+  // The block tree node mirrors the block structure of root_block,
+  // indexing the Java PCs where each subblock starts and ends.
+  block_tree_node root;
+  code_blockt root_block;
+
+  // First create a simple flat list of basic blocks. We'll add lexical nesting
+  // constructs as variable live-ranges require next.
+  bool start_new_block=true;
+  for(auto ait=address_map.begin(), aend=address_map.end(); ait != aend; ++ait)
+  {
+    const auto& it=*ait;
     const unsigned address=it.first;
     assert(it.first==it.second.source->address);
     const codet &c=it.second.code;
 
-    if(targets.find(address)!=targets.end())
-      code.add(code_labelt(label(i2string(address)), c));
-    else if(c.get_statement()!=ID_skip)
-      code.add(c);
+    if(!start_new_block)
+      start_new_block=targets.find(address)!=targets.end();
+    if(!start_new_block)
+      start_new_block=it.second.predecessors.size()>1;
+
+    if(start_new_block)
+    {
+      code_labelt newlabel(label(i2string(address)), code_blockt());
+      root_block.move_to_operands(newlabel);
+      root.branch.push_back(block_tree_node::get_leaf());
+      assert((root.branch_addresses.size()==0 ||
+              root.branch_addresses.back()<address) &&
+             "Block addresses should be unique and increasing");
+      root.branch_addresses.push_back(address);
+    }
+
+    if(c.get_statement()!=ID_skip)
+    {
+      auto& lastlabel=to_code_label(to_code(root_block.operands().back()));
+      auto& add_to_block=to_code_block(lastlabel.code());
+      add_to_block.add(c);
+    }
+    start_new_block=it.second.successors.size()>1;
   }
+
+  for(const auto& vlist : variables)
+  {
+    for(const auto& v : vlist)
+    {
+      if(v.is_parameter)
+        continue;
+      // Merge lexical scopes as far as possible to allow us to
+      // declare these variable scopes faithfully.
+      // Don't insert yet, as for the time being the blocks' only
+      // operands must be other blocks.
+      get_or_create_block_for_pcrange(
+        root,
+        root_block,
+        v.start_pc,
+        v.start_pc+v.length,
+        std::numeric_limits<unsigned>::max(),
+        address_map);
+    }
+  }
+  for(const auto& vlist : variables)
+  {  
+    for(const auto& v : vlist)
+    {
+      if(v.is_parameter)
+        continue;
+      if(v.symbol_expr.get_identifier()==irep_idt())
+        continue;
+      auto& block=get_block_for_pcrange(
+        root,
+        root_block,
+        v.start_pc,
+        v.start_pc+v.length,
+        std::numeric_limits<unsigned>::max());
+      code_declt d(v.symbol_expr);
+      block.operands().insert(block.operands().begin(),d);
+    }
+  }
+
+  for(auto& block : root_block.operands())
+    code.move_to_operands(block);
 
   return code;
 }
@@ -1690,10 +2233,11 @@ void java_bytecode_convert_method(
   const symbolt &class_symbol,
   const java_bytecode_parse_treet::methodt &method,
   symbol_tablet &symbol_table,
-  message_handlert &message_handler)
+  message_handlert &message_handler,
+  int max_array_length)
 {
   java_bytecode_convert_methodt java_bytecode_convert_method(
-    symbol_table, message_handler);
+    symbol_table, message_handler, max_array_length);
 
   java_bytecode_convert_method(class_symbol, method);
 }
