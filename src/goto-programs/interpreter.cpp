@@ -1767,6 +1767,7 @@ struct trace_stack_entry {
   mp_integer this_address;
   irep_idt capture_symbol;
   bool is_super_call;
+  std::vector<interpretert::function_assignmentt> param_values;
 };
 
 static bool is_super_call(const trace_stack_entry& called, const trace_stack_entry& caller)
@@ -1864,7 +1865,7 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
   std::vector<trace_stack_entry> trace_stack;
   int outermost_constructor_depth=-1;
 
-  trace_stack.push_back({goto_functionst::entry_point(),0,irep_idt(),false});
+  trace_stack.push_back({goto_functionst::entry_point(),0,irep_idt(),false,{}});
   
   for(auto it = trace.steps.begin(), itend = trace.steps.end(); it != itend; ++it)
   {
@@ -1912,7 +1913,34 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
 
       mp_integer this_address=get_this_address(to_code_function_call(step.pc->code));
 
-      trace_stack.push_back({called,this_address,irep_idt(),false});
+      // Capture the arguments of *every* call as it is entered,
+      // because we might need them for verification if it happens to call a super-method later.
+      std::vector<function_assignmentt> actual_params;
+      const auto& formal_params=
+        to_code_type(to_code_function_call(step.pc->code).function().type()).parameters();
+      std::vector<function_assignmentt> direct_params;
+      
+      for(const auto& fp : formal_params)
+      {        
+        // Note this will record the actual parameter values as well as anything
+        // reachable from them. We use a single actual_params list for all parameters
+        // to avoid redundancy e.g. if parameters or objects reachable from them alias,
+        // we only need to capture that subtree once.
+        get_value_tree(fp.get_identifier(),actual_params);
+        // Set the actual direct params aside, so we can keep them in order at the back.
+        direct_params.push_back(std::move(actual_params.back()));
+        actual_params.pop_back();
+      }
+
+      // Put the direct params back on the end of the list:
+      actual_params.insert(actual_params.end(),direct_params.begin(),direct_params.end());
+
+      #ifdef DEBUG
+      for(const auto& id_expr : actual_params)
+        message->status() << id_expr.id << " = " << from_expr(ns,"",id_expr.value) << messaget::eom;
+      #endif
+      
+      trace_stack.push_back({called,this_address,irep_idt(),false,std::move(actual_params)});
       
       bool is_super=(!is_cons) &&
                     trace_stack.size()!=0 &&

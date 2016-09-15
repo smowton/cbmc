@@ -24,6 +24,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "java_bytecode_convert_method.h"
 #include "bytecode_info.h"
 #include "java_types.h"
+#include "java_opaque_method_stubs.h"
 
 #include <limits>
 #include <algorithm>
@@ -1333,6 +1334,9 @@ codet java_bytecode_convert_methodt::convert_instructions(
         symbol.type=arg0.type();
         symbol.value.make_nil();
         symbol.mode=ID_java;
+        
+        assign_parameter_names(to_code_type(symbol.type),symbol.name,symbol_table);
+        
         symbol_table.add(symbol);
       }
 
