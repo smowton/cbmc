@@ -922,6 +922,7 @@ std::string reference_factoryt::verify_mock_objects(const symbol_tablet &st,
   const interpretert::list_input_varst& opaque_function_returns)
 {
 
+  namespacet ns(st);
   std::vector<init_statement> verify_statements;
   
   for(auto fn_and_returns : opaque_function_returns)
@@ -942,11 +943,28 @@ std::string reference_factoryt::verify_mock_objects(const symbol_tablet &st,
     
     populate_descriptor_types(func,last_toplevel_assignment.type(),desc,st);
 
-    // For now just check that call counts meet our expectations.
-
     bool is_static=!desc.original_type.has_this();
     bool is_constructor=desc.original_type.get_bool(ID_constructor);
-
+    
+    // Translate call parameters from exprt to Java expressions:
+    // (For now just do primitive types)
+    std::vector<std::vector<std::string> > argstrings;
+    for(const auto& call : fn_and_returns.second)
+    {
+      argstrings.resize(argstrings.size()+1);
+      assert(call.param_assignments.size() >= desc.java_arg_types.size());
+      size_t param_offset=call.param_assignments.size()-desc.java_arg_types.size();
+      for(size_t paramidx=0, paramlim=desc.java_arg_types.size(); paramidx!=paramlim; ++paramidx)
+      {
+        const auto& argtype=desc.java_arg_types[paramidx];
+        const auto& param_assignment=call.param_assignments[paramidx+param_offset];
+        std::string argstring;
+        if(argtype.is_primitive)
+          expr2java(argstring,param_assignment.value,ns);
+        argstrings.back().push_back(std::move(argstring));
+      }
+    }
+    
     if(is_static)
       mockenv_builder.verify_static_calls(desc.classname,desc.funcname,desc.java_arg_types,
                                           fn_and_returns.second.size(),verify_statements);
@@ -955,7 +973,7 @@ std::string reference_factoryt::verify_mock_objects(const symbol_tablet &st,
                                                fn_and_returns.second.size(),verify_statements);
     else
       mockenv_builder.verify_instance_calls(desc.classname,desc.funcname,desc.java_arg_types,
-                                            fn_and_returns.second.size(),verify_statements);
+                                            argstrings,verify_statements);
 
   }
 

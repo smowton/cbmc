@@ -158,7 +158,7 @@ class mock_environment_builder {
 
   void verify_constructor_calls(const std::string& targetclass,const std::string& methodname,const std::vector<java_type>& argtypes, size_t ncalls, std::vector<init_statement>& stmts);
 
-  void verify_instance_calls(const std::string& targetclass,const std::string& methodname,const std::vector<java_type>& argtypes, size_t ncalls, std::vector<init_statement>& stmts);
+  void verify_instance_calls(const std::string& targetclass,const std::string& methodname,const std::vector<java_type>& argtypes, const std::vector<std::vector<std::string> >& calls, std::vector<init_statement>& stmts);
   
 };
 

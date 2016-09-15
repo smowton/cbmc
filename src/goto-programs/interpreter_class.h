@@ -57,6 +57,7 @@ public:
   
   // list_input_varst maps function identifiers onto a vector of [name = value] assignments
   // per call to that function.
+  typedef std::list<function_assignments_contextt> function_assignments_contextst;
   typedef std::map<const irep_idt,std::list<function_assignments_contextt> > list_input_varst;
   typedef hash_map_cont<irep_idt, unsigned, irep_id_hash> memory_mapt;
 

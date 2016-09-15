@@ -519,17 +519,25 @@ void mock_environment_builder::verify_instance_calls(
   const std::string& targetclass,
   const std::string& methodname,
   const std::vector<java_type>& argtypes,
-  size_t ncalls,
+  const std::vector<std::vector<std::string> >& calls,
   std::vector<init_statement>& stmts)
 {
-  std::ostringstream instance_call;
-
   method_signature sig(targetclass,methodname,argtypes);
   const auto& answer_record=answer_objects.at(sig);
+
+  for(size_t callidx=0, calllim=calls.size(); callidx!=calllim; ++callidx)
+  {
+    const auto& call = calls[callidx];
+    for(size_t argidx=0, arglim=argtypes.size(); argidx!=arglim; ++argidx)
+    {
+      if(!argtypes[argidx].is_primitive)
+        continue;
+      std::ostringstream assert_statement;
+      assert_statement << "assert(" << answer_record.answer_object << ".callArguments.get(" <<
+        callidx << ")[" << argidx << "].equals(" << call[argidx] << "))";
+      stmts.push_back(init_statement::statement(assert_statement.str()));
+    }
+  }
   
-  // For the time being, just check that a call happened at all:
-  instance_call << "assert(" << answer_record.answer_object << ".callArguments.size()"
-                << " == " << ncalls << ')';
-  stmts.push_back(init_statement::statement(instance_call.str()));
 }
     

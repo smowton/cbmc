@@ -1937,7 +1937,7 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
 
       #ifdef DEBUG
       for(const auto& id_expr : actual_params)
-        message->status() << id_expr.id << " = " << from_expr(ns,"",id_expr.value) << messaget::eom;
+        message->status() << "Param " << id_expr.id << " = " << from_expr(ns,"",id_expr.value) << messaget::eom;
       #endif
       
       trace_stack.push_back({called,this_address,irep_idt(),false,std::move(actual_params)});
