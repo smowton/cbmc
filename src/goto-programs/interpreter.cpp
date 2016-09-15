@@ -1828,6 +1828,29 @@ exprt interpretert::get_value(const irep_idt& id)
   return get_value(get_type,integer2unsigned(whole_lhs_object_address));
 }
 
+const exprt & get_entry_function(const goto_functionst &gf)
+{
+  typedef goto_functionst::function_mapt function_mapt;
+  const function_mapt &fm=gf.function_map;
+  const irep_idt start(goto_functionst::entry_point());
+  const function_mapt::const_iterator entry_func=fm.find(start);
+  assert(fm.end() != entry_func);
+  const goto_programt::instructionst &in=entry_func->second.body.instructions;
+  typedef goto_programt::instructionst::const_reverse_iterator reverse_target;
+  reverse_target codeit=in.rbegin();
+  const reverse_target end=in.rend();
+  assert(end != codeit);
+  // Tolerate 'dead' statements at the end of _start.
+  while(end!=codeit && codeit->code.get_statement()!=ID_function_call)
+    ++codeit;
+  assert(end != codeit);
+  const reverse_target call=codeit;
+  const code_function_callt &func_call=to_code_function_call(call->code);
+  const exprt &func_expr=func_call.function();
+  return func_expr;
+}
+
+
 /*******************************************************************
  Function: load_counter_example_inputs
 
@@ -1865,10 +1888,22 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
   int outermost_constructor_depth=-1;
 
   trace_stack.push_back({goto_functionst::entry_point(),0,irep_idt(),false});
+
+  const exprt &func_expr = get_entry_function(goto_functions);
+  const irep_idt &func_name = to_symbol_expr(func_expr).get_identifier();
+  const code_typet::parameterst &params = to_code_type(func_expr.type()).parameters();
+
+  std::map<std::string, const irep_idt &> parameterSet;
+  namespacet ns(symbol_table);
+
+  for(const auto &p : params)
+    parameterSet.insert({id2string(p.get_identifier()), p.get_identifier()});
   
   for(auto it = trace.steps.begin(), itend = trace.steps.end(); it != itend; ++it)
   {
+
     const auto& step=*it;
+
     if(is_assign_step(step))
     {
       mp_integer address;
@@ -1897,6 +1932,24 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
       assign(address,rhs);
 
       trace_eval.push_back(std::make_pair(address, rhs));
+
+      /********* 8< **********/
+      irep_idt identifier=step.lhs_object.get_identifier();
+      auto param = parameterSet.find(id2string(identifier));
+      // if(param != parameterSet.end())
+      // {
+        message->status() << "ASSIGN: " << id2string(identifier) << messaget::eom;
+        const exprt &expr = step.full_lhs_value;
+        interpretert::function_assignmentst input_assigns;
+        get_value_tree(identifier, input_assigns);
+        for(const auto &assign : input_assigns)
+         {
+           message->status() << " TREE_ASSIGN: " << id2string(assign.id)
+                             << " to " << from_expr(ns,"",assign.value)
+                             << messaget::eom;
+         }
+      // }
+      /********* 8< **********/
     }
     else if(step.is_function_call())
     {
@@ -1975,6 +2028,29 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
 	}
       }
       trace_stack.pop_back();
+    }
+
+    if(step.type==goto_trace_stept::OUTPUT)
+    {
+      for(const auto &inputParam : parameterSet)
+      {
+        std::size_t found = (inputParam.first).rfind(id2string(step.io_id));
+        if(found!=std::string::npos)
+        {
+          // looping over io_args will ignore atomic types which won't have side
+          // effects
+          interpretert::function_assignmentst output_assigns;
+          get_value_tree(inputParam.second, output_assigns);
+          message->status() << "OUTPUT: " << (inputParam.first)
+                            << messaget::eom;
+          for(const auto &assign : output_assigns)
+          {
+            message->status() << " OUTPUT_TREE_ASSIGN: " << id2string(assign.id)
+                              << " to " << from_expr(ns,"",assign.value)
+                              << messaget::eom;
+          }
+        }
+      }
     }
   }
 

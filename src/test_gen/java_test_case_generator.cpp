@@ -92,7 +92,7 @@ const std::string java_test_case_generatort::generate_test_case(
   interpretert::list_input_varst opaque_function_returns;
   interpretert::input_var_functionst input_defn_functions;
   interpretert::dynamic_typest dynamic_types;
-  
+
   const inputst inputs(generate_inputs(st,gf,trace,opaque_function_returns,
                                        input_defn_functions,dynamic_types,
                                        options));
