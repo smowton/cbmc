@@ -486,7 +486,7 @@ void mock_environment_builder::verify_static_calls(
   const std::string& targetclass,
   const std::string& methodname,
   const std::vector<java_type>& argtypes,
-  const std::vector<std::vector<std::string> >& calls,  
+  const std::vector<verification_envt>& calls,  
   std::vector<init_statement>& stmts)
 {
   verify_instance_calls(targetclass,methodname,
@@ -497,7 +497,7 @@ void mock_environment_builder::verify_constructor_calls(
   const std::string& targetclass,
   const std::string& methodname,
   const std::vector<java_type>& argtypes,
-  const std::vector<std::vector<std::string> >& calls,  
+  const std::vector<verification_envt>& calls,  
   std::vector<init_statement>& stmts)  
 {
   verify_instance_calls(targetclass,targetclass,
@@ -508,7 +508,7 @@ void mock_environment_builder::verify_instance_calls(
   const std::string& targetclass,
   const std::string& methodname,
   const std::vector<java_type>& argtypes,
-  const std::vector<std::vector<std::string> >& calls,
+  const std::vector<verification_envt>& calls,
   std::vector<init_statement>& stmts)
 {
   method_signature sig(targetclass,methodname,argtypes);
@@ -517,6 +517,13 @@ void mock_environment_builder::verify_instance_calls(
   for(size_t callidx=0, calllim=calls.size(); callidx!=calllim; ++callidx)
   {
     stmts.push_back(init_statement::scopeOpen());
+
+    // Include any auxiliary object setup needed to check this:
+    stmts.insert(stmts.end(),
+                 calls[callidx].aux_statements.begin(),
+                 calls[callidx].aux_statements.end());
+
+    // Now check each parameter:
     const auto& call = calls[callidx];
     std::ostringstream decl_statement;
     decl_statement << "Object[] expected = new Object[" << argtypes.size() << "]";
@@ -526,7 +533,7 @@ void mock_environment_builder::verify_instance_calls(
       if(!argtypes[argidx].is_primitive)
         continue;
       std::ostringstream set_statement;
-      set_statement << "expected[" << argidx << "] = " << call[argidx];
+      set_statement << "expected[" << argidx << "] = " << call.arg_strings[argidx];
       stmts.push_back(init_statement::statement(set_statement.str()));
     }
     std::ostringstream add_statement;

@@ -72,6 +72,8 @@ public:
 				const irep_idt &func_id, inputst &inputs);
   void add_mock_call(const interpretert::function_assignments_contextt,
 		     const java_call_descriptor& desc, const symbol_tablet&);
+  void defined_symbols_to_java(const interpretert::function_assignmentst& defined_symbols,
+                               const symbol_tablet& st, std::vector<init_statement>& statements);
   void add_mock_objects(const symbol_tablet &st,
 			const interpretert::list_input_varst& opaque_function_returns);
   void expand_wildcard(const std::string& s, std::vector<std::string>& out);
@@ -765,6 +767,24 @@ void reference_factoryt::configure_mocks(
   }
 
 }
+
+void reference_factoryt::defined_symbols_to_java(
+  const interpretert::function_assignmentst& defined_symbols,
+  const symbol_tablet& st,
+  std::vector<init_statement>& statements)
+{
+  for(auto defined : defined_symbols)
+  {
+    symbolt fake_symbol;
+    const symbolt& use_symbol=get_or_fake_symbol(defined.id,fake_symbol);
+
+    // Initial empty statement makes the loop below easier.
+    std::string this_object_init=";";
+    add_declare_and_assign(this_object_init,st,use_symbol,defined.value,true);
+
+    string_to_statements(this_object_init, statements);
+  }  
+}
   
 void reference_factoryt::add_mock_call(
   const interpretert::function_assignments_contextt defined_symbols_context,
@@ -798,18 +818,9 @@ void reference_factoryt::add_mock_call(
     // Start an anonymous scope, as the symbol names defined below may not be unique
     // if the same method stub was used more than once.
     init_statements.push_back(init_statement::scopeOpen());
-	
-    for(auto defined : defined_symbols)
-    {
-      symbolt fake_symbol;
-      const symbolt& use_symbol=get_or_fake_symbol(defined.id,fake_symbol);
 
-      // Initial empty statement makes the loop below easier.
-      std::string this_object_init=";";
-      add_declare_and_assign(this_object_init,st,use_symbol,defined.value,true);
-
-      string_to_statements(this_object_init, init_statements);
-    }
+    // Define each symbol from the trace:
+    defined_symbols_to_java(defined_symbols,st,init_statements);
 
     const irep_idt& last_sym_name=defined_symbols.back().id;
     init_statements.push_back(
@@ -948,12 +959,40 @@ std::string reference_factoryt::verify_mock_objects(const symbol_tablet &st,
     
     // Translate call parameters from exprt to Java expressions:
     // (For now just do primitive types)
-    std::vector<std::vector<std::string> > argstrings;
+    std::vector<verification_envt> verify_calls;
     for(const auto& call : fn_and_returns.second)
     {
-      argstrings.resize(argstrings.size()+1);
+      verify_calls.resize(verify_calls.size()+1);
       assert(call.param_assignments.size() >= desc.java_arg_types.size());
+
+      // Seperate auxiliary defintions and direct parameters:
+      std::vector<interpretert::function_assignmentt> aux_assignments;
+      std::vector<interpretert::function_assignmentt> direct_assignments;
+
+      auto first_aux=call.param_assignments.begin();
       size_t param_offset=call.param_assignments.size()-desc.java_arg_types.size();
+      auto first_direct=first_aux;
+      std::advance(first_direct,param_offset);
+
+      aux_assignments.insert(aux_assignments.begin(),
+                             first_aux,
+                             first_direct);
+
+      // Omit implicit 'this' argument for now:
+      if(!is_static)
+      {
+        assert(param_offset>0);
+        aux_assignments.pop_back();
+      }
+      
+      direct_assignments.insert(direct_assignments.begin(),
+                                first_direct,
+                                call.param_assignments.end());
+
+      // Render the aux assignments down to a Java statement list:
+      defined_symbols_to_java(aux_assignments,st,verify_calls.back().aux_statements);
+      
+      // Create the direct parameters:
       for(size_t paramidx=0, paramlim=desc.java_arg_types.size(); paramidx!=paramlim; ++paramidx)
       {
         const auto& argtype=desc.java_arg_types[paramidx];
@@ -961,19 +1000,19 @@ std::string reference_factoryt::verify_mock_objects(const symbol_tablet &st,
         std::string argstring;
         if(argtype.is_primitive)
           expr2java(argstring,param_assignment.value,ns);
-        argstrings.back().push_back(std::move(argstring));
+        verify_calls.back().arg_strings.push_back(std::move(argstring));
       }
     }
     
     if(is_static)
       mockenv_builder.verify_static_calls(desc.classname,desc.funcname,desc.java_arg_types,
-                                          argstrings,verify_statements);
+                                          verify_calls,verify_statements);
     else if(is_constructor)
       mockenv_builder.verify_constructor_calls(desc.classname,desc.funcname,desc.java_arg_types,
-                                               argstrings,verify_statements);
+                                               verify_calls,verify_statements);
     else
       mockenv_builder.verify_instance_calls(desc.classname,desc.funcname,desc.java_arg_types,
-                                            argstrings,verify_statements);
+                                            verify_calls,verify_statements);
 
   }
 

@@ -91,6 +91,11 @@ struct init_statement {
   
 };
 
+struct verification_envt {
+  std::vector<init_statement> aux_statements;
+  std::vector<std::string> arg_strings;
+};
+
 class mock_environment_builder {
 
   // Track mock classes that have been instantiated and so need an instance-list
@@ -155,11 +160,11 @@ class mock_environment_builder {
   }
 
   // Verify functions, similar to call statements above:
-  void verify_static_calls(const std::string& targetclass,const std::string& methodname,const std::vector<java_type>& argtypes, const std::vector<std::vector<std::string> >& calls, std::vector<init_statement>& stmts);
+  void verify_static_calls(const std::string& targetclass,const std::string& methodname,const std::vector<java_type>& argtypes, const std::vector<verification_envt>& calls, std::vector<init_statement>& stmts);
 
-  void verify_constructor_calls(const std::string& targetclass,const std::string& methodname,const std::vector<java_type>& argtypes, const std::vector<std::vector<std::string> >& calls, std::vector<init_statement>& stmts);
+  void verify_constructor_calls(const std::string& targetclass,const std::string& methodname,const std::vector<java_type>& argtypes, const std::vector<verification_envt>& calls, std::vector<init_statement>& stmts);
 
-  void verify_instance_calls(const std::string& targetclass,const std::string& methodname,const std::vector<java_type>& argtypes, const std::vector<std::vector<std::string> >& calls, std::vector<init_statement>& stmts);
+  void verify_instance_calls(const std::string& targetclass,const std::string& methodname,const std::vector<java_type>& argtypes, const std::vector<verification_envt>& calls, std::vector<init_statement>& stmts);
   
 };
 
