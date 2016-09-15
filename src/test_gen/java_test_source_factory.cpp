@@ -74,6 +74,11 @@ public:
 		     const java_call_descriptor& desc, const symbol_tablet&);
   void defined_symbols_to_java(const interpretert::function_assignmentst& defined_symbols,
                                const symbol_tablet& st, std::vector<init_statement>& statements);
+  void defined_symbols_to_java_fieldlists(
+    const interpretert::function_assignmentst& defined_symbols,
+    const symbol_tablet& st, std::vector<init_statement>& statements);
+  void struct_to_fieldlist(const irep_idt& listname, const struct_exprt& in_struct,
+                           const symbol_tablet& st, std::vector<init_statement>& statements);
   void add_mock_objects(const symbol_tablet &st,
 			const interpretert::list_input_varst& opaque_function_returns);
   void expand_wildcard(const std::string& s, std::vector<std::string>& out);
@@ -87,7 +92,6 @@ public:
                                  std::vector<symbolt>& needed);
   std::string verify_mock_objects(const symbol_tablet &st,
                                   const interpretert::list_input_varst& opaque_function_returns);
-
 };
 
 bool is_array_tag(const irep_idt& tag)
@@ -778,11 +782,80 @@ void reference_factoryt::defined_symbols_to_java(
     symbolt fake_symbol;
     const symbolt& use_symbol=get_or_fake_symbol(defined.id,fake_symbol);
 
-    // Initial empty statement makes the loop below easier.
+    // Initial empty statement makes 'string_to_statements' easier
     std::string this_object_init=";";
     add_declare_and_assign(this_object_init,st,use_symbol,defined.value,true);
 
     string_to_statements(this_object_init, statements);
+  }  
+}
+
+void reference_factoryt::struct_to_fieldlist(
+  const irep_idt& listname, const struct_exprt& in_struct,
+  const symbol_tablet& st, std::vector<init_statement>& statements)
+{
+  namespacet ns(st);
+  // Make a FieldList object documenting the name-value pairs we
+  // expect from this object:
+  const auto& comps=to_struct_type(ns.follow(in_struct.type())).components();
+  const auto& ops=in_struct.operands();
+  assert(comps.size()==ops.size());
+      
+  std::ostringstream new_statement;
+  new_statement << "FieldList " << listname << " = new FieldList()";
+  statements.push_back(init_statement::statement(new_statement.str()));
+  for(size_t fieldidx=0,fieldlim=ops.size(); fieldidx!=fieldlim; ++fieldidx)
+  {
+    std::string compname=id2string(comps[fieldidx].get_pretty_name());
+    assert(compname.size()>=1);
+    if(comps[fieldidx].type().id()==ID_struct)
+    {
+      // Superclass, I hope.
+      assert(compname[0]=='@');
+      struct_to_fieldlist(listname,to_struct_expr(ops[fieldidx]),st,statements);
+    }
+    else if(compname[0]=='@')
+    {
+      // Internal detail, do not check
+      continue;
+    }
+
+    std::string valstr;
+    std::string empty;
+    add_value(valstr, st, ops[fieldidx], empty);
+        
+    std::ostringstream add_field_statement;
+    add_field_statement << listname << ".add(" <<
+      id2string(comps[fieldidx].get_pretty_name()) << ", " <<
+      valstr << ")";
+
+    statements.push_back(init_statement::statement(add_field_statement.str()));
+  }
+}
+  
+void reference_factoryt::defined_symbols_to_java_fieldlists(
+  const interpretert::function_assignmentst& defined_symbols,
+  const symbol_tablet& st,
+  std::vector<init_statement>& statements)
+{
+  for(auto defined : defined_symbols)
+  {
+    symbolt fake_symbol;
+    const symbolt& use_symbol=get_or_fake_symbol(defined.id,fake_symbol);
+    std::string pretty_name;
+    add_symbol(pretty_name,fake_symbol);
+
+    if(use_symbol.type.id()==ID_struct)
+    {
+      struct_to_fieldlist(pretty_name,to_struct_expr(defined.value),st,statements);
+    }
+    else {
+      // Initial empty statement makes 'string_to_statements' easier
+      std::string this_object_init=";";
+      add_declare_and_assign(this_object_init,st,use_symbol,defined.value,true);
+
+      string_to_statements(this_object_init, statements);
+    }
   }  
 }
   
@@ -990,7 +1063,7 @@ std::string reference_factoryt::verify_mock_objects(const symbol_tablet &st,
                                 call.param_assignments.end());
 
       // Render the aux assignments down to a Java statement list:
-      defined_symbols_to_java(aux_assignments,st,verify_calls.back().aux_statements);
+      defined_symbols_to_java_fieldlists(aux_assignments,st,verify_calls.back().aux_statements);
       
       // Create the direct parameters:
       for(size_t paramidx=0, paramlim=desc.java_arg_types.size(); paramidx!=paramlim; ++paramidx)
