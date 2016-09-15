@@ -29,9 +29,6 @@ public:
     goto_functions(_goto_functions)
   {
     message = _message_handler;
-    max_allowed_dynamic_array_size=options.get_unsigned_int_option("java-max-vla-length");
-    if(max_allowed_dynamic_array_size==0)
-      max_allowed_dynamic_array_size=65536;
   }
   
   void operator()();
@@ -97,6 +94,7 @@ protected:
   exprt get_value(const irep_idt &id);
   void get_value_tree(const irep_idt& capture_symbol, function_assignmentst& captured);
   void get_value_tree(const exprt& capture_expr, function_assignmentst& captured);
+  mp_integer get_this_address(const code_function_callt&);
   char is_opaque_function(const goto_programt::instructionst::const_iterator &it,irep_idt &function_id);
 
 
@@ -153,7 +151,6 @@ protected:
   mutable int num_dynamic_objects;
   int stack_depth;
   int thread_id;
-  size_t max_allowed_dynamic_array_size;
 
   bool evaluate_boolean(const exprt &expr) const
   {
@@ -171,6 +168,11 @@ protected:
     const typet& target_type,
     std::vector<mp_integer> &dest,
     bool should_return_this) const;
+
+  bool get_cell_byte_offset(
+    const typet& source_type,
+    mp_integer& cell_offset,
+    mp_integer& result) const;
   
   void evaluate(
     const exprt &expr,

@@ -1,3 +1,5 @@
+CONFIGDIR := $(dir $(lastword $(MAKEFILE_LIST)))
+
 # Build platform (use one of AUTO, Unix, OSX_Universal, MSVC, Cygwin, MinGW)
 BUILD_ENV = AUTO
 
@@ -25,3 +27,5 @@ LIBZIPINC = ../../libzip/lib
 # Signing identity for MacOS Gatekeeper
 
 OSX_IDENTITY="3rd Party Mac Developer Application: Daniel Kroening"
+
+-include $(CONFIGDIR)/config.local

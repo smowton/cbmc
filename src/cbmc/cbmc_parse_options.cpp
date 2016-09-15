@@ -24,6 +24,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-programs/goto_convert_functions.h>
 #include <goto-programs/remove_function_pointers.h>
 #include <goto-programs/remove_virtual_functions.h>
+#include <goto-programs/remove_instanceof.h>
 #include <goto-programs/remove_returns.h>
 #include <goto-programs/remove_vector.h>
 #include <goto-programs/remove_complex.h>
@@ -74,8 +75,7 @@ cbmc_parse_optionst::cbmc_parse_optionst(int argc, const char **argv):
   parse_options_baset(CBMC_OPTIONS, argc, argv),
   xml_interfacet(cmdline),
   language_uit(cmdline, ui_message_handler),
-  ui_message_handler(language_uit::get_ui_cmdline(cmdline),
-                       "CBMC " CBMC_VERSION)
+  ui_message_handler(cmdline, "CBMC " CBMC_VERSION)
 {
 }
   
@@ -98,8 +98,7 @@ Function: cbmc_parse_optionst::cbmc_parse_optionst
   parse_options_baset(CBMC_OPTIONS+extra_options, argc, argv),
   xml_interfacet(cmdline),
   language_uit(cmdline, ui_message_handler),
-  ui_message_handler(language_uit::get_ui_cmdline(cmdline),
-                       "CBMC " CBMC_VERSION)
+  ui_message_handler(cmdline, "CBMC " CBMC_VERSION)
 {
 }
 
@@ -950,6 +949,8 @@ bool cbmc_parse_optionst::process_goto_program(
     remove_function_pointers(symbol_table, goto_functions,
       cmdline.isset("pointer-check"));
     remove_virtual_functions(symbol_table, goto_functions);
+    // Similar removal of RTTI inspection:
+    remove_instanceof(symbol_table, goto_functions);
 
     // full slice?
     if(cmdline.isset("full-slice"))

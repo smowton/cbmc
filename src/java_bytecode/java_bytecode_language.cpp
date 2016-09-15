@@ -41,6 +41,8 @@ void java_bytecode_languaget::get_language_options(const cmdlinet& cmd)
   assume_inputs_non_null=cmd.isset("java-assume-inputs-non-null");
   if(cmd.isset("java-max-input-array-length"))
     max_nondet_array_length=safe_string2int(cmd.get_value("java-max-input-array-length"));
+  if(cmd.isset("java-max-vla-length"))
+    max_user_array_length=safe_string2int(cmd.get_value("java-max-vla-length"));
 }
 
 /*******************************************************************\
@@ -198,7 +200,8 @@ bool java_bytecode_languaget::typecheck(
          c_it->second, 
 	 enable_runtime_checks,
 	 symbol_table, 
-	 get_message_handler()))
+	 get_message_handler(),
+	 max_user_array_length))
       return true;
   }
 

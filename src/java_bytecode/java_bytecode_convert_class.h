@@ -18,7 +18,8 @@ bool java_bytecode_convert_class(
   const java_bytecode_parse_treet &parse_tree,
   const bool &enable_runtime_checks,
   symbol_tablet &symbol_table,
-  message_handlert &message_handler);
+  message_handlert &message_handler,
+  int max_array_length);
 
 #endif
 

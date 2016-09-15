@@ -9,6 +9,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/prefix.h>
 
 #include "class_hierarchy.h"
+#include "class_identifier.h"
 #include "remove_virtual_functions.h"
 
 /*******************************************************************\
@@ -23,7 +24,7 @@ class remove_virtual_functionst
 {
 public:
   remove_virtual_functionst(
-    const symbol_tablet &_symbol_table,
+    symbol_tablet &_symbol_table,
     const goto_functionst &goto_functions);
 
   void operator()(goto_functionst &goto_functions);
@@ -32,7 +33,7 @@ public:
 
 protected:
   const namespacet ns;
-  const symbol_tablet &symbol_table;
+  symbol_tablet &symbol_table;
   
   class_hierarchyt class_hierarchy;
 
@@ -49,9 +50,9 @@ protected:
 
   typedef std::vector<functiont> functionst;
   void get_functions(const exprt &, functionst &);
+  void get_child_functions_rec(const irep_idt &, const symbol_exprt &,
+                               const irep_idt &, functionst &);
   exprt get_method(const irep_idt &class_id, const irep_idt &component_name);
-  
-  exprt build_class_identifier(const exprt &);
 };
 
 /*******************************************************************\
@@ -67,54 +68,12 @@ Function: remove_virtual_functionst::remove_virtual_functionst
 \*******************************************************************/
 
 remove_virtual_functionst::remove_virtual_functionst(
-  const symbol_tablet &_symbol_table,
+  symbol_tablet &_symbol_table,
   const goto_functionst &goto_functions):
   ns(_symbol_table),
   symbol_table(_symbol_table)
 {
   class_hierarchy(symbol_table);
-}
-
-/*******************************************************************\
-
-Function: remove_virtual_functionst::build_class_identifier
-
-  Inputs:
-
- Outputs:
-
- Purpose:
-
-\*******************************************************************/
-
-exprt remove_virtual_functionst::build_class_identifier(
-  const exprt &src)
-{
-  // the class identifier is in the root class
-  exprt e=src;
-  
-  while(1)
-  {
-    const typet &type=ns.follow(e.type());
-    assert(type.id()==ID_struct);
-    
-    const struct_typet &struct_type=to_struct_type(type);
-    const struct_typet::componentst &components=struct_type.components();
-    assert(!components.empty());
-    
-    member_exprt member_expr(
-      e, components.front().get_name(), components.front().type());
-    
-    if(components.front().get_name()=="@class_identifier")
-    {
-      // found it
-      return member_expr;
-    }
-    else
-    {
-      e=member_expr;
-    }
-  }
 }
 
 /*******************************************************************\
@@ -170,35 +129,37 @@ void remove_virtual_functionst::remove_virtual_function(
   goto_programt new_code_calls;
   goto_programt new_code_gotos;
 
-  // Get a pointer from which we can extract a clsid.
-  // If it's already a pointer to an object of some sort, just use it;
-  // if it's void* then use the parent of all possible candidates,
-  // which by the nature of get_functions happens to be the last candidate.
+  exprt this_expr=code.arguments()[0];
+  // If necessary, cast to the last candidate function to get the object's clsid.
+  // By the structure of get_functions, this is the parent of all other classes
+  // under consideration.
+  symbol_typet suggested_type(functions.back().class_id);
+  exprt c_id2=get_class_identifier_field(this_expr,suggested_type,ns);
 
-  exprt this_expr=code.arguments()[0];    
-  assert(this_expr.type().id()==ID_pointer && "Non-pointer this-arg in remove-virtuals?");
-  const auto& points_to=this_expr.type().subtype();
-  if(points_to==empty_typet())
-  {
-    symbol_typet symbol_type(functions.back().class_id);
-    this_expr=typecast_exprt(this_expr, pointer_typet(symbol_type));
-  }
-  exprt deref=dereference_exprt(this_expr, this_expr.type().subtype());
-  exprt c_id2=build_class_identifier(deref);
+  goto_programt::targett last_function;
   
   for(functionst::const_iterator
       it=functions.begin();
       it!=functions.end();
       it++)
   {
-    // call function
     goto_programt::targett t1=new_code_calls.add_instruction();
-    t1->make_function_call(code);
-    auto& newcall=to_code_function_call(t1->code);
-    newcall.function()=it->symbol_expr;
-    pointer_typet need_type(symbol_typet(it->class_id));
-    if(newcall.arguments()[0].type()!=need_type)
-      newcall.arguments()[0].make_typecast(need_type);
+    if(it->symbol_expr.get_identifier()!=irep_idt())
+    {
+      // call function
+      t1->make_function_call(code);
+      auto& newcall=to_code_function_call(t1->code);
+      newcall.function()=it->symbol_expr;
+      pointer_typet need_type(symbol_typet(it->symbol_expr.get(ID_C_class)));
+      if(newcall.arguments()[0].type()!=need_type)
+        newcall.arguments()[0].make_typecast(need_type);
+    }
+    else
+    {
+      // No definition for this type; shouldn't be possible...
+      t1->make_assertion(false_exprt());
+    }
+    last_function=t1;
     
     // goto final
     goto_programt::targett t3=new_code_calls.add_instruction();
@@ -209,6 +170,11 @@ void remove_virtual_functionst::remove_virtual_function(
     goto_programt::targett t4=new_code_gotos.add_instruction();
     t4->make_goto(t1, equal_exprt(c_id1, c_id2));
   }
+
+  // In any other case (most likely a stub class) call the most basic
+  // version of the method we know to exist:
+  goto_programt::targett fallthrough=new_code_gotos.add_instruction();
+  fallthrough->make_goto(last_function);
 
   goto_programt new_code;
   
@@ -237,6 +203,35 @@ void remove_virtual_functionst::remove_virtual_function(
   target->make_skip();
 }
 
+void remove_virtual_functionst::get_child_functions_rec(
+  const irep_idt &this_id,
+  const symbol_exprt &last_method_defn,
+  const irep_idt &component_name,
+  functionst &functions)
+{
+  auto findit=class_hierarchy.class_map.find(this_id);
+  if(findit==class_hierarchy.class_map.end())
+    return;
+  
+  for(const auto & child : findit->second.children)
+  {
+    exprt method=get_method(child, component_name);
+    functiont function;
+    function.class_id=child;   
+    if(method.is_not_nil())
+    {
+      function.symbol_expr=to_symbol_expr(method);
+      function.symbol_expr.set(ID_C_class, child);
+    }
+    else {
+      function.symbol_expr=last_method_defn;
+    }
+    functions.push_back(function);
+
+    get_child_functions_rec(child,function.symbol_expr,component_name,functions);    
+  }
+}
+
 /*******************************************************************\
 
 Function: remove_virtual_functionst::get_functions
@@ -256,23 +251,8 @@ void remove_virtual_functionst::get_functions(
   const irep_idt class_id=function.get(ID_C_class);
   const irep_idt component_name=function.get(ID_component_name);
   assert(!class_id.empty());
-  
-  // iterate over all children, transitively
-  std::vector<irep_idt> children=
-    class_hierarchy.get_children_trans(class_id);
 
-  for(const auto & child : children)
-  {
-    exprt method=get_method(child, component_name);
-    if(method.is_not_nil())
-    {
-      functiont function;
-      function.class_id=child;
-      function.symbol_expr=to_symbol_expr(method);
-      function.symbol_expr.set(ID_C_class, child);
-      functions.push_back(function);
-    }
-  }
+  functiont root_function;
   
   // Start from current class, go to parents until something
   // is found.
@@ -282,11 +262,9 @@ void remove_virtual_functionst::get_functions(
     exprt method=get_method(c, component_name);
     if(method.is_not_nil())
     {
-      functiont function;
-      function.class_id=c;
-      function.symbol_expr=to_symbol_expr(method);
-      function.symbol_expr.set(ID_C_class, c);
-      functions.push_back(function);
+      root_function.class_id=c;
+      root_function.symbol_expr=to_symbol_expr(method);
+      root_function.symbol_expr.set(ID_C_class, c);
       break; // abort
     }
 
@@ -296,6 +274,18 @@ void remove_virtual_functionst::get_functions(
     if(parents.empty()) break;
     c=parents.front();
   }
+
+  if(root_function.class_id==irep_idt())
+  {
+    // No definition here; this is an abstract function.
+    root_function.class_id=class_id;
+  }
+
+  // iterate over all children, transitively
+  get_child_functions_rec(class_id,root_function.symbol_expr,component_name,functions);
+
+  functions.push_back(root_function);
+  
 }
 
 /*******************************************************************\
@@ -342,6 +332,7 @@ bool remove_virtual_functionst::remove_virtual_functions(
   bool did_something=false;
 
   Forall_goto_program_instructions(target, goto_program)
+  {
     if(target->is_function_call())
     {
       const code_function_callt &code=
@@ -353,7 +344,8 @@ bool remove_virtual_functionst::remove_virtual_functions(
         did_something=true;
       }
     }
-
+  }
+    
   if(did_something)
   {
     //remove_skip(goto_program);
@@ -407,7 +399,7 @@ Function: remove_virtual_functions
 \*******************************************************************/
 
 void remove_virtual_functions(
-  const symbol_tablet &symbol_table,
+  symbol_tablet &symbol_table,
   goto_functionst &goto_functions)
 {
   remove_virtual_functionst

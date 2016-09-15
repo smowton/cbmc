@@ -58,7 +58,7 @@ class optionst;
   "(java-max-input-array-length):(java-mock-class):(java-no-mock-class):"\
   "(java-max-vla-length):"\
   "(localize-faults)(localize-faults-method):" \
-  "(floatbv)(all-claims)(all-properties)(decide)" // legacy, and will eventually disappear
+  "(floatbv)(all-claims)(all-properties)" // legacy, and will eventually disappear
 
 class cbmc_parse_optionst:
   public parse_options_baset,

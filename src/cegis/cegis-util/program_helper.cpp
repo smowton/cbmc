@@ -6,6 +6,7 @@
 
 #include <cegis/instrument/literals.h>
 #include <cegis/instrument/instrument_var_ops.h>
+#include <cegis/cegis-util/string_helper.h>
 #include <cegis/cegis-util/program_helper.h>
 
 goto_programt &get_entry_body(goto_functionst &gf)
@@ -92,15 +93,15 @@ bool contains(const exprt &rhs, const irep_idt &id)
 }
 }
 
-bool is_nondet(const goto_programt::targett &target,
-    const goto_programt::targett &end)
+bool is_nondet(goto_programt::const_targett target,
+    goto_programt::const_targett end)
 {
   const goto_programt::instructiont &instr=*target;
   switch (instr.type)
   {
   case goto_program_instruction_typet::DECL:
   {
-    goto_programt::targett next=std::next(target);
+    goto_programt::const_targett next=std::next(target);
     if (next == end) return true;
     if (goto_program_instruction_typet::FUNCTION_CALL == next->type)
     {
@@ -127,6 +128,11 @@ bool is_nondet(const goto_programt::targett &target,
   default:
     return false;
   }
+}
+
+bool is_return_value_name(const std::string &name)
+{
+  return contains(name, "return_value___") || contains(name, RETURN_VALUE_SUFFIX);
 }
 
 const typet &get_affected_type(const goto_programt::instructiont &instr)

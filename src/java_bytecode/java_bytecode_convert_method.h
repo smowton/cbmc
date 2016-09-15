@@ -19,7 +19,8 @@ void java_bytecode_convert_method(
   const java_bytecode_parse_treet::methodt &,
   symbol_tablet &symbol_table,
   message_handlert &message_handler,
-  const bool &enable_runtime_checks);
+  const bool &enable_runtime_checks,
+  int max_array_length);
 
 #endif
 

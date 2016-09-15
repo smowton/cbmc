@@ -19,6 +19,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-programs/set_properties.h>
 #include <goto-programs/remove_function_pointers.h>
 #include <goto-programs/remove_virtual_functions.h>
+#include <goto-programs/remove_instanceof.h>
 #include <goto-programs/remove_returns.h>
 #include <goto-programs/remove_vector.h>
 #include <goto-programs/remove_complex.h>
@@ -63,8 +64,7 @@ Function: goto_analyzer_parse_optionst::goto_analyzer_parse_optionst
 goto_analyzer_parse_optionst::goto_analyzer_parse_optionst(int argc, const char **argv):
   parse_options_baset(GOTO_ANALYSER_OPTIONS, argc, argv),
   language_uit(cmdline, ui_message_handler),
-  ui_message_handler(language_uit::get_ui_cmdline(cmdline),
-                     "GOTO-ANALYZER " CBMC_VERSION)
+  ui_message_handler(cmdline, "GOTO-ANALYZER " CBMC_VERSION)
 {
 }
   
@@ -431,6 +431,8 @@ bool goto_analyzer_parse_optionst::process_goto_program(
     status() << "Removing function pointers and virtual functions" << eom;
     remove_function_pointers(goto_model, cmdline.isset("pointer-check"));
     remove_virtual_functions(goto_model);
+    // remove rtti
+    remove_instanceof(goto_model);
 
     // do partial inlining
     status() << "Partial Inlining" << eom;

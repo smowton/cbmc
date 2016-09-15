@@ -1030,15 +1030,14 @@ typet interpretert::concretise_type(const typet &type) const
     std::vector<mp_integer> computed_size;
     evaluate(size_expr,computed_size);
     if(computed_size.size()==1 &&
-       computed_size[0]>0 &&
-       computed_size[0]<=max_allowed_dynamic_array_size)
+       computed_size[0]>=0)
     {
-      message->result() << "Concretised array with size " << computed_size[0] << "\n" << messaget::eom;
+      message->result() << "Concretised array with size " << computed_size[0] << messaget::eom;
       return array_typet(type.subtype(),
                          constant_exprt::integer_constant(computed_size[0].to_ulong()));
     }
     else {
-      message->error() << "Failed to concretise variable array\n" << messaget::eom;
+      message->error() << "Failed to concretise variable array" << messaget::eom;
     }
   }
   return type;
@@ -1160,9 +1159,17 @@ unsigned interpretert::get_size(const typet &type) const
 
     unsigned subtype_size=get_size(type.subtype());
 
-    mp_integer i;
-    if(!to_integer(size_expr, i))
-      return subtype_size*integer2unsigned(i);
+    std::vector<mp_integer> i;
+    evaluate(size_expr,i);
+    if(i.size()==1)
+    {
+      // Go via the binary representation to reproduce any
+      // overflow behaviour.
+      exprt size_const=from_integer(i[0],size_expr.type());
+      mp_integer size_mp;
+      assert(!to_integer(size_const,size_mp));
+      return subtype_size*integer2unsigned(size_mp);
+    }
     else
       return subtype_size;
   }
@@ -1755,15 +1762,52 @@ static bool is_constructor_call(const goto_trace_stept& step,
   return callee_type.get_bool(ID_constructor);
 }
 
-static bool is_super_call(const irep_idt& called, const irep_idt& caller)
+struct trace_stack_entry {
+  irep_idt func_name;
+  mp_integer this_address;
+  irep_idt capture_symbol;
+  bool is_super_call;
+};
+
+static bool is_super_call(const trace_stack_entry& called, const trace_stack_entry& caller)
 {
+  // If either call isn't an instance method, it's not a super call:
+  if(called.this_address==0 || caller.this_address==0)
+    return false;
+
+  // If the this-addresses don't match, it's not a super call:
+  if(called.this_address!=caller.this_address)
+    return false;
+  
+  // If the names (including class) match entirely, this is simply a recursive call:
+  if(called.func_name == caller.func_name)
+    return false;
+
   // Check whether the mangled method names (disregarding class) match:
-  std::string calleds=as_string(called);
-  std::string callers=as_string(caller);
+  std::string calleds=as_string(called.func_name);
+  std::string callers=as_string(caller.func_name);
   size_t calledoff=calleds.rfind('.'), calleroff=callers.rfind('.');
   if(calledoff==std::string::npos || calleroff==std::string::npos)
     return false;
   return calleds.substr(calledoff)==callers.substr(calleroff);
+}
+
+mp_integer interpretert::get_this_address(const code_function_callt& call_code)
+{
+  if(!to_code_type(call_code.function().type()).has_this())
+    return 0;
+  
+  std::vector<mp_integer> this_address;
+  assert(call_code.arguments().size()!=0);
+  evaluate(call_code.arguments()[0],this_address);
+  if(this_address.size()==0)
+  {
+    message->warning() << "Failed to evaluate this-arg for " <<
+      from_expr(ns,"",call_code.function()) << messaget::eom;
+    return 0;
+  }
+  assert(this_address.size()==1);
+  return this_address[0];
 }
 
 exprt interpretert::get_value(const irep_idt& id)
@@ -1817,15 +1861,10 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
   // creeps in that needs the current value of local 'i') will be evaluated correctly.
 
   std::vector<std::pair<mp_integer, std::vector<mp_integer> > > trace_eval;
-  struct trace_stack_entry {
-    irep_idt func_name;
-    irep_idt capture_symbol;
-    bool is_super_call;
-  };
   std::vector<trace_stack_entry> trace_stack;
   int outermost_constructor_depth=-1;
 
-  trace_stack.push_back({goto_functionst::entry_point(),irep_idt(),false});
+  trace_stack.push_back({goto_functionst::entry_point(),0,irep_idt(),false});
   
   for(auto it = trace.steps.begin(), itend = trace.steps.end(); it != itend; ++it)
   {
@@ -1837,12 +1876,24 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
       symbol_exprt symbol_expr=get_assigned_symbol(step);
       irep_idt id=symbol_expr.get_identifier();
 
+      #ifdef DEBUG
+      message->status() << it->pc->function << ": " << from_expr(ns,"",step.full_lhs) << " <- " << from_expr(ns,"",step.full_lhs_value) << messaget::eom;
+      #endif
+
       address=evaluate_address(step.full_lhs);
       if(address==0)
         address=build_memory_map(id,symbol_expr.type());
 
       std::vector<mp_integer> rhs;
       evaluate(step.full_lhs_value,rhs);
+      if(rhs.size()==0)
+      {
+        evaluate(step.full_lhs,rhs);
+        if(rhs.size()!=0)
+        {
+          message->warning() << "symex::build_goto_trace couldn't evaluate this expression, but the interpreter could." << messaget::eom;
+        }
+      }
       assign(address,rhs);
 
       trace_eval.push_back(std::make_pair(address, rhs));
@@ -1858,11 +1909,16 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
                                      symbol_table,called,capture_symbol);
       bool is_jlo_cons=is_cons &&
                        as_string(called).find("java.lang.Object")!=std::string::npos;
+
+      mp_integer this_address=get_this_address(to_code_function_call(step.pc->code));
+
+      trace_stack.push_back({called,this_address,irep_idt(),false});
+      
       bool is_super=(!is_cons) &&
                     trace_stack.size()!=0 &&
-                    is_super_call(called,trace_stack.back().func_name);
+                    is_super_call(trace_stack.back(),trace_stack[trace_stack.size()-2]);
+      trace_stack.back().is_super_call=is_super;
       
-      trace_stack.push_back({called,irep_idt(),is_super});
       if((!is_stub) || is_jlo_cons)
       {
 	if(is_cons)
@@ -1904,19 +1960,18 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
     else if(step.is_function_return())
     {
       outermost_constructor_depth=-1;
-      assert(trace_stack.size()!=0);
+      assert(trace_stack.size()>=1);
       const auto& ret_func=trace_stack.back();
       if(ret_func.capture_symbol!=irep_idt())
       {
+        assert(trace_stack.size()>=2);
 	// We must record the value of stub_capture_symbol now.
 	function_assignmentst defined;
 	get_value_tree(ret_func.capture_symbol,defined);
 	if(defined.size()!=0) // Definition found?
 	{
-	  // Find our calling function:
-	  auto nextit=it; ++nextit;
-	  assert(nextit!=trace.steps.end());
-	  function_inputs[ret_func.func_name].push_front({ nextit->pc->function,defined });
+          const auto& caller=trace_stack[trace_stack.size()-2].func_name;
+	  function_inputs[ret_func.func_name].push_front({ caller,defined });
 	}
       }
       trace_stack.pop_back();
