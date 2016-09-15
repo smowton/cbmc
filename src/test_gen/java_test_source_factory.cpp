@@ -970,7 +970,7 @@ std::string reference_factoryt::verify_mock_objects(const symbol_tablet &st,
                                           argstrings,verify_statements);
     else if(is_constructor)
       mockenv_builder.verify_constructor_calls(desc.classname,desc.funcname,desc.java_arg_types,
-                                               fn_and_returns.second.size(),verify_statements);
+                                               argstrings,verify_statements);
     else
       mockenv_builder.verify_instance_calls(desc.classname,desc.funcname,desc.java_arg_types,
                                             argstrings,verify_statements);

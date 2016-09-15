@@ -493,21 +493,11 @@ void mock_environment_builder::verify_constructor_calls(
   const std::string& targetclass,
   const std::string& methodname,
   const std::vector<java_type>& argtypes,
-  size_t ncalls,
-  std::vector<init_statement>& stmts)
+  const std::vector<std::vector<std::string> >& calls,  
+  std::vector<init_statement>& stmts)  
 {
-  std::ostringstream constructor_call;
-  constructor_call << "org.powermock.api.mockito.PowerMockito.verifyNew(" <<
-    targetclass << ".class, org.mockito.Mockito.times(" << ncalls << "))";
-  if(argtypes.size()==0)
-    constructor_call << ".withNoArguments()";
-  else
-  {
-    constructor_call << ".withArguments(";
-    generate_arg_matchers(constructor_call,argtypes);
-    constructor_call << ')';
-  }
-  stmts.push_back(init_statement::statement(constructor_call.str()));
+  verify_instance_calls(targetclass,targetclass,
+                        argtypes,calls,stmts);
 }
 
 void mock_environment_builder::verify_instance_calls(
