@@ -929,8 +929,8 @@ void interpretert::execute_function_call()
     {
       std::vector<mp_integer> value;
       assert(it->second.size()!=0);
-      assert(it->second.front().assignments.size()!=0);
-      evaluate(it->second.front().assignments.back().value,value);
+      assert(it->second.front().return_assignments.size()!=0);
+      evaluate(it->second.front().return_assignments.back().value,value);
       if (return_value_address>0)
       {
         assign(return_value_address,value);
@@ -1471,15 +1471,15 @@ void interpretert::prune_inputs(input_varst &inputs,list_input_varst& function_i
 {
   for(list_input_varst::iterator it=function_inputs.begin(); it!=function_inputs.end();it++) {
     const exprt size=from_integer(it->second.size(), integer_typet());
-    assert(it->second.front().assignments.size()!=0);
-    const auto& first_function_assigns=it->second.front().assignments;
+    assert(it->second.front().return_assignments.size()!=0);
+    const auto& first_function_assigns=it->second.front().return_assignments;
     const auto& toplevel_definition=first_function_assigns.back().value;
     array_typet type=array_typet(toplevel_definition.type(),size);
     array_exprt list(type);
     list.reserve_operands(it->second.size());
     for(auto l_it : it->second)
     {
-      list.copy_to_operands(l_it.assignments.back().value);
+      list.copy_to_operands(l_it.return_assignments.back().value);
     }
     inputs[it->first]=list;
   }
@@ -1767,6 +1767,7 @@ struct trace_stack_entry {
   mp_integer this_address;
   irep_idt capture_symbol;
   bool is_super_call;
+  std::vector<interpretert::function_assignmentt> param_values;
 };
 
 static bool is_super_call(const trace_stack_entry& called, const trace_stack_entry& caller)
@@ -1863,8 +1864,9 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
   std::vector<std::pair<mp_integer, std::vector<mp_integer> > > trace_eval;
   std::vector<trace_stack_entry> trace_stack;
   int outermost_constructor_depth=-1;
+  int expect_parameter_assignments=0;
 
-  trace_stack.push_back({goto_functionst::entry_point(),0,irep_idt(),false});
+  trace_stack.push_back({goto_functionst::entry_point(),0,irep_idt(),false,{}});
   
   for(auto it = trace.steps.begin(), itend = trace.steps.end(); it != itend; ++it)
   {
@@ -1896,6 +1898,48 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
       }
       assign(address,rhs);
 
+      if(expect_parameter_assignments!=0)
+      {
+        if(!--expect_parameter_assignments)
+        {
+          // Just executed the last parameter assignment for a function we just entered.
+          // Capture the arguments of *every* call as it is entered,
+          // because we might need them for verification if it happens to call a super-method later.
+          std::vector<function_assignmentt> actual_params;
+          const auto& this_function=trace_stack.back().func_name;
+          const auto& formal_params=
+            to_code_type(symbol_table.lookup(this_function).type).parameters();
+          std::vector<function_assignmentt> direct_params;
+          bool is_constructor=id2string(this_function).find("<init>")!=std::string::npos;
+      
+          for(const auto& fp : formal_params)
+          {
+            // Don't capture 'this' on entering a constructor, as it's uninitialised
+            // at this point.
+            if(is_constructor && fp.get_this())
+              continue;
+            // Note this will record the actual parameter values as well as anything
+            // reachable from them. We use a single actual_params list for all parameters
+            // to avoid redundancy e.g. if parameters or objects reachable from them alias,
+            // we only need to capture that subtree once.
+            get_value_tree(fp.get_identifier(),actual_params);
+            // Set the actual direct params aside, so we can keep them in order at the back.
+            direct_params.push_back(std::move(actual_params.back()));
+            actual_params.pop_back();
+          }
+
+          // Put the direct params back on the end of the list:
+          actual_params.insert(actual_params.end(),direct_params.begin(),direct_params.end());
+#ifdef DEBUG
+          for(const auto& id_expr : actual_params)
+            message->status() << "Param " << id_expr.id << " = " <<
+              from_expr(ns,"",id_expr.value) << messaget::eom;
+#endif
+          trace_stack.back().param_values=std::move(actual_params);
+
+        }
+      }
+
       trace_eval.push_back(std::make_pair(address, rhs));
     }
     else if(step.is_function_call())
@@ -1912,7 +1956,13 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
 
       mp_integer this_address=get_this_address(to_code_function_call(step.pc->code));
 
-      trace_stack.push_back({called,this_address,irep_idt(),false});
+      trace_stack.push_back({called,this_address,irep_idt(),false,{}});
+
+      assert(expect_parameter_assignments==0 &&
+             "Entered another function before the parameter assignment chain was done?");
+      // Capture upcoming parameter assignments:
+      expect_parameter_assignments=
+        to_code_type(to_code_function_call(step.pc->code).function().type()).parameters().size();
       
       bool is_super=(!is_cons) &&
                     trace_stack.size()!=0 &&
@@ -1961,6 +2011,8 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
     {
       outermost_constructor_depth=-1;
       assert(trace_stack.size()>=1);
+      assert(expect_parameter_assignments==0 &&
+             "Exited function before the parameter assignment chain was done?");
       const auto& ret_func=trace_stack.back();
       if(ret_func.capture_symbol!=irep_idt())
       {
@@ -1971,7 +2023,8 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
 	if(defined.size()!=0) // Definition found?
 	{
           const auto& caller=trace_stack[trace_stack.size()-2].func_name;
-	  function_inputs[ret_func.func_name].push_front({ caller,defined });
+	  function_inputs[ret_func.func_name].push_back({
+              caller,std::move(defined),std::move(trace_stack.back().param_values)});
 	}
       }
       trace_stack.pop_back();
