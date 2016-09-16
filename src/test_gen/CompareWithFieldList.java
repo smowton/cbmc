@@ -5,6 +5,8 @@ import java.lang.reflect.Field;
 
 public class CompareWithFieldList {
 
+  static boolean debug = false;
+
   static HashSet<Class> primitives;
   
   static {
@@ -34,8 +36,8 @@ public class CompareWithFieldList {
 
   private static void fail(Object actual, Object expected, String prefix)
   {
-    String actual_str = actual == null ? "null" : actual.toString();
-    String expected_str = expected == null ? "null" : expected.toString();
+    String actual_str = actual == null ? "null" : (actual.getClass().getName() + " " + actual.toString());
+    String expected_str = expected == null ? "null" : (expected.getClass().getName() + " " + expected.toString());
     String field_str = prefix.equals("") ? "" : ("Field " + prefix + ": ");
     throw new UnexpectedMockParameterException(field_str + "Expected " + expected_str + " got " + actual_str);
   }
@@ -45,12 +47,19 @@ public class CompareWithFieldList {
 
     if(real == null)
     {
-      if(primitive_or_fieldlist == null)
+      if(primitive_or_fieldlist == null) {
+        if(debug)
+          System.err.printf("%s null as expected\n", prefix);
 	return;
+      }
       fail(real, primitive_or_fieldlist, prefix);
     }
     if(real.equals(primitive_or_fieldlist))
+    {
+      if(debug)
+        System.err.printf("%s = %s as expected\n", prefix, real.toString());
       return;
+    }
     if(primitive_or_fieldlist == null)
       fail(real, primitive_or_fieldlist, prefix);
     if(primitives.contains(primitive_or_fieldlist.getClass()))
