@@ -24,6 +24,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "java_bytecode_convert_method.h"
 #include "bytecode_info.h"
 #include "java_types.h"
+#include "java_opaque_method_stubs.h"
 
 #include <limits>
 #include <algorithm>
@@ -823,7 +824,12 @@ codet get_array_bounds_check(const exprt &arraystruct, const exprt& idx)
   binary_relation_exprt ltlength(idx,ID_lt,length_field);
   code_blockt boundschecks;
   boundschecks.add(code_assertt(gezero));
+  boundschecks.operands().back().add_source_location().set_comment("Array index < 0");
+  boundschecks.operands().back().add_source_location().set_property_class("array-index-oob-low");
   boundschecks.add(code_assertt(ltlength));
+  boundschecks.operands().back().add_source_location().set_comment("Array index >= length");
+  boundschecks.operands().back().add_source_location().set_property_class("array-index-oob-high");
+  
   // TODO make this throw ArrayIndexOutOfBoundsException instead of asserting.
   return boundschecks;
 }
@@ -1202,6 +1208,8 @@ codet java_bytecode_convert_methodt::convert_instructions(
       assert(op.size()==1 && results.size()==1);
       binary_predicate_exprt check(op[0], "java_instanceof", arg0);
       c=code_assertt(check);
+      c.add_source_location().set_comment("Dynamic cast check");
+      c.add_source_location().set_property_class("bad-dynamic-cast");
       results[0]=op[0];
     }
     else if(statement=="invokedynamic")
@@ -1326,6 +1334,9 @@ codet java_bytecode_convert_methodt::convert_instructions(
         symbol.type=arg0.type();
         symbol.value.make_nil();
         symbol.mode=ID_java;
+        
+        assign_parameter_names(to_code_type(symbol.type),symbol.name,symbol_table);
+        
         symbol_table.add(symbol);
       }
 
@@ -1884,6 +1895,8 @@ codet java_bytecode_convert_methodt::convert_instructions(
       binary_relation_exprt gezero(op[0],ID_ge,intzero);
       code_blockt checkandcreate;
       code_assertt check(gezero);
+      check.add_source_location().set_comment("Array size < 0");
+      check.add_source_location().set_property_class("array-create-negative-size");      
       checkandcreate.move_to_operands(check);
       if(max_array_length!=0)
       {

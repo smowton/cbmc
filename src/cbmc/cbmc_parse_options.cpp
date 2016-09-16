@@ -477,6 +477,9 @@ void cbmc_parse_optionst::get_command_line_options(optionst &options)
   if(cmdline.isset("java-disable-mocks"))
     options.set_option("java-disable-mocks", true);
 
+  if(cmdline.isset("java-verify-mocks"))
+    options.set_option("java-verify-mocks", true);
+
   if(cmdline.isset("java-mock-class"))
     options.set_option("java-mock-class", cmdline.get_values("java-mock-class"));
 
@@ -1211,8 +1214,15 @@ void cbmc_parse_optionst::help()
     " --classpath dir/jar          set the classpath\n"
     " --main-class class-name      set the name of the main class\n"
     " --gen-java-test-case         generate test case\n" 
-    " --cover-function-only        add coverage instrumentation only to the entry function"
-    " --assertions-as-assumptions  convert assertions from generic checks into assumptions"
+    " --cover-function-only        add coverage instrumentation only to the entry function\n"
+    " --assertions-as-assumptions  convert assertions from generic checks into assumptions\n"
+    " --java-assume-inputs-non-null   never generate tests where direct or indirect parameters are null\n"
+    " --java-disable-mocks         disable use of Mockito to model opaque functions\n"
+    " --java-verify-mocks          check that runtime mock object interactions match expectations\n"
+    " --java-mock-class            force mocking of given class (wildcards supported)\n"
+    " --java-no-mock-class         disable mocking of given class (wildcards supported; default java.*)\n"
+    " --java-max-input-array-length   limit the length of nondeterministic arrays (default 5)\n"
+    " --java-max-vla-length        limit the length of user-code-created arrays\n"
     "\n"
     "Semantic transformations:\n"
     " --nondet-static              add nondeterministic initialization of variables with static lifetime\n"

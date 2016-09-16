@@ -62,37 +62,6 @@ void insert_nondet_opaque_fields_at(const typet &expected_type,
   }
 }
 
-void assign_parameter_names(code_typet &ftype,const irep_idt &name_prefix,
-                            symbol_tablet &symbol_table)
-{
-
-  code_typet::parameterst &parameters=ftype.parameters();
-
-  // Mostly borrowed from java_bytecode_convert.cpp; maybe factor this out.
-  // assign names to parameters
-  for(std::size_t i=0; i<parameters.size(); ++i)
-  {
-    irep_idt base_name,identifier;
-
-    if(i==0 && parameters[i].get_this())
-      base_name="this";
-    else
-      base_name="stub_ignored_arg" + i2string(i);
-
-    identifier=id2string(name_prefix) + "::" + id2string(base_name);
-    parameters[i].set_base_name(base_name);
-    parameters[i].set_identifier(identifier);
-
-    // add to symbol table
-    parameter_symbolt parameter_symbol;
-    parameter_symbol.base_name=base_name;
-    parameter_symbol.mode=ID_java;
-    parameter_symbol.name=identifier;
-    parameter_symbol.type=parameters[i].type();
-    symbol_table.add(parameter_symbol);
-  }
-}
-
 void insert_nondet_opaque_fields(symbolt &sym,symbol_tablet &symbol_table,
                                  code_blockt *parent,unsigned parent_index,
                                  bool assume_non_null,int max_nondet_array_length,
@@ -111,8 +80,6 @@ void insert_nondet_opaque_fields(symbolt &sym,symbol_tablet &symbol_table,
     if(needed==empty_typet())
       return;
   }
-
-  assign_parameter_names(required_type,sym.name,symbol_table);
 
   if(is_constructor)
   {
@@ -167,6 +134,37 @@ void insert_nondet_opaque_fields(symbolt &sym,symbol_tablet &symbol_table,
 }
 
 } // End anon namespace for insert-nondet support functions
+
+void assign_parameter_names(code_typet &ftype,const irep_idt &name_prefix,
+                            symbol_tablet &symbol_table)
+{
+
+  code_typet::parameterst &parameters=ftype.parameters();
+
+  // Mostly borrowed from java_bytecode_convert.cpp; maybe factor this out.
+  // assign names to parameters
+  for(std::size_t i=0; i<parameters.size(); ++i)
+  {
+    irep_idt base_name,identifier;
+
+    if(i==0 && parameters[i].get_this())
+      base_name="this";
+    else
+      base_name="stub_ignored_arg" + i2string(i);
+
+    identifier=id2string(name_prefix) + "::" + id2string(base_name);
+    parameters[i].set_base_name(base_name);
+    parameters[i].set_identifier(identifier);
+
+    // add to symbol table
+    parameter_symbolt parameter_symbol;
+    parameter_symbol.base_name=base_name;
+    parameter_symbol.mode=ID_java;
+    parameter_symbol.name=identifier;
+    parameter_symbol.type=parameters[i].type();
+    symbol_table.add(parameter_symbol);
+  }
+}
 
 void java_generate_opaque_method_stubs(symbol_tablet &symbol_table,
                                        bool assume_non_null,

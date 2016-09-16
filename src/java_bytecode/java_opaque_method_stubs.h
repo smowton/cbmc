@@ -18,4 +18,8 @@ void java_generate_opaque_method_stubs(
   int max_nondet_array_length,
   const source_locationt &loc);
 
+void assign_parameter_names(code_typet &required_type,
+                            const irep_idt &symname,
+                            symbol_tablet &symbol_table);
+
 #endif
