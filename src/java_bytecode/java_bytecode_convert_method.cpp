@@ -1196,7 +1196,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
 	assertion_failure=false;
       }
     }
-    else if(statement=="checkcast")
+    else if(statement=="checkcast" && enable_runtime_checks)
     {
       // checkcast throws an exception in case a cast of object
       // on stack to given type fails.
