@@ -1,10 +1,11 @@
 package com.diffblue.java_testcase;
 
 import java.util.HashSet;
+import java.lang.reflect.Field;
 
 public class CompareWithFieldList {
 
-  HashSet<Class> primitives;
+  static HashSet<Class> primitives;
   
   static {
     primitives = new HashSet<Class>();
@@ -64,9 +65,15 @@ public class CompareWithFieldList {
       if(f == null)
 	throw new RuntimeException("Real object did not have expected field " + v.name);
       f.setAccessible(true);
-      Object realval = f.get(real);
+      Object realval;
+      try {
+        realval = f.get(real);
+      } catch(IllegalAccessException e) {
+        // Should be impossible.
+        throw new RuntimeException(e);
+      }
       String newPrefix = prefix + "." + v.name;
-      compare(realval, v.value);
+      compare(realval, v.value, newPrefix);
     }
     
   }

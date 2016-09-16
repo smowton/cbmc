@@ -1,5 +1,7 @@
 package com.diffblue.java_testcase;
 
+import java.util.ArrayList;
+
 public class FieldList {
   public ArrayList<FieldValue> fields;
   public FieldList() { fields = new ArrayList<FieldValue>(); }
