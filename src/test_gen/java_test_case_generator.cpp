@@ -198,17 +198,37 @@ const std::string java_test_case_generatort::generate_test_case(
       coversCompleteFlow = true;
   }
 
-  if(!coversCompleteFlow)
-    return("/* test cases without return values are not generated */\n");
+  if(goals_reached.size() && !coversCompleteFlow)
+    return("/* test cases without return values are not generated in coverage mode */\n");
+
+  std::string expect_exception;
+  if(trace.steps.size()!=0)
+  {
+    const auto& last_step=*trace.steps.rbegin();
+    if(last_step.type==goto_trace_stept::ASSERT)
+    {
+      const auto& prop_class=as_string(last_step.pc->source_location.get_property_class());
+      if(prop_class=="assertion")
+        expect_exception="java.lang.AssertionError";
+      else if(prop_class=="array-index-oob-low" ||
+              prop_class=="array-index-oob-high")
+        expect_exception="java.lang.IndexOutOfBoundsException";
+      else if(prop_class=="bad-dynamic-cast")
+        expect_exception="java.lang.ClassCastException";
+      else if(prop_class=="array-create-negative-size")
+        expect_exception="NegativeArraySizeException";
+    }
+  }
 
   const std::string &unique_name = get_test_function_name(st, gf, test_idx);
   const std::string source(generate(st,entry_func_id,enters_main,inputs,opaque_function_returns,
                                     input_defn_functions,dynamic_types,unique_name,
                                     assertCompare, emitAssert,
                                     options.get_bool_option("java-disable-mocks"),
+                                    !options.get_bool_option("java-verify-mocks"),
                                     options.get_list_option("java-mock-class"),
                                     options.get_list_option("java-no-mock-class"),
-                                    goals_reached));
+                                    goals_reached,expect_exception));
   const std::string empty("");
   std::string out_file_name=options.get_option("outfile");
   if(out_file_name.empty())
@@ -250,8 +270,7 @@ java_test_case_generatort::test_case_statust java_test_case_generatort::generate
 const std::string  java_test_case_generatort::generate_java_test_case(const optionst &options, const symbol_tablet &st,
                                                                       const goto_functionst &gf, const goto_tracet &trace,
                                                                       const size_t test_idx,
-                                                                      const std::vector<std::string> &goals_reached
-  )
+                                                                      const std::vector<std::string> &goals_reached)
 {
   const test_case_generatort source_gen=generate_java_test_case_from_inputs;
   return generate_test_case(options, st, gf, trace, source_gen, test_idx, goals_reached);
