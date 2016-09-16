@@ -225,6 +225,7 @@ const std::string java_test_case_generatort::generate_test_case(
                                     input_defn_functions,dynamic_types,unique_name,
                                     assertCompare, emitAssert,
                                     options.get_bool_option("java-disable-mocks"),
+                                    !options.get_bool_option("java-verify-mocks"),
                                     options.get_list_option("java-mock-class"),
                                     options.get_list_option("java-no-mock-class"),
                                     goals_reached,expect_exception));

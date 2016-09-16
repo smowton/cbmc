@@ -28,6 +28,7 @@ typedef std::function<
               const std::string &,
               bool,
               bool,
+              bool,
               const optionst::value_listt&,
               const optionst::value_listt&,              
               const std::vector<std::string>&,
