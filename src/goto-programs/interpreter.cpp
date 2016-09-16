@@ -1894,6 +1894,12 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
   const code_typet::parameterst &params = to_code_type(func_expr.type()).parameters();
 
   std::map<std::string, const irep_idt &> parameterSet;
+
+  // mapping <structure, field> -> value
+  std::map<std::pair<const irep_idt, const irep_idt>, const exprt> valuesBefore;
+  std::map<std::pair<const irep_idt, const irep_idt>,
+           std::pair<const exprt, const exprt>> valuesDifference;
+
   namespacet ns(symbol_table);
 
   for(const auto &p : params)
@@ -1936,19 +1942,41 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
       /********* 8< **********/
       irep_idt identifier=step.lhs_object.get_identifier();
       auto param = parameterSet.find(id2string(identifier));
-      // if(param != parameterSet.end())
-      // {
+      if(param != parameterSet.end())
+      {
         message->status() << "ASSIGN: " << id2string(identifier) << messaget::eom;
         const exprt &expr = step.full_lhs_value;
         interpretert::function_assignmentst input_assigns;
         get_value_tree(identifier, input_assigns);
         for(const auto &assign : input_assigns)
-         {
-           message->status() << " TREE_ASSIGN: " << id2string(assign.id)
-                             << " to " << from_expr(ns,"",assign.value)
-                             << messaget::eom;
-         }
-      // }
+        {
+          const typet &tree_typ = symbol_table.lookup(assign.id).type;
+          message->status() << " TREE_ASSIGN: " << id2string(assign.id)
+                            << " to " << from_expr(ns,"",assign.value)
+                            << messaget::eom;
+          if(tree_typ.id()==ID_struct)
+          {
+            const struct_typet &struct_type=to_struct_type(tree_typ);
+            const struct_typet::componentst &components=struct_type.components();
+            const struct_exprt &struct_expr=to_struct_expr(assign.value);
+            const auto& ops=struct_expr.operands();
+            for(size_t fieldidx=0, fieldlim=ops.size(); fieldidx!=fieldlim; ++fieldidx)
+            {
+              const exprt & expr = ops[fieldidx];
+              // only look at atomic types for now
+              if(expr.type().id()==ID_signedbv ||
+                 expr.type().id()==ID_c_bool ||
+                 expr.type().id()==ID_string ||
+                 expr.type().id()==ID_floatbv)
+              {
+                message->status() << " TVAL: " << components[fieldidx].get_name()
+                                  << " " << from_expr(ns,"",expr) << messaget::eom;
+                valuesBefore.insert({{assign.id, components[fieldidx].get_name()}, expr});
+              }
+            }
+          }
+        }
+      }
       /********* 8< **********/
     }
     else if(step.is_function_call())
@@ -2029,8 +2057,7 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
       }
       trace_stack.pop_back();
     }
-
-    if(step.type==goto_trace_stept::OUTPUT)
+    else if(step.type==goto_trace_stept::OUTPUT)
     {
       for(const auto &inputParam : parameterSet)
       {
@@ -2041,17 +2068,63 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
           // effects
           interpretert::function_assignmentst output_assigns;
           get_value_tree(inputParam.second, output_assigns);
-          message->status() << "OUTPUT: " << (inputParam.first)
-                            << messaget::eom;
+          const typet &typ = symbol_table.lookup(inputParam.second).type;
+          // message->status() << "OUTPUT: " << (inputParam.first)
+          //                   << " TYPE: " << id2string(typ.id())
+          //                   << messaget::eom;
           for(const auto &assign : output_assigns)
           {
-            message->status() << " OUTPUT_TREE_ASSIGN: " << id2string(assign.id)
-                              << " to " << from_expr(ns,"",assign.value)
-                              << messaget::eom;
+            const typet &tree_typ = symbol_table.lookup(assign.id).type;
+            // message->status() << " OUTPUT_TREE_ASSIGN: " << id2string(assign.id)
+            //                   << " TYPE: " << id2string(tree_typ.id())
+            //                   << " to " << from_expr(ns,"",assign.value)
+            //                   << messaget::eom;
+
+            if(tree_typ.id()==ID_struct)
+            {
+              const struct_typet &struct_type=to_struct_type(tree_typ);
+              const struct_typet::componentst &components=struct_type.components();
+              const struct_exprt &struct_expr=to_struct_expr(assign.value);
+              const auto& ops=struct_expr.operands();
+              for(size_t fieldidx=0, fieldlim=ops.size(); fieldidx!=fieldlim; ++fieldidx)
+              {
+                const exprt &after_expr = ops[fieldidx];
+                if(after_expr.type().id()==ID_signedbv ||
+                   after_expr.type().id()==ID_c_bool)
+                   // after_expr.type().id()==ID_string ||
+                   // after_expr.type().id()==ID_floatbv)
+                {
+                  const exprt &before_expr = valuesBefore[{assign.id, components[fieldidx].get_name()}];
+                  assert(after_expr.type().id()==before_expr.type().id());
+                  mp_integer a, b;
+                  to_integer(after_expr, a);
+                  to_integer(before_expr, b);
+                  if (a != b)
+                  {
+                    // message->status() << "NEQ: " << id2string(assign.id) << " "
+                    //                   << a << "!=" << b
+                    //                   << " typexpr: " << id2string(after_expr.type().id())
+                    //                   << messaget::eom;
+                    valuesDifference.insert({{assign.id, components[fieldidx].get_name()},
+                                             {before_expr, after_expr}});
+                  }
+                }
+              }
+            }
           }
         }
       }
     }
+  }
+
+  for(auto &diff : valuesDifference)
+  {
+    const exprt &before = diff.second.first;
+    const exprt &after = diff.second.second;
+    message->status() << "NEQ: " << id2string(diff.first.first) << " "
+                      << " before: " << from_expr(ns,"",before)
+                      << " after: " << from_expr(ns,"",after)
+                      << messaget::eom;
   }
 
   // Now walk backwards to find object states on entering 'main'.
