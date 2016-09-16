@@ -135,6 +135,7 @@ const std::string java_test_case_generatort::generate_test_case(
      an init block etc. */
   bool coversCompleteFlow = false;
 
+  // look for return value to create assert
   for(const auto& step : trace.steps)
   {
     if(step.type==goto_trace_stept::ASSIGNMENT)
@@ -220,6 +221,7 @@ const std::string java_test_case_generatort::generate_test_case(
   const std::string &unique_name = get_test_function_name(st, gf, test_idx);
   const std::string source(generate(st,entry_func_id,enters_main,inputs,opaque_function_returns,
                                     input_defn_functions,dynamic_types,unique_name,
+                                    valuesDifference,
                                     assertCompare, emitAssert,
                                     options.get_bool_option("java-disable-mocks"),
                                     options.get_list_option("java-mock-class"),

@@ -25,6 +25,7 @@ typedef std::function<
               const interpretert::input_var_functionst&,
               const interpretert::dynamic_typest&,
               const std::string &,
+              const interpretert::side_effects_differencet &,
               const std::string &,
               bool,
               bool,

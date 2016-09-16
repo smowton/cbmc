@@ -922,12 +922,14 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
     const interpretert::input_var_functionst& input_defn_functions,
     const interpretert::dynamic_typest& dynamic_types,
     const std::string &test_func_name,
+    const interpretert::side_effects_differencet &valuesDifference,
     const std::string &assertCompare, bool emitAssert,
     bool disable_mocks,
     const optionst::value_listt& mock_classes,
     const optionst::value_listt& no_mock_classes,            
     const std::vector<std::string>& goals_reached)
 {
+  namespacet ns(st);
   const symbolt &func=st.lookup(func_id);
   std::string result;
 
@@ -1017,11 +1019,34 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
     else
       add_func_call(result,st,func_id);
 
-    if(emitAssert)
+    if(emitAssert || valuesDifference.size() > 0)
     {
-      result+="\n";
-      indent(result,2u)+="/* check return value */\n";
-      indent(result,2u)+="assertTrue(retval" + assertCompare + ");\n";
+      if(emitAssert)
+      {
+        result+="\n";
+        indent(result,2u)+="/* check return value */\n";
+        indent(result,2u)+="assertTrue(retval" + assertCompare + ");\n";
+      }
+      if(valuesDifference.size() > 0)
+      {
+        result+="\n";
+        indent(result,2u)+="/* check detected side effects */\n";
+        for(auto &side_effect : valuesDifference)
+        {
+          auto &objectName = id2string(side_effect.first.first);
+          auto &fieldName = id2string(side_effect.first.second);
+          auto &value_expr = side_effect.second.second;
+          const typet& type = value_expr.type();
+
+          if(type.id()==ID_signedbv)
+          {
+            indent(result,2u)+="assertTrue("
+              + from_expr(ns,"",value_expr)
+              + " == (int) Reflector.getInstanceField("
+              + objectName + ",\"" + fieldName + "\"));\n";
+          }
+        }
+      }
     }
     else
     {
