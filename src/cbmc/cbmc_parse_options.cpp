@@ -265,10 +265,11 @@ void cbmc_parse_optionst::get_command_line_options(optionst &options)
   else
     options.set_option("pointer-check", false);
 
-  // check runtime exceptions
-  if(cmdline.isset("runtime-check")) 
-    // pointer checks are implicitly enabled
-    options.set_option("pointer-check", true);
+  // disable runtime checks
+  if(cmdline.isset("disable-runtime-check"))
+    options.set_option("disable-runtime-check", true);
+  else
+    options.set_option("disable-runtime-check", false);
 
   // check for memory leaks
   if(cmdline.isset("memory-leak-check"))
@@ -1204,7 +1205,6 @@ void cbmc_parse_optionst::help()
     " --bounds-check               enable array bounds checks\n"
     " --div-by-zero-check          enable division by zero checks\n"
     " --pointer-check              enable pointer checks\n"
-    " --runtime-check              enable runtime checks\n"
     " --memory-leak-check          enable memory leak checks\n"
     " --signed-overflow-check      enable arithmetic over- and underflow checks\n"
     " --unsigned-overflow-check    enable arithmetic over- and underflow checks\n"
@@ -1219,6 +1219,7 @@ void cbmc_parse_optionst::help()
     "Java Bytecode options:\n"
     " --classpath dir/jar          set the classpath\n"
     " --main-class class-name      set the name of the main class\n"
+    " --disable-runtime-check      disable runtime checks\n"
     " --gen-java-test-case         generate test case\n" 
     " --cover-function-only        add coverage instrumentation only to the entry function\n"
     " --assertions-as-assumptions  convert assertions from generic checks into assumptions\n"
