@@ -1988,16 +1988,12 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
       auto param = parameterSet.find(id2string(identifier));
       if(param != parameterSet.end())
       {
-        // message->status() << "ASSIGN: " << id2string(identifier) << messaget::eom;
         const exprt &expr = step.full_lhs_value;
         interpretert::function_assignmentst input_assigns;
         get_value_tree(identifier, input_assigns);
         for(const auto &assign : input_assigns)
         {
           const typet &tree_typ = symbol_table.lookup(assign.id).type;
-          // message->status() << " TREE_ASSIGN: " << id2string(assign.id)
-          //                   << " to " << from_expr(ns,"",assign.value)
-          //                   << messaget::eom;
           if(tree_typ.id()==ID_struct)
           {
             const struct_typet &struct_type=to_struct_type(tree_typ);
@@ -2011,8 +2007,6 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
               if(expr.type().id()==ID_signedbv ||
                  expr.type().id()==ID_c_bool)
               {
-                // message->status() << " TVAL: " << components[fieldidx].get_name()
-                //                   << " " << from_expr(ns,"",expr) << messaget::eom;
                 valuesBefore.insert({{assign.id, components[fieldidx].get_name()}, expr});
               }
             }
@@ -2120,17 +2114,9 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
           interpretert::function_assignmentst output_assigns;
           get_value_tree(inputParam.second, output_assigns);
           const typet &typ = symbol_table.lookup(inputParam.second).type;
-          // message->status() << "OUTPUT: " << (inputParam.first)
-          //                   << " TYPE: " << id2string(typ.id())
-          //                   << messaget::eom;
           for(const auto &assign : output_assigns)
           {
             const typet &tree_typ = symbol_table.lookup(assign.id).type;
-            // message->status() << " OUTPUT_TREE_ASSIGN: " << id2string(assign.id)
-            //                   << " TYPE: " << id2string(tree_typ.id())
-            //                   << " to " << from_expr(ns,"",assign.value)
-            //                   << messaget::eom;
-
             if(tree_typ.id()==ID_struct)
             {
               const struct_typet &struct_type=to_struct_type(tree_typ);
@@ -2152,10 +2138,6 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
                   to_integer(before_expr, b);
                   if (a != b)
                   {
-                    // message->status() << "NEQ: " << id2string(assign.id) << " "
-                    //                   << a << "!=" << b
-                    //                   << " typexpr: " << id2string(after_expr.type().id())
-                    //                   << messaget::eom;
                     valuesDifference.insert({{assign.id, components[fieldidx].get_name()},
                                              {before_expr, after_expr}});
                   }
