@@ -1202,18 +1202,25 @@ codet java_bytecode_convert_methodt::convert_instructions(
 	assertion_failure=false;
       }
     }
-    else if(statement=="checkcast" && enable_runtime_checks)
+    else if(statement=="checkcast")
     {
-      // checkcast throws an exception in case a cast of object
-      // on stack to given type fails.
-      // The stack isn't modified.
-      // TODO: convert assertions to exceptions.
-      assert(op.size()==1 && results.size()==1);
-      binary_predicate_exprt check(op[0], "java_instanceof", arg0);
-      c=code_assertt(check);
-      c.add_source_location().set_comment("Dynamic cast check");
-      c.add_source_location().set_property_class("bad-dynamic-cast");
-      results[0]=op[0];
+      if(enable_runtime_checks)
+      {
+	// checkcast throws an exception in case a cast of object
+	// on stack to given type fails.
+	// The stack isn't modified.
+	// TODO: convert assertions to exceptions.
+	assert(op.size()==1 && results.size()==1);
+	binary_predicate_exprt check(op[0], "java_instanceof", arg0);
+	c=code_assertt(check);
+	c.add_source_location().set_comment("Dynamic cast check");
+	c.add_source_location().set_property_class("bad-dynamic-cast");
+	results[0]=op[0];
+      }
+      else
+      {
+	c=code_skipt();
+      }
     }
     else if(statement=="invokedynamic")
     {
