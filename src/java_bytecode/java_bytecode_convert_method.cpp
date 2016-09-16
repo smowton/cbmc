@@ -61,11 +61,11 @@ public:
   java_bytecode_convert_methodt(
     symbol_tablet &_symbol_table,
     message_handlert &_message_handler,
-    const bool &_enable_runtime_checks,
+    const bool &_disable_runtime_checks,
     int _max_array_length):
     messaget(_message_handler),
     symbol_table(_symbol_table),
-    enable_runtime_checks(_enable_runtime_checks),
+    disable_runtime_checks(_disable_runtime_checks),
     max_array_length(_max_array_length)
   {
   }
@@ -84,7 +84,7 @@ public:
 protected:
   irep_idt method_id;
   symbol_tablet &symbol_table;
-  const bool &enable_runtime_checks;
+  const bool &disable_runtime_checks;
   int max_array_length;
 
   irep_idt current_method;
@@ -1204,7 +1204,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
     }
     else if(statement=="checkcast")
     {
-      if(enable_runtime_checks)
+      if(!disable_runtime_checks)
       {
 	// checkcast throws an exception in case a cast of object
 	// on stack to given type fails.
@@ -1399,7 +1399,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
       const dereference_exprt element(data_plus_offset, element_type);
 
       code_blockt assert_and_put;
-      if(enable_runtime_checks)
+      if(!disable_runtime_checks)
       {
 	codet bounds_check=get_array_bounds_check(deref,op[1]);
 	bounds_check.add_source_location()=i_it->source_location;
@@ -1443,7 +1443,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
       typet element_type=data_ptr.type().subtype();
       dereference_exprt element(data_plus_offset, element_type);
 
-      if(enable_runtime_checks)
+      if(!disable_runtime_checks)
       {
         codet bounds_check=get_array_bounds_check(deref,op[1]);
         bounds_check.add_source_location()=i_it->source_location;
@@ -1907,7 +1907,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
         java_new_array.add_source_location()=i_it->source_location;
 
       code_blockt checkandcreate;
-      if(enable_runtime_checks)
+      if(!disable_runtime_checks)
       {
 	// TODO make this throw NegativeArrayIndexException instead.
 	constant_exprt intzero=as_number(0,java_int_type());
@@ -2267,13 +2267,13 @@ void java_bytecode_convert_method(
   const java_bytecode_parse_treet::methodt &method,
   symbol_tablet &symbol_table,
   message_handlert &message_handler,
-  const bool &enable_runtime_checks,
+  const bool &disable_runtime_checks,
   int max_array_length)
 {
   java_bytecode_convert_methodt java_bytecode_convert_method(
 				symbol_table, 
 				message_handler, 
-				enable_runtime_checks, 
+				disable_runtime_checks, 
 				max_array_length);
 
   java_bytecode_convert_method(class_symbol, method);
