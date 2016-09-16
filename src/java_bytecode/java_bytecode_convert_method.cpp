@@ -24,6 +24,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "java_bytecode_convert_method.h"
 #include "bytecode_info.h"
 #include "java_types.h"
+#include "java_opaque_method_stubs.h"
 
 #include <limits>
 #include <algorithm>
@@ -60,9 +61,11 @@ public:
   java_bytecode_convert_methodt(
     symbol_tablet &_symbol_table,
     message_handlert &_message_handler,
+    const bool &_enable_runtime_checks,
     int _max_array_length):
     messaget(_message_handler),
     symbol_table(_symbol_table),
+    enable_runtime_checks(_enable_runtime_checks),
     max_array_length(_max_array_length)
   {
   }
@@ -81,6 +84,7 @@ public:
 protected:
   irep_idt method_id;
   symbol_tablet &symbol_table;
+  const bool &enable_runtime_checks;
   int max_array_length;
 
   irep_idt current_method;
@@ -814,7 +818,7 @@ member_exprt to_member(const exprt &pointer, const exprt &fieldref)
     obj_deref, fieldref.get(ID_component_name), fieldref.type());
 }
 
-codet get_array_bounds_check(const exprt &arraystruct, const exprt& idx)
+codet get_array_bounds_check(const exprt &arraystruct, const exprt &idx)
 {
   constant_exprt intzero=as_number(0,java_int_type());
   binary_relation_exprt gezero(idx,ID_ge,intzero);
@@ -823,7 +827,12 @@ codet get_array_bounds_check(const exprt &arraystruct, const exprt& idx)
   binary_relation_exprt ltlength(idx,ID_lt,length_field);
   code_blockt boundschecks;
   boundschecks.add(code_assertt(gezero));
+  boundschecks.operands().back().add_source_location().set_comment("Array index < 0");
+  boundschecks.operands().back().add_source_location().set_property_class("array-index-oob-low");
   boundschecks.add(code_assertt(ltlength));
+  boundschecks.operands().back().add_source_location().set_comment("Array index >= length");
+  boundschecks.operands().back().add_source_location().set_property_class("array-index-oob-high");
+  
   // TODO make this throw ArrayIndexOutOfBoundsException instead of asserting.
   return boundschecks;
 }
@@ -1202,6 +1211,8 @@ codet java_bytecode_convert_methodt::convert_instructions(
       assert(op.size()==1 && results.size()==1);
       binary_predicate_exprt check(op[0], "java_instanceof", arg0);
       c=code_assertt(check);
+      c.add_source_location().set_comment("Dynamic cast check");
+      c.add_source_location().set_property_class("bad-dynamic-cast");
       results[0]=op[0];
     }
     else if(statement=="invokedynamic")
@@ -1326,6 +1337,9 @@ codet java_bytecode_convert_methodt::convert_instructions(
         symbol.type=arg0.type();
         symbol.value.make_nil();
         symbol.mode=ID_java;
+        
+        assign_parameter_names(to_code_type(symbol.type),symbol.name,symbol_table);
+        
         symbol_table.add(symbol);
       }
 
@@ -1378,9 +1392,12 @@ codet java_bytecode_convert_methodt::convert_instructions(
       const dereference_exprt element(data_plus_offset, element_type);
 
       code_blockt assert_and_put;
-      codet bounds_check=get_array_bounds_check(deref,op[1]);
-      bounds_check.add_source_location()=i_it->source_location;
-      assert_and_put.move_to_operands(bounds_check);
+      if(enable_runtime_checks)
+      {
+	codet bounds_check=get_array_bounds_check(deref,op[1]);
+	bounds_check.add_source_location()=i_it->source_location;
+	assert_and_put.move_to_operands(bounds_check);
+      }
       code_assignt array_put(element, op[2]);
       array_put.add_source_location()=i_it->source_location;
       assert_and_put.move_to_operands(array_put);
@@ -1419,9 +1436,12 @@ codet java_bytecode_convert_methodt::convert_instructions(
       typet element_type=data_ptr.type().subtype();
       dereference_exprt element(data_plus_offset, element_type);
 
-      codet bounds_check=get_array_bounds_check(deref,op[1]);
-      bounds_check.add_source_location()=i_it->source_location;
-      c=std::move(bounds_check);
+      if(enable_runtime_checks)
+      {
+        codet bounds_check=get_array_bounds_check(deref,op[1]);
+        bounds_check.add_source_location()=i_it->source_location;
+	c=std::move(bounds_check);
+      }
       results[0]=java_bytecode_promotion(element);
     }
     else if(statement==patternt("?load"))
@@ -1879,18 +1899,24 @@ codet java_bytecode_convert_methodt::convert_instructions(
       if(!i_it->source_location.get_line().empty())
         java_new_array.add_source_location()=i_it->source_location;
 
-      // TODO make this throw NegativeArrayIndexException instead.
-      constant_exprt intzero=as_number(0,java_int_type());
-      binary_relation_exprt gezero(op[0],ID_ge,intzero);
       code_blockt checkandcreate;
-      code_assertt check(gezero);
-      checkandcreate.move_to_operands(check);
-      if(max_array_length!=0)
+      if(enable_runtime_checks)
       {
-        constant_exprt size_limit=as_number(max_array_length,java_int_type());
-        binary_relation_exprt le_max_size(op[0],ID_le,size_limit);
-        code_assumet assume_le_max_size(le_max_size);
-        checkandcreate.move_to_operands(assume_le_max_size);
+	// TODO make this throw NegativeArrayIndexException instead.
+	constant_exprt intzero=as_number(0,java_int_type());
+	binary_relation_exprt gezero(op[0],ID_ge,intzero);
+	code_assertt check(gezero);
+        check.add_source_location().set_comment("Array size < 0");
+        check.add_source_location().set_property_class("array-create-negative-size");      
+	checkandcreate.move_to_operands(check);
+
+	if(max_array_length!=0)
+	  {
+	    constant_exprt size_limit=as_number(max_array_length,java_int_type());
+	    binary_relation_exprt le_max_size(op[0],ID_le,size_limit);
+	    code_assumet assume_le_max_size(le_max_size);
+	    checkandcreate.move_to_operands(assume_le_max_size);
+	  }
       }
       const exprt tmp=tmp_variable("newarray", ref_type);
       checkandcreate.copy_to_operands(code_assignt(tmp, java_new_array));
@@ -2234,10 +2260,14 @@ void java_bytecode_convert_method(
   const java_bytecode_parse_treet::methodt &method,
   symbol_tablet &symbol_table,
   message_handlert &message_handler,
+  const bool &enable_runtime_checks,
   int max_array_length)
 {
   java_bytecode_convert_methodt java_bytecode_convert_method(
-    symbol_table, message_handler, max_array_length);
+				symbol_table, 
+				message_handler, 
+				enable_runtime_checks, 
+				max_array_length);
 
   java_bytecode_convert_method(class_symbol, method);
 }

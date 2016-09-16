@@ -69,6 +69,7 @@ protected:
   irep_idt main_class;
   java_class_loadert java_class_loader;
   bool assume_inputs_non_null;
+  bool enable_runtime_checks;
   int max_nondet_array_length;
   int max_user_array_length;
 };

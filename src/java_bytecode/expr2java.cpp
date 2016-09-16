@@ -209,12 +209,12 @@ std::string expr2javat::convert_constant(
   else if(src.type()==java_char_type())
   {
     std::string dest;
-    dest.reserve(10);
+    dest.reserve(14);
 
     mp_integer int_value;
     to_integer(src, int_value);
 
-    dest+='\'';
+    dest+="(char)'";
 
     if(int_value>=' ' && int_value<127)
       dest+=(char)(int_value.to_long());
@@ -229,6 +229,24 @@ std::string expr2javat::convert_constant(
 
     dest+='\'';
     return dest;
+  }
+  else if(src.type()==java_byte_type())
+  {
+    // No byte-literals in Java, so just cast:
+    mp_integer int_value;
+    to_integer(src, int_value);
+    std::string dest="(byte)";
+    dest+=integer2string(int_value);
+    return dest;    
+  }
+  else if(src.type()==java_short_type())
+  {
+    // No short-literals in Java, so just cast:
+    mp_integer int_value;
+    to_integer(src, int_value);
+    std::string dest="(short)";
+    dest+=integer2string(int_value);
+    return dest;    
   }
   else if(src.type()==java_long_type())
   {
