@@ -823,8 +823,8 @@ void reference_factoryt::struct_to_fieldlist(
       add_value(valstr, st, ops[fieldidx], empty);
         
       std::ostringstream add_field_statement;
-      add_field_statement << listname << ".add(" <<
-        id2string(comps[fieldidx].get_pretty_name()) << ", " <<
+      add_field_statement << listname << ".add(\"" <<
+        id2string(comps[fieldidx].get_pretty_name()) << "\", " <<
         valstr << ")";
 
       statements.push_back(init_statement::statement(add_field_statement.str()));
@@ -847,7 +847,8 @@ void reference_factoryt::defined_symbols_to_java_fieldlists(
     if(use_symbol.type.id()==ID_struct)
     {
       std::ostringstream new_statement;
-      new_statement << "FieldList " << pretty_name << " = new FieldList()";
+      new_statement << "com.diffblue.java_testcase.FieldList " << pretty_name <<
+        " = new com.diffblue.java_testcase.FieldList()";
       statements.push_back(init_statement::statement(new_statement.str()));
       struct_to_fieldlist(pretty_name,to_struct_expr(defined.value),st,statements);
     }
@@ -1073,8 +1074,7 @@ std::string reference_factoryt::verify_mock_objects(const symbol_tablet &st,
         const auto& argtype=desc.java_arg_types[paramidx];
         const auto& param_assignment=call.param_assignments[paramidx+param_offset];
         std::string argstring;
-        if(argtype.is_primitive)
-          expr2java(argstring,param_assignment.value,ns);
+        expr2java(argstring,param_assignment.value,ns);
         verify_calls.back().arg_strings.push_back(std::move(argstring));
       }
     }

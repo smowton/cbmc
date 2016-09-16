@@ -210,10 +210,13 @@ method_answer* mock_environment_builder::add_to_answer_list(
     mock_prelude << "final java.util.ArrayList<" << boxed_type << "> " << al
 		 << "=new java.util.ArrayList<" << boxed_type << ">();"
 		 << prelude_newline
+                 << "final java.util.ArrayList<Object[]> " << el
+                 << "=new java.util.ArrayList<Object[]>();"
+                 << prelude_newline
 		 << "final com.diffblue.java_testcase.IterAnswer " << ao
 		 << "=new com.diffblue.java_testcase.IterAnswer<"
-		 << boxed_type << "> (" << targetclass << ", "
-                 << methodname << ", " << al << ", " << el << ");" << prelude_newline;
+		 << boxed_type << "> (\"" << targetclass << "\", \""
+                 << methodname << "\", " << al << ", " << el << ");" << prelude_newline;
   }
 
   // Add the desired return value to the list:
@@ -530,8 +533,6 @@ void mock_environment_builder::verify_instance_calls(
     stmts.push_back(init_statement::statement(decl_statement.str()));
     for(size_t argidx=0, arglim=argtypes.size(); argidx!=arglim; ++argidx)
     {
-      if(!argtypes[argidx].is_primitive)
-        continue;
       std::ostringstream set_statement;
       set_statement << "expected[" << argidx << "] = " << call.arg_strings[argidx];
       stmts.push_back(init_statement::statement(set_statement.str()));
