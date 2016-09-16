@@ -64,6 +64,21 @@ public class CompareWithFieldList {
       fail(real, primitive_or_fieldlist, prefix);
     if(primitives.contains(primitive_or_fieldlist.getClass()))
       fail(real, primitive_or_fieldlist, prefix);
+    if(primitive_or_fieldlist.getClass().isArray())
+    {
+      if(!real.getClass().isArray())
+	fail(real, primitive_or_fieldlist, prefix);
+      Object[] lhs_array=(Object[])real;
+      Object[] rhs_array=(Object[])primitive_or_fieldlist;
+      if(lhs_array.length!=rhs_array.length)
+	fail(real, primitive_or_fieldlist, prefix);
+      for(int i = 0; i < lhs_array.length; ++i)
+      {
+	String newPrefix = prefix + "[" + i + "]";
+	compare(lhs_array[i], rhs_array[i], newPrefix);
+      }
+      return;
+    }
     if(!(primitive_or_fieldlist instanceof FieldList))
       throw new RuntimeException("Right-hand operand must be a primitive or a FieldList object");
 
@@ -72,7 +87,7 @@ public class CompareWithFieldList {
     {
       Field f = getField(real.getClass(), v.name);
       if(f == null)
-	throw new RuntimeException("Real object did not have expected field " + v.name);
+	throw new RuntimeException("Real object of class " + real.getClass().getName() + " did not have expected field " + v.name);
       f.setAccessible(true);
       Object realval;
       try {

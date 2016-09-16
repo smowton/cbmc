@@ -844,7 +844,7 @@ void reference_factoryt::defined_symbols_to_java_fieldlists(
     std::string pretty_name;
     add_symbol(pretty_name,fake_symbol);
 
-    if(use_symbol.type.id()==ID_struct)
+    if(use_symbol.type.id()==ID_struct && !is_array_tag(to_struct_type(use_symbol.type).get_tag()))
     {
       std::ostringstream new_statement;
       new_statement << "com.diffblue.java_testcase.FieldList " << pretty_name <<
