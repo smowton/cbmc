@@ -187,7 +187,8 @@ void interpretert::command()
     else if(ch=='n') list_inputs(true);
     else if(ch=='t') {
       list_input_varst ignored;
-      load_counter_example_inputs(steps, ignored);
+      side_effects_differencet diffs;
+      load_counter_example_inputs(steps, ignored, diffs);
     }
     else if(ch==' ') load_counter_example_inputs(command+3);
     else if(ch=='f') {
@@ -1863,7 +1864,8 @@ const exprt & get_entry_function(const goto_functionst &gf)
  \*******************************************************************/
 
 interpretert::input_varst& interpretert::load_counter_example_inputs(
-    const goto_tracet &trace, list_input_varst& function_inputs, const bool filtered) {
+ const goto_tracet &trace, list_input_varst& function_inputs, side_effects_differencet &valuesDifference, const bool filtered)
+{
   show=false;
   stop_on_assertion=false;
 
@@ -1897,8 +1899,6 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
 
   // mapping <structure, field> -> value
   std::map<std::pair<const irep_idt, const irep_idt>, const exprt> valuesBefore;
-  std::map<std::pair<const irep_idt, const irep_idt>,
-           std::pair<const exprt, const exprt>> valuesDifference;
 
   namespacet ns(symbol_table);
 
@@ -1944,16 +1944,16 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
       auto param = parameterSet.find(id2string(identifier));
       if(param != parameterSet.end())
       {
-        message->status() << "ASSIGN: " << id2string(identifier) << messaget::eom;
+        // message->status() << "ASSIGN: " << id2string(identifier) << messaget::eom;
         const exprt &expr = step.full_lhs_value;
         interpretert::function_assignmentst input_assigns;
         get_value_tree(identifier, input_assigns);
         for(const auto &assign : input_assigns)
         {
           const typet &tree_typ = symbol_table.lookup(assign.id).type;
-          message->status() << " TREE_ASSIGN: " << id2string(assign.id)
-                            << " to " << from_expr(ns,"",assign.value)
-                            << messaget::eom;
+          // message->status() << " TREE_ASSIGN: " << id2string(assign.id)
+          //                   << " to " << from_expr(ns,"",assign.value)
+          //                   << messaget::eom;
           if(tree_typ.id()==ID_struct)
           {
             const struct_typet &struct_type=to_struct_type(tree_typ);
@@ -1965,12 +1965,10 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
               const exprt & expr = ops[fieldidx];
               // only look at atomic types for now
               if(expr.type().id()==ID_signedbv ||
-                 expr.type().id()==ID_c_bool ||
-                 expr.type().id()==ID_string ||
-                 expr.type().id()==ID_floatbv)
+                 expr.type().id()==ID_c_bool)
               {
-                message->status() << " TVAL: " << components[fieldidx].get_name()
-                                  << " " << from_expr(ns,"",expr) << messaget::eom;
+                // message->status() << " TVAL: " << components[fieldidx].get_name()
+                //                   << " " << from_expr(ns,"",expr) << messaget::eom;
                 valuesBefore.insert({{assign.id, components[fieldidx].get_name()}, expr});
               }
             }
@@ -2115,16 +2113,6 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
         }
       }
     }
-  }
-
-  for(auto &diff : valuesDifference)
-  {
-    const exprt &before = diff.second.first;
-    const exprt &after = diff.second.second;
-    message->status() << "NEQ: " << id2string(diff.first.first) << " "
-                      << " before: " << from_expr(ns,"",before)
-                      << " after: " << from_expr(ns,"",after)
-                      << messaget::eom;
   }
 
   // Now walk backwards to find object states on entering 'main'.

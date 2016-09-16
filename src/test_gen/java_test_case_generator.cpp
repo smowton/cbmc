@@ -28,10 +28,12 @@ inputst java_test_case_generatort::generate_inputs(const symbol_tablet &st,
     interpretert::list_input_varst& opaque_function_returns,
     interpretert::input_var_functionst& first_assignments,
     interpretert::dynamic_typest& dynamic_types,
-    const optionst &options)
+    const optionst &options,
+    interpretert::side_effects_differencet &valuesDifference)
 {
   interpretert interpreter(st, gf, this, options);
-  inputst res(interpreter.load_counter_example_inputs(trace, opaque_function_returns));
+  inputst res(interpreter.load_counter_example_inputs(trace, opaque_function_returns,
+                                                      valuesDifference));
   for (inputst::const_iterator it(res.begin()); it != res.end();)
     if (is_meta(it->first)) it=res.erase(it);
     else ++it;
@@ -88,14 +90,29 @@ const std::string java_test_case_generatort::generate_test_case(
   const test_case_generatort generate, size_t test_idx,
   std::vector<std::string> goals_reached)
 {
+  const namespacet ns(st);
 
   interpretert::list_input_varst opaque_function_returns;
   interpretert::input_var_functionst input_defn_functions;
   interpretert::dynamic_typest dynamic_types;
 
+  interpretert::side_effects_differencet valuesDifference;
   const inputst inputs(generate_inputs(st,gf,trace,opaque_function_returns,
                                        input_defn_functions,dynamic_types,
-                                       options));
+                                       options,
+                                       valuesDifference));
+
+  for(auto &diff : valuesDifference)
+  {
+    const exprt &before = diff.second.first;
+    const exprt &after = diff.second.second;
+    status() << "NEQ: " << id2string(diff.first.first) << "."
+             << id2string(diff.first.second)
+             << " before: " << from_expr(ns,"",before)
+             << " after: " << from_expr(ns,"",after)
+             << messaget::eom;
+  }
+
   const irep_idt &entry_func_id=get_entry_function_id(gf);
   bool enters_main=false;
   irep_idt previous_function;
@@ -137,7 +154,6 @@ const std::string java_test_case_generatort::generate_test_case(
           status() << "VAL     : " << expr.get_string(ID_value) << eom;
 
 
-          const namespacet ns(st);
           const typet &type=ns.follow(expr.type());
 
           // no unsinged ints in Java

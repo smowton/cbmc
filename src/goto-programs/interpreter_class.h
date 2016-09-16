@@ -27,7 +27,8 @@ public:
 
   // A list of such assignments.
   typedef std::vector<function_assignmentt> function_assignmentst;
-
+  typedef std::map<std::pair<const irep_idt, const irep_idt>,
+                   std::pair<const exprt, const exprt>> side_effects_differencet;
 
   interpretert(
     const symbol_tablet &_symbol_table,
@@ -198,7 +199,7 @@ public:
 
  public:
   input_varst& load_counter_example_inputs(const std::string &filename);
-  input_varst& load_counter_example_inputs(const goto_tracet &trace, list_input_varst& opaque_function_returns, const bool filtered=false);
+  input_varst& load_counter_example_inputs(const goto_tracet &trace, list_input_varst& opaque_function_returns, side_effects_differencet &, const bool filtered=false);
   const input_var_functionst& get_input_first_assignments() { return input_first_assignments; }
   const dynamic_typest& get_dynamic_types() { return dynamic_types; }
 };
