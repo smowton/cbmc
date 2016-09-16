@@ -27,9 +27,11 @@ public:
   java_bytecode_convert_classt(
     symbol_tablet &_symbol_table,
     message_handlert &_message_handler,
+    const bool &_enable_runtime_checks,
     int _max_array_length):
     messaget(_message_handler),
     symbol_table(_symbol_table),
+    enable_runtime_checks(_enable_runtime_checks),
     max_array_length(_max_array_length)
   {
   }
@@ -49,6 +51,7 @@ public:
 
 protected:
   symbol_tablet &symbol_table;
+  const bool &enable_runtime_checks;
   int max_array_length;
 
   // conversion
@@ -126,7 +129,8 @@ void java_bytecode_convert_classt::convert(const classt &c)
   // now do methods
   for(const auto & it : c.methods)
     java_bytecode_convert_method(
-      *class_symbol, it, symbol_table, get_message_handler(), max_array_length);
+      *class_symbol, it, symbol_table, get_message_handler(), 
+      enable_runtime_checks, max_array_length);
 
   // is this a root class?
   if(c.extends.empty())
@@ -303,12 +307,16 @@ Function: java_bytecode_convert_class
 
 bool java_bytecode_convert_class(
   const java_bytecode_parse_treet &parse_tree,
+  const bool &enable_runtime_checks,
   symbol_tablet &symbol_table,
   message_handlert &message_handler,
   int max_array_length)
 {
   java_bytecode_convert_classt java_bytecode_convert_class(
-    symbol_table, message_handler, max_array_length);
+			       symbol_table, 
+			       message_handler, 
+			       enable_runtime_checks,
+			       max_array_length);
 
   try
   {

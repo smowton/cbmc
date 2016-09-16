@@ -265,6 +265,11 @@ void cbmc_parse_optionst::get_command_line_options(optionst &options)
   else
     options.set_option("pointer-check", false);
 
+  // check runtime exceptions
+  if(cmdline.isset("runtime-check")) 
+    // pointer checks are implicitly enabled
+    options.set_option("pointer-check", true);
+
   // check for memory leaks
   if(cmdline.isset("memory-leak-check"))
     options.set_option("memory-leak-check", true);
@@ -1199,6 +1204,7 @@ void cbmc_parse_optionst::help()
     " --bounds-check               enable array bounds checks\n"
     " --div-by-zero-check          enable division by zero checks\n"
     " --pointer-check              enable pointer checks\n"
+    " --runtime-check              enable runtime checks\n"
     " --memory-leak-check          enable memory leak checks\n"
     " --signed-overflow-check      enable arithmetic over- and underflow checks\n"
     " --unsigned-overflow-check    enable arithmetic over- and underflow checks\n"
