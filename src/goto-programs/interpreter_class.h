@@ -19,6 +19,17 @@
 class interpretert
 {
 public:
+  // An assertion that identifier 'id' carries value 'value' in some particular context.
+  struct function_assignmentt {
+    irep_idt id;
+    exprt value;
+  };
+
+  // A list of such assignments.
+  typedef std::vector<function_assignmentt> function_assignmentst;
+  typedef std::map<std::pair<const irep_idt, const irep_idt>,
+                   std::pair<const exprt, const exprt>> side_effects_differencet;
+
   interpretert(
     const symbol_tablet &_symbol_table,
     const goto_functionst &_goto_functions,
@@ -38,15 +49,6 @@ public:
   typedef std::map<const irep_idt,exprt> input_varst;
   typedef std::map<const irep_idt,irep_idt> input_var_functionst;
   typedef std::map<const irep_idt,const typet> dynamic_typest;
-
-  // An assertion that identifier 'id' carries value 'value' in some particular context.
-  struct function_assignmentt {
-    irep_idt id;
-    exprt value;
-  };
-
-  // A list of such assignments.
-  typedef std::vector<function_assignmentt> function_assignmentst;
 
   // An assignment list annotated with the calling context.
   struct function_assignments_contextt {
@@ -90,6 +92,7 @@ protected:
   unsigned get_size(const typet &type) const;
 
   irep_idt get_component_id(const irep_idt &object,unsigned offset);
+public:
   typet get_type(const irep_idt &id);
   exprt get_value(const typet &type,unsigned offset=0,bool use_non_det = false);
   exprt get_value(const typet &type,std::vector<mp_integer> &rhs,unsigned offset=0);
@@ -198,7 +201,7 @@ protected:
 
  public:
   input_varst& load_counter_example_inputs(const std::string &filename);
-  input_varst& load_counter_example_inputs(const goto_tracet &trace, list_input_varst& opaque_function_returns, const bool filtered=false);
+  input_varst& load_counter_example_inputs(const goto_tracet &trace, list_input_varst& opaque_function_returns, side_effects_differencet &, const bool filtered=false);
   const input_var_functionst& get_input_first_assignments() { return input_first_assignments; }
   const dynamic_typest& get_dynamic_types() { return dynamic_types; }
 };
