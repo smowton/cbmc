@@ -1,0 +1,10 @@
+CORE
+TestGenTest.class
+--gen-java-test-case --stop-on-fail --function TestGenTest.f
+^EXIT=0$
+^SIGNAL=0$
+^ *int arg0i=499;$
+^ *int arg1i=498;$
+^ *TestGenTest.f(arg0i, arg1i);$
+--
+^warning: ignoring

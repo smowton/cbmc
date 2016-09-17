@@ -50,11 +50,13 @@ bool to_integer(const constant_exprt &expr, mp_integer &int_value)
 
   if(type_id==ID_pointer)
   {
-    if(value==ID_NULL)
+    if ((value==ID_NULL) || (value==ID_null) || (value==ID_nullptr))
     {
       int_value=0;
       return false;
     }
+    int_value=string2integer(id2string(value));
+    return false;	
   }
   else if(type_id==ID_integer ||
           type_id==ID_natural)

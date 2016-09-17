@@ -233,6 +233,9 @@ protected:
     bool propagate);
 
   bool is_symbol_member_index(const exprt &src) const;
+
+public:
+  bool is_branch;
 };
 
 path_symex_statet initial_state(

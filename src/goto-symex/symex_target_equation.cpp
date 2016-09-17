@@ -305,7 +305,7 @@ Function: symex_target_equationt::dead
 
  Outputs:
 
- Purpose: declare a fresh variable
+ Purpose: indicate the death of a variable
 
 \*******************************************************************/
 
@@ -314,7 +314,18 @@ void symex_target_equationt::dead(
   const ssa_exprt &ssa_lhs,
   const sourcet &source)
 {
-  // we currently don't record these
+  SSA_steps.push_back(SSA_stept());
+  SSA_stept &SSA_step=SSA_steps.back();
+  
+  SSA_step.guard=guard;
+  SSA_step.ssa_lhs=ssa_lhs;
+  SSA_step.ssa_full_lhs=ssa_lhs;
+  SSA_step.original_full_lhs=ssa_lhs.get_original_expr();
+  SSA_step.type=goto_trace_stept::DEAD;
+  SSA_step.source=source;
+  SSA_step.hidden=true;
+
+  merge_ireps(SSA_step);
 }
 
 /*******************************************************************\

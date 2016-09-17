@@ -209,6 +209,11 @@ void java_bytecode_convert_classt::convert(
     new_symbol.is_type=false;  
     new_symbol.value=gen_zero(field_type);
 
+    // Do we have the static field symbol already?
+    const auto s_it=symbol_table.symbols.find(new_symbol.name);
+    if(s_it!=symbol_table.symbols.end())
+      symbol_table.symbols.erase(s_it); // erase, we stubbed it
+    
     if(symbol_table.add(new_symbol))
     {
       error() << "failed to add static field symbol" << eom;
@@ -265,8 +270,10 @@ void java_bytecode_convert_classt::add_array_types()
     struct_type.components()[0].set_name("@java.lang.Object");
     struct_type.components()[0].type()=symbol_typet("java::java.lang.Object");
     struct_type.components()[1].set_name("length");
+    struct_type.components()[1].set_pretty_name("length");
     struct_type.components()[1].type()=java_int_type();
     struct_type.components()[2].set_name("data");
+    struct_type.components()[2].set_pretty_name("data");
     struct_type.components()[2].type()=
       pointer_typet(java_type_from_char(letters[i]));
 

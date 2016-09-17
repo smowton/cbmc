@@ -125,12 +125,9 @@ void goto_difft::convert_function(
   json_objectt &result,
   const irep_idt &function_name) const
 {
-  const goto_programt &program=
-    goto_model2.goto_functions.function_map.at(function_name).body;
-  if(!program.instructions.empty())
-  {
-    result["sourceLocation"]=
-      json(program.instructions.begin()->source_location);
-  }
+  symbol_tablet::symbolst::const_iterator s_it=
+    goto_model2.symbol_table.symbols.find(function_name);
+  if(s_it!=goto_model2.symbol_table.symbols.end())
+    result["sourceLocation"]=json(s_it->second.location);
   result["name"]=json_stringt(id2string(function_name));
 }

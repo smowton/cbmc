@@ -4470,10 +4470,9 @@ std::string expr2ct::convert(
       return convert(to_index_expr(src.op0()).array());
     else if(src.type().subtype().id()==ID_code)
       return convert_unary(src, "", precedence=15);
-    else
+    else 
       return convert_unary(src, "&", precedence=15);
   }
-
   else if(src.id()==ID_dereference)
   {
     if(src.operands().size()!=1)

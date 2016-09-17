@@ -1,0 +1,11 @@
+CORE
+TestGenTest.class
+--cover branch --gen-java-test-case --function TestGenTest.f
+^EXIT=1$
+^SIGNAL=0$
+^.*100[.]0%.*$
+^.*1073741824.*$
+^.*1073751552.*$
+^.*-1073741824.*$
+--
+^warning: ignoring

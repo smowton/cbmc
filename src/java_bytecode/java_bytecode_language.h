@@ -16,6 +16,9 @@ Author: Daniel Kroening, kroening@kroening.com
 class java_bytecode_languaget:public languaget
 {
 public:
+
+  virtual void get_language_options(const cmdlinet&);
+  
   virtual bool preprocess(
     std::istream &instream,
     const std::string &path,
@@ -35,7 +38,7 @@ public:
   virtual void show_parse(std::ostream &out);
   
   virtual ~java_bytecode_languaget();
-  java_bytecode_languaget() { }
+ java_bytecode_languaget() : max_nondet_array_length(5) { }
   
   virtual bool from_expr(
     const exprt &expr,
@@ -65,6 +68,8 @@ public:
 protected:
   irep_idt main_class;
   java_class_loadert java_class_loader;
+  bool assume_inputs_non_null;
+  int max_nondet_array_length;
 };
  
 languaget *new_java_bytecode_language();
