@@ -492,7 +492,12 @@ protected:
 
   void check_static_field_stub(const symbol_exprt& se,
 			       const irep_idt& basename);
-  
+
+  symbol_exprt check_stub_function(const irep_idt& symname,
+                                   const irep_idt& basename,
+                                   const irep_idt& prettyname,
+                                   const typet& fntype);
+    
 };
 }
 
@@ -861,6 +866,32 @@ void java_bytecode_convert_methodt::check_static_field_stub(const symbol_exprt& 
   }
 }
 
+symbol_exprt java_bytecode_convert_methodt::check_stub_function(const irep_idt& symname,
+                                                                const irep_idt& basename,
+                                                                const irep_idt& prettyname,
+                                                                const typet& fntype)
+{
+  auto findit=symbol_table.symbols.find(symname);
+  if(findit==symbol_table.symbols.end())
+  {
+    // no, create stub
+    symbolt symbol;
+    symbol.name=symname;
+    symbol.base_name=basename;
+    // XXX: Are all Java class names prefixed java::?
+    symbol.pretty_name=prettyname;
+    symbol.type=fntype;
+    symbol.value.make_nil();
+    symbol.mode=ID_java;
+        
+    assign_parameter_names(to_code_type(symbol.type),symbol.name,symbol_table);
+        
+    symbol_table.add(symbol);
+    return symbol.symbol_expr();  
+  }
+  return findit->second.symbol_expr();
+}
+  
 void replace_goto_target(codet& repl, const irep_idt& old_label, const irep_idt& new_label)
 {
   const auto& stmt=repl.get_statement();
@@ -1325,24 +1356,12 @@ codet java_bytecode_convert_methodt::convert_instructions(
 
       // does the function symbol exist?
       irep_idt id=arg0.get(ID_identifier);
-      if(symbol_table.symbols.find(id)==symbol_table.symbols.end())
-      {
-        // no, create stub
-        symbolt symbol;
-        symbol.name=id;
-        symbol.base_name=arg0.get(ID_C_base_name);
-	// XXX: Are all Java class names prefixed java::?
-	symbol.pretty_name = id2string(arg0.get(ID_C_class)).substr(6) + "." +
-	  id2string(symbol.base_name) + "()";
-        symbol.type=arg0.type();
-        symbol.value.make_nil();
-        symbol.mode=ID_java;
-        
-        assign_parameter_names(to_code_type(symbol.type),symbol.name,symbol_table);
-        
-        symbol_table.add(symbol);
-      }
-
+      auto fn_basename=arg0.get(ID_C_base_name);
+      auto fn_prettyname=id2string(arg0.get(ID_C_class)).substr(6) + "." +
+	  id2string(fn_basename) + "()";
+      auto fn_type=arg0.type();
+      check_stub_function(id,fn_basename,fn_prettyname,fn_type);
+      
       if(is_virtual)
       {
         // dynamic binding
@@ -2030,8 +2049,12 @@ codet java_bytecode_convert_methodt::convert_instructions(
       type.return_type()=void_typet();
       type.parameters().resize(1);
       type.parameters()[0].type()=reference_typet(void_typet());
+      auto symexpr=check_stub_function("java::monitorenter",
+                                       "monitorenter",
+                                       "monitorenter",
+                                       type);
       code_function_callt call;
-      call.function()=symbol_exprt("java::monitorenter", type);
+      call.function()=symexpr;
       call.lhs().make_nil();
       call.arguments().push_back(op[0]);
       call.add_source_location()=i_it->source_location;
@@ -2044,8 +2067,12 @@ codet java_bytecode_convert_methodt::convert_instructions(
       type.return_type()=void_typet();
       type.parameters().resize(1);
       type.parameters()[0].type()=reference_typet(void_typet());
+      auto symexpr=check_stub_function("java::monitorexit",
+                                       "monitorexit",
+                                       "monitorexit",
+                                       type);
       code_function_callt call;
-      call.function()=symbol_exprt("java::monitorexit", type);
+      call.function()=symexpr;
       call.lhs().make_nil();
       call.arguments().push_back(op[0]);
       call.add_source_location()=i_it->source_location;
