@@ -1690,7 +1690,7 @@ bool calls_opaque_stub(const code_function_callt& callinst,
 
  Inputs: Symbol to capture, map of current symbol ("input") values.
 
- Outputs: Populates captured with a bottom-up-ordered list of symbol
+ Outputs: Populates captured with a top-down-ordered list of symbol
           values containing every value reachable from capture_symbol.
           For example, if capture_symbol contains a pointer to some
           object x, captured will be populated with x's value and then
@@ -1707,11 +1707,15 @@ void interpretert::get_value_tree(const irep_idt& capture_symbol,
 				  function_assignmentst& captured)
 {
 
+  message->status() << "Capture " << capture_symbol << messaget::eom;
   // Circular reference?
   for(auto already_captured : captured)
     if(already_captured.id==capture_symbol)
       return;
   exprt defined=get_value(capture_symbol);
+
+  captured.push_back({capture_symbol, defined});
+
   if(defined.type().id()==ID_pointer)
   {
     get_value_tree(defined,captured);
@@ -1731,8 +1735,6 @@ void interpretert::get_value_tree(const irep_idt& capture_symbol,
     // Primitive, just capture this.
   }
 
-  captured.push_back({capture_symbol, defined});
-
 }
 
 void interpretert::get_value_tree(const exprt& capture_expr,
@@ -1745,6 +1747,15 @@ void interpretert::get_value_tree(const exprt& capture_expr,
     get_value_tree(referee,captured);
   }
 }
+
+// Wrapper for above, giving bottom-up ordering
+void interpretert::get_value_tree_bu(const irep_idt& capture_symbol,
+                                     function_assignmentst& captured)
+{
+  get_value_tree(capture_symbol,captured);
+  std::reverse(captured.begin(),captured.end());
+}
+                                  
 
 static bool is_assign_step(const goto_trace_stept& step)
 {
@@ -1922,7 +1933,7 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
             // reachable from them. We use a single actual_params list for all parameters
             // to avoid redundancy e.g. if parameters or objects reachable from them alias,
             // we only need to capture that subtree once.
-            get_value_tree(fp.get_identifier(),actual_params);
+            get_value_tree_bu(fp.get_identifier(),actual_params);
             // Set the actual direct params aside, so we can keep them in order at the back.
             direct_params.push_back(std::move(actual_params.back()));
             actual_params.pop_back();
@@ -2019,7 +2030,7 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
         assert(trace_stack.size()>=2);
 	// We must record the value of stub_capture_symbol now.
 	function_assignmentst defined;
-	get_value_tree(ret_func.capture_symbol,defined);
+	get_value_tree_bu(ret_func.capture_symbol,defined);
 	if(defined.size()!=0) // Definition found?
 	{
           const auto& caller=trace_stack[trace_stack.size()-2].func_name;
