@@ -3,6 +3,6 @@ if_acmp1.class
 --cover location --existing-coverage if_acmp1.json
 ^EXIT=0$
 ^SIGNAL=0$
-^\*\* 0 of 0 covered (100.0%)
+^\*\* 10 of 23 covered (43.5%)
 --
 ^warning: ignoring
