@@ -3,13 +3,25 @@ main.c
 --cover mcdc
 ^EXIT=0$
 ^SIGNAL=0$
-^\[main.coverage.1\] file main.c line 14 function main MC/DC independence condition `C && D && !E && A && !B.*: SATISFIED$
-^\[main.coverage.2\] file main.c line 14 function main MC/DC independence condition `C && !D && E && A && !B.*: SATISFIED$
-^\[main.coverage.3\] file main.c line 14 function main MC/DC independence condition `!C && D && E && A && !B.*: SATISFIED$
-^\[main.coverage.4\] file main.c line 14 function main MC/DC independence condition `C && D && E && A && !B.*: SATISFIED$
-^\[main.coverage.5\] file main.c line 14 function main MC/DC independence condition `C && D && E && !A && B.*: SATISFIED$
-^\[main.coverage.6\] file main.c line 14 function main MC/DC independence condition `C && D && E && !A && !B.*: SATISFIED$
-^\*\* .* of .* covered (100.0%)$
+^\[coverage.1\] file main.c line 14 MC/DC independence condition .*: SATISFIED$
+^\[coverage.2\] file main.c line 14 MC/DC independence condition .*: SATISFIED$
+^\[coverage.3\] file main.c line 14 MC/DC independence condition .*: SATISFIED$
+^\[coverage.4\] file main.c line 14 MC/DC independence condition .*: SATISFIED$
+^\[coverage.5\] file main.c line 14 MC/DC independence condition .*: SATISFIED$
+^\[coverage.6\] file main.c line 14 MC/DC independence condition .*: SATISFIED$
+^\[coverage.7\] file main.c line 14 condition .* false: SATISFIED$
+^\[coverage.8\] file main.c line 14 condition .* true: SATISFIED$
+^\[coverage.9\] file main.c line 14 condition .* false: SATISFIED$
+^\[coverage.10\] file main.c line 14 condition .* true: SATISFIED$
+^\[coverage.11\] file main.c line 14 condition .* false: SATISFIED$
+^\[coverage.12\] file main.c line 14 condition .* true: SATISFIED$
+^\[coverage.13\] file main.c line 14 condition .* false: SATISFIED$
+^\[coverage.14\] file main.c line 14 condition .* true: SATISFIED$
+^\[coverage.15\] file main.c line 14 condition .* false: SATISFIED$
+^\[coverage.16\] file main.c line 14 condition .* true: SATISFIED$
+^\[main.coverage.1\] file main.c line 14 function main decision .* false: SATISFIED$
+^\[main.coverage.2\] file main.c line 14 function main decision .* true: SATISFIED$
+^\*\* 18 of 18 covered (100.0%)$
 ^\*\* Used 10 iterations$
 --
 ^warning: ignoring
