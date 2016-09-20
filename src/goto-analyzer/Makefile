@@ -12,7 +12,8 @@ OBJ += ../ansi-c/ansi-c$(LIBEXT) \
       ../langapi/langapi$(LIBEXT) \
       ../json/json$(LIBEXT) \
       ../assembler/assembler$(LIBEXT) \
-      ../util/util$(LIBEXT)
+      ../util/util$(LIBEXT) \
+      ../function_summaries/function_summaries$(LIBEXT)
 
 INCLUDES= -I ..
 

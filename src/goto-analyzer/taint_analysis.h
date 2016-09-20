@@ -11,8 +11,8 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <util/message.h>
 #include <util/namespace.h>
-
 #include <goto-programs/goto_model.h>
+#include <string>
 
 bool taint_analysis(
   goto_modelt &,
@@ -20,5 +20,13 @@ bool taint_analysis(
   message_handlert &,
   bool show_full,
   const std::string &json_file_name);
+
+
+std::string  taint_analysis_instrument_knowledge(
+  goto_modelt&  model,
+  std::string const&  taint_file_name,
+  message_handlert&  logger
+  );
+
 
 #endif

@@ -43,6 +43,8 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <cbmc/version.h>
 
+#include <function_summaries/function_summary.h>
+
 #include "goto_analyzer_parse_options.h"
 #include "taint_analysis.h"
 #include "unreachable_instructions.h"
@@ -275,6 +277,16 @@ int goto_analyzer_parse_optionst::doit()
     {
       taint_analysis(goto_model, taint_file, get_message_handler(), true, "");
       return 0;
+    }
+    else if (cmdline.isset("summary-only"))
+    {
+      taint_analysis_instrument_knowledge(
+          goto_model,
+          taint_file,
+          get_message_handler()
+          );
+      sumfn::database_of_summaries_t  summaries;
+      sumfn::taint::summarise_all_functions(goto_model,summaries);
     }
     else
     {

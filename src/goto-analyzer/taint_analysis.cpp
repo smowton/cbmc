@@ -453,3 +453,25 @@ bool taint_analysis(
     taint_file_name, goto_model.symbol_table, goto_model.goto_functions, show_full, json_file_name);
 }
 
+std::string  taint_analysis_instrument_knowledge(
+  goto_modelt&  model,
+  std::string const&  taint_file_name,
+  message_handlert&  logger
+  )
+{
+  struct taint_analysis_accessor_t : public taint_analysist {
+    taint_parse_treet& get_taint() { return taint; }
+    class_hierarchyt& get_class_hierarchy() { return class_hierarchy; }
+    void instrument(namespacet const&  ns, goto_functionst& fns) {
+      taint_analysist::instrument(ns,fns);
+    }
+  };
+  taint_analysis_accessor_t  analysis;
+  analysis.set_message_handler(logger);
+  if (taint_parser(taint_file_name, analysis.get_taint(), logger) == true)
+    return "Failed to read taint definition file";
+  analysis.get_class_hierarchy()(model.symbol_table);
+  analysis.instrument(namespacet(model.symbol_table), model.goto_functions);
+  model.goto_functions.update();
+  return ""; // Success
+}
