@@ -3,6 +3,6 @@ if_expr1.class
 --cover location --existing-coverage if_expr1.json
 ^EXIT=0$
 ^SIGNAL=0$
-^\*\* 0 of 0 covered (100.0%)$
+^\*\* 6 of 11 covered (54.5%)
 --
 ^warning: ignoring
