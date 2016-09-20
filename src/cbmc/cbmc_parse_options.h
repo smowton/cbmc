@@ -58,6 +58,7 @@ class optionst;
   "(java-max-input-array-length):(java-mock-class):(java-no-mock-class):"\
   "(java-max-vla-length):"\
   "(localize-faults)(localize-faults-method):" \
+  "(no-trivial-tests)(existing-coverage):" \
   "(floatbv)(all-claims)(all-properties)" // legacy, and will eventually disappear
 
 class cbmc_parse_optionst:

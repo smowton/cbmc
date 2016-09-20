@@ -23,7 +23,7 @@ SRC = goto_instrument_parse_options.cpp rw_set.cpp \
       wmm/event_graph.cpp wmm/pair_collection.cpp \
       goto_instrument_main.cpp horn_encoding.cpp \
       thread_instrumentation.cpp skip_loops.cpp loop_utils.cpp \
-      code_contracts.cpp
+      code_contracts.cpp cover.cpp
 
 OBJ += ../ansi-c/ansi-c$(LIBEXT) \
       ../cpp/cpp$(LIBEXT) \
@@ -37,8 +37,8 @@ OBJ += ../ansi-c/ansi-c$(LIBEXT) \
       ../langapi/langapi$(LIBEXT) \
       ../xmllang/xmllang$(LIBEXT) \
       ../util/util$(LIBEXT) \
-      ../solvers/solvers$(LIBEXT) \
-      ../json/json$(LIBEXT)
+      ../json/json$(LIBEXT) \
+      ../solvers/solvers$(LIBEXT)
 
 INCLUDES= -I ..
 
