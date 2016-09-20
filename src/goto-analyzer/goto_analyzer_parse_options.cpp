@@ -43,7 +43,8 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <cbmc/version.h>
 
-#include <function_summaries/function_summary.h>
+#include <summaries/summary.h>
+#include <goto-analyzer/taint_summary.h>
 
 #include "goto_analyzer_parse_options.h"
 #include "taint_analysis.h"

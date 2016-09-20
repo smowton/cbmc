@@ -1,6 +1,6 @@
 /////////////////////////////////////////////////////////////////////////////
 //
-// Module: summaries
+// Module: summary
 // Author: Marek Trtik
 //
 // This module defines interfaces and functionality for all kinds of summaries.
@@ -95,31 +95,5 @@ using  database_of_summaries_ptr_t = std::shared_ptr<database_of_summaries_t>;
 
 
 }
-
-
-
-namespace sumfn { namespace taint {
-
-
-struct  summary_t : public sumfn::summary_t
-{
-  std::string  kind() const;
-  std::string  description() const noexcept;
-};
-
-
-void  summarise_all_functions(
-    goto_modelt const&  instrumented_program,
-    database_of_summaries_t&  summaries_to_compute
-    );
-
-
-summary_ptr_t  summarise_function(
-    irep_idt const&  function_id,
-    goto_functionst::function_mapt const&  functions
-    );
-
-
-}}
 
 #endif

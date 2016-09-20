@@ -1,6 +1,6 @@
 SRC = goto_analyzer_main.cpp goto_analyzer_parse_options.cpp \
       taint_parser.cpp taint_analysis.cpp static_analyzer.cpp \
-      unreachable_instructions.cpp
+      unreachable_instructions.cpp taint_summary.cpp
 
 OBJ += ../ansi-c/ansi-c$(LIBEXT) \
       ../cpp/cpp$(LIBEXT) \
@@ -13,7 +13,7 @@ OBJ += ../ansi-c/ansi-c$(LIBEXT) \
       ../json/json$(LIBEXT) \
       ../assembler/assembler$(LIBEXT) \
       ../util/util$(LIBEXT) \
-      ../function_summaries/function_summaries$(LIBEXT)
+      ../summaries/summary$(LIBEXT)
 
 INCLUDES= -I ..
 

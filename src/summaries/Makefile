@@ -7,19 +7,19 @@
 #
 #############################################################################
 
-SRC = function_summary.cpp
+SRC = summary.cpp
 
 INCLUDES= -I ..
 
 include ../config.inc
 include ../common
 
-CLEANFILES = function_summaries$(LIBEXT)
+CLEANFILES = summary$(LIBEXT)
 
-all: function_summaries$(LIBEXT)
+all: summary$(LIBEXT)
 
 ###############################################################################
 
-function_summaries$(LIBEXT): $(OBJ) 
+summary$(LIBEXT): $(OBJ) 
 	$(LINKLIB)
 
