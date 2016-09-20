@@ -90,7 +90,7 @@ protected:
   unsigned get_size(const typet &type) const;
 
   irep_idt get_component_id(const irep_idt &object,unsigned offset);
-  typet get_type(const irep_idt &id);
+  typet get_type(const irep_idt &id) const;
   exprt get_value(const typet &type,unsigned offset=0,bool use_non_det = false);
   exprt get_value(const typet &type,std::vector<mp_integer> &rhs,unsigned offset=0);
   exprt get_value(const irep_idt &id);

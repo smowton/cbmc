@@ -540,7 +540,7 @@ Function: interpretert::get_type
  Purpose:
 
  \*******************************************************************/
-typet interpretert::get_type(const irep_idt &id)
+typet interpretert::get_type(const irep_idt &id) const
 {
   dynamic_typest::const_iterator it=dynamic_types.find(id);
   if (it==dynamic_types.end()) return symbol_table.lookup(id).type;
