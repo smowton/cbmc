@@ -1707,7 +1707,6 @@ void interpretert::get_value_tree(const irep_idt& capture_symbol,
 				  function_assignmentst& captured)
 {
 
-  message->status() << "Capture " << capture_symbol << messaget::eom;
   // Circular reference?
   for(auto already_captured : captured)
     if(already_captured.id==capture_symbol)
