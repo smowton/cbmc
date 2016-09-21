@@ -13,6 +13,7 @@
 #define CPROVER_SUMMARY_DUMP_H
 
 #include <summaries/summary.h>
+#include <goto-programs/goto_model.h>
 #include <functional>
 #include <string>
 #include <iosfwd>
@@ -38,7 +39,8 @@ using  callback_dump_derived_summary_in_html =
 std::string  dump_in_html(
     database_of_summaries_t const&  summaries_to_compute,
     callback_dump_derived_summary_in_html const&  summary_dump_callback,
-    std::string const&  dump_root_directory
+    std::string const&  dump_root_directory,
+    goto_modelt const*  program = nullptr
     );
 
 

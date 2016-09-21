@@ -292,7 +292,8 @@ int goto_analyzer_parse_optionst::doit()
       sumfn::dump_in_html(
           summaries,
           &sumfn::taint::dump_in_html,
-          "./dump_taint_summaries"
+          "./dump_taint_summaries",
+          &goto_model
           );
     }
     else

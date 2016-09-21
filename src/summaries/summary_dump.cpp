@@ -57,6 +57,86 @@ void  dump_html_suffix(std::ostream&  ostr)
     ostr << "</html>\n";
 }
 
+
+
+std::string  dump_function_body_in_html(
+    irep_idt const  raw_fn_name,
+    goto_programt  const&  fn_body,
+    goto_modelt const&  program,
+    std::string const&  dump_root_directory
+    )
+{
+  fileutl::create_directory(dump_root_directory);
+
+  std::string const  log_filename =
+      msgstream() << dump_root_directory << "/index.html";
+  std::fstream  ostr(log_filename, std::ios_base::out);
+  if (!ostr.is_open())
+      return msgstream() << "ERROR: sumfn::dump_function_body_in_html() : "
+                            "Cannot open the log file '" << log_filename << "'."
+                         ;
+  detail::dump_html_prefix(ostr);
+  ostr << "<h1>Code of function '" << to_html_text(as_string(raw_fn_name))
+                                   << "'</h1>\n"
+          ;
+  detail::dump_html_suffix(ostr);
+  return ""; // no error.
+}
+
+
+std::string  dump_goto_program_in_html(
+    goto_modelt const&  program,
+    std::string const&  dump_root_directory
+    )
+{
+  fileutl::create_directory(dump_root_directory);
+
+  namespacet const  ns(program.symbol_table);
+  goto_functionst::function_mapt const&  functions =
+      program.goto_functions.function_map;
+  for(auto  it = functions.cbegin(); it != functions.cend(); it++)
+    if(it->second.body_available())
+    {
+      std::string const  err_message =
+          detail::dump_function_body_in_html(
+              it->first,
+              it->second.body,
+              program,
+              msgstream() << dump_root_directory << "/"
+                          << to_file_name(as_string(it->first))
+              );
+      if (!err_message.empty())
+        return err_message;
+    }
+
+  std::string const  log_filename =
+      msgstream() << dump_root_directory << "/index.html";
+  std::fstream  ostr(log_filename, std::ios_base::out);
+  if (!ostr.is_open())
+      return msgstream() << "ERROR: sumfn::dump_goto_program_in_html() : "
+                            "Cannot open the log file '" << log_filename << "'."
+                         ;
+  detail::dump_html_prefix(ostr);
+  ostr << "<h1>Dump of analysed program</h1>\n"
+          "<table>\n"
+          "  <tr>\n"
+          "    <th>Function name</th>\n"
+          "    <th>Code</th>\n"
+          "  </tr>\n"
+          ;
+  for(auto  it = functions.cbegin(); it != functions.cend(); it++)
+    if(it->second.body_available())
+      ostr << "  <tr>\n"
+              "    <td>" << to_html_text(as_string(it->first)) << "</td>\n"
+              "    <td><a href=\"./" << to_file_name(as_string(it->first))
+                                     << "/index.html\">here</a></td>\n"
+              "  </tr>\n"
+              ;
+  ostr << "</table>\n";
+  detail::dump_html_suffix(ostr);
+  return ""; // no error.
+}
+
 void  replace(
     std::string&  str,
     std::string const&  what,
@@ -80,10 +160,22 @@ namespace sumfn {
 std::string  dump_in_html(
     database_of_summaries_t const&  summaries_to_compute,
     callback_dump_derived_summary_in_html const&  summary_dump_callback,
-    std::string const&  dump_root_directory
+    std::string const&  dump_root_directory,
+    goto_modelt const*  program
     )
 {
   fileutl::create_directory(dump_root_directory);
+
+  if (program != nullptr)
+  {
+    std::string const  err_message =
+        detail::dump_goto_program_in_html(
+            *program,
+            msgstream() << dump_root_directory << "/goto_model"
+            );
+    if (!err_message.empty())
+      return err_message;
+  }
 
   for (auto  it = summaries_to_compute.cbegin();
        it != summaries_to_compute.cend();
@@ -109,7 +201,7 @@ std::string  dump_in_html(
   ostr << "<h1>Taint Summaries</h1>\n"
           "<table>\n"
           "  <tr>\n"
-          "    <th>Summarised functions</th>\n"
+          "    <th>Summarised objects</th>\n"
           "    <th>Summary</th>\n"
           "  </tr>\n"
           ;
@@ -123,6 +215,10 @@ std::string  dump_in_html(
             "  </tr>\n"
             ;
   ostr << "</table>\n";
+  if (program != nullptr)
+    ostr << "<p>Dump of whole analysed program is available "
+            "<a href=\"./goto_model/index.html\">here</a></p>\n"
+         ;
   detail::dump_html_suffix(ostr);
 
   return ""; // no error.
