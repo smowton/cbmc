@@ -19,7 +19,7 @@ my $has_thread_pool = eval
 
 sub run($$$$$) {
   my ($name, $input, $cmd, $options, $output) = @_;
-  my $cmdline = "$cmd $options $input >$output 2>&1";
+  my $cmdline = "$cmd $options '$input' >'$output' 2>&1";
 
   print LOG "Running $cmdline\n";
   system("bash", "-c", "cd '$name' ; $cmdline");
