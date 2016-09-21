@@ -241,221 +241,20 @@ protected:
 
 public:
   typedef std::map<unsigned, converted_instructiont> address_mapt;
+  typedef cfg_dominators_templatet<const address_mapt,unsigned,false> java_cfg_dominatorst;
 
 protected:  
-  struct hash_sig_endaddress {
-    size_t operator()(java_bytecode_convert_methodt::local_variablet* ptr) const
-      {
-        if(ptr==0)
-          return 0;
-        return std::hash<std::string>()(id2string(ptr->name)) ^
-          std::hash<std::string>()(ptr->signature) ^
-          std::hash<size_t>()(ptr->index) ^
-          std::hash<size_t>()(ptr->start_pc+ptr->length);
-      }
-  };
 
-  struct eq_sig_endaddress {
-    size_t operator()(java_bytecode_convert_methodt::local_variablet* a,
-                      java_bytecode_convert_methodt::local_variablet* b) const
-      {
-        return ((!a) && (!b)) ||
-          (a->name==b->name &&
-           a->signature==b->signature &&
-           a->index == b->index &&
-           (a->start_pc+a->length)==(b->start_pc+b->length));
-      }
-  };
+  void find_initialisers(
+    local_variable_tablet& vars,
+    const address_mapt& amap,
+    const java_cfg_dominatorst& doms);
 
-  bool find_trivial_initialiser(local_variablet& var,
-                                const methodt::instructionst& insts,
-                                methodt::instructionst::const_iterator instit)
-  {
-
-    // Look for a trivial initialiser preceding var's live range,
-    // such as:
-    // astore_2
-    // --- live range begins for slot 2 ---
-    // more instructions...
-    // If this pattern is found, allow the store to directly initialise the named variable.
-
-    // instit points to the instruction where var's annotated live range begins.
-    
-    auto slotidx=var.index;
-    if(instit==insts.begin())
-      return false;
-
-    auto previt=instit;
-    --previt;
-    auto& previnst=*previt;
-    const std::string prevstatement=id2string(previnst.statement);
-    if(!(prevstatement.size()>=1 && prevstatement.substr(1,5)=="store"))
-      return false;
-
-    std::string storeslot;
-    if(previnst.args.size()==1)
-    {
-      const auto& arg=previnst.args[0];
-      storeslot=id2string(to_constant_expr(arg).get_value());
-    }
-    else
-    {
-      assert(prevstatement[6]=='_' && prevstatement.size()==8);
-      storeslot=prevstatement[7];
-      assert(isdigit(storeslot[0]));
-    }
-    auto storeslotidx=safe_string2unsigned(storeslot);
-    if(storeslotidx==slotidx)
-    {
-      // The instruction immediately prior to this is an initialiser.
-      var.length+=(var.start_pc-previnst.address);
-      var.start_pc=previnst.address;
-      return true;
-    }
-
-    return false;
-
-  }
-
-  typedef std::unordered_map<local_variablet*,local_variablet*,
-                             hash_sig_endaddress, eq_sig_endaddress> by_sig_and_endaddresst;
-
-  bool find_split_initialiser(local_variablet& var,
-                              const address_mapt& amap,
-                              by_sig_and_endaddresst& by_sig_and_endaddress)
-  {
-    // Second chance: does the live range start at a block header?
-    // If so can we find one or more predecessors with a live variable
-    // with like signature?
-    auto amap_iter=amap.find(var.start_pc);
-    assert(amap_iter!=amap.end() &&
-           "Live range doesn't start on an instruction boundary?");
-
-    if(amap_iter->second.predecessors.size()==0)
-      return false;
-
-    local_variablet* earliest_startpc=0;
-    std::vector<local_variablet> pred_keys;
-    std::vector<local_variablet*> preds;
-    
-    for(auto come_from_address : amap_iter->second.predecessors)
-    {
-    
-      // Try to find a variable like this one, but whose live range ends
-      // after the goto instruction at come_from_address:
-      auto goto_iter=amap.find(come_from_address);
-      assert(goto_iter!=amap.end() &&
-             "Predecessor that doesn't itself appear in the address map?");
-      ++goto_iter;
-      if(goto_iter==amap.end())
-        return false;
-
-      unsigned instruction_after_goto_address=goto_iter->first;
-      // Find a variable that ends there:
-      // (by the nature of the map we search, this will find anything with
-      //  this signature and end-address, not just the particular live range we
-      //  construct here)
-      local_variablet search_key=var;
-      search_key.start_pc=come_from_address;
-      search_key.length=instruction_after_goto_address-come_from_address;
-      auto find_var_iter=by_sig_and_endaddress.find(&search_key);
-
-      if(find_var_iter==by_sig_and_endaddress.end())
-        return false;
-
-      // TODO: handle backward jumps if we encounter code that inits
-      // variables after use in address order in the wild.
-      if(find_var_iter->second->start_pc >= var.start_pc)
-        return false;
-
-      // Find the predecessor with the lowest address:
-      if((!earliest_startpc) || earliest_startpc->start_pc > find_var_iter->second->start_pc)
-        earliest_startpc=find_var_iter->second;
-
-      preds.push_back(find_var_iter->second);
-      pred_keys.push_back(search_key);
-
-    }
-
-    // Remove all variables that will be modified from the end-address map
-    // before we alter their keys:
-    for(auto& key : pred_keys)
-      assert(by_sig_and_endaddress.erase(&key));
-    by_sig_and_endaddress.erase(&var);    
-   
-    // Extend the first predecessor's live range to span all live ranges found:
-    auto& existing_var=*earliest_startpc;
-    existing_var.length=(var.start_pc+var.length)-existing_var.start_pc;
-    
-    // Update the first predecessor's map entry:
-    by_sig_and_endaddress[&existing_var]=&existing_var;
-
-    // Mark this variable for deletion:
-    var.length=0;
-    // Mark all non-first preds for deletion too:
-    for(auto& pred : preds)
-      if(pred!=earliest_startpc)
-        pred->length=0;
-
-    status() << "Found split initialiser for variable " << var.name <<
-      " with " << preds.size() << " predecessors; new live range " <<
-      existing_var.start_pc << "-" << existing_var.start_pc+existing_var.length << eom;
-
-    return true;
-    
-  }
-                                
-
-  void find_initialisers(const methodt::instructionst& insts,
-                         local_variable_tablet& vars,
-                         const address_mapt& amap)
-  {
-
-    // Note: vars is sorted by start_pc.
-
-    // Build a map indexing variables by their signature and the address where their
-    // range ends, for trying to pair up disjoint live ranges:
-
-    by_sig_and_endaddresst by_signature_and_endaddress;
-    for(auto& v : vars)
-      assert(by_signature_and_endaddress.insert(std::make_pair(&v,&v)).second);
-
-    auto variter=vars.begin(), varlim=vars.end();
-    for(auto instit=insts.begin(),instend=insts.end(); instit!=instend; ++instit)
-    {
-      for(; variter!=varlim && variter->start_pc<instit->address; ++variter) {}
-      for(; variter!=varlim && variter->start_pc==instit->address; ++variter)
-      {
-        auto& var=*variter;
-        if(var.start_pc==0) // Parameter
-          continue;
-        bool found_init=find_trivial_initialiser(var,insts,instit);
-        if(!found_init)
-          found_init=find_split_initialiser(var,amap,by_signature_and_endaddress);
-        assert(found_init && "Couldn't find an initialiser for local variable");
-      }
-    }
-
-    // Clean up removed records from the variable table:
-
-    size_t toremove=0;
-    for(size_t i=0; i<(vars.size()-toremove); ++i)
-    {
-      auto& v=vars[i];
-      if(v.length==0)
-      {
-        // Move to end; consider the new element we've swapped in:
-        ++toremove;
-        if(i!=vars.size()-toremove) // Already where it needs to be?
-          std::swap(v,vars[vars.size()-toremove]);
-        --i;
-      }
-    }
-
-    // Remove un-needed entries.
-    vars.resize(vars.size()-toremove);
-    
-  }
+  void find_initialisers_for_slot(
+    local_variable_tablet::iterator firstvar,
+    local_variable_tablet::iterator varlimit,
+    const address_mapt& amap,
+    const java_cfg_dominatorst& doms);
 
   void setup_local_variables(const methodt& m, const address_mapt& amap);
 
@@ -710,16 +509,17 @@ void java_bytecode_convert_methodt::convert(
 }
 
 namespace {
-  bool lt_start_pc(const java_bytecode_convert_methodt::local_variablet& a,
-                   const java_bytecode_convert_methodt::local_variablet& b)
+  bool lt_index(const java_bytecode_convert_methodt::local_variablet& a,
+                const java_bytecode_convert_methodt::local_variablet& b)
   {
-    return a.start_pc < b.start_pc;
+    return a.index<b.index;
   }
 }
 
 // Convert the address-map to a cfg-graph so we can compute dominators:
 
 typedef java_bytecode_convert_methodt::address_mapt address_mapt;
+typedef java_bytecode_convert_methodt::java_cfg_dominatorst java_cfg_dominatorst;
 
 template<class T>
 struct procedure_local_cfg_baset<T,const address_mapt,unsigned> :
@@ -752,25 +552,279 @@ struct procedure_local_cfg_baset<T,const address_mapt,unsigned> :
   
 };
 
-typedef cfg_dominators_templatet<const address_mapt,unsigned,false> java_cfg_dominatorst;
+typedef java_bytecode_convert_methodt::local_variablet local_variablet;
+typedef std::map<local_variablet*, std::set<local_variablet*> > predecessor_mapt;
+
+struct is_predecessor_of
+{
+  const predecessor_mapt& order;
+
+  is_predecessor_of(const predecessor_mapt& _order) : order(_order) {}
+  
+  bool operator()(local_variablet* a,
+                  local_variablet* b) const
+  {
+    return order.at(a).count(b)>0;
+  }
+};
+
+static void gather_transitive_predecessors(
+  local_variablet* start,
+  const predecessor_mapt& predecessor_map,
+  std::set<local_variablet*>& result)
+{
+  if(result.insert(start).second)
+    return;
+  for(const auto pred : predecessor_map.at(start))
+    gather_transitive_predecessors(pred,predecessor_map,result);
+}
+
+static bool is_store_to_slot(
+  const java_bytecode_convert_methodt::instructiont& inst,
+  unsigned slotidx)
+{
+  const std::string prevstatement=id2string(inst.statement);
+  if(!(prevstatement.size()>=1 && prevstatement.substr(1,5)=="store"))
+    return false;
+
+  std::string storeslot;
+  if(inst.args.size()==1)
+  {
+    const auto& arg=inst.args[0];
+    storeslot=id2string(to_constant_expr(arg).get_value());
+  }
+  else
+  {
+    assert(prevstatement[6]=='_' && prevstatement.size()==8);
+    storeslot=prevstatement[7];
+    assert(isdigit(storeslot[0]));
+  }
+  auto storeslotidx=safe_string2unsigned(storeslot);
+  return storeslotidx==slotidx;
+}
+
+void java_bytecode_convert_methodt::find_initialisers_for_slot(
+  local_variable_tablet::iterator firstvar,
+  local_variable_tablet::iterator varlimit,
+  const address_mapt& amap,
+  const java_cfg_dominatorst& doms)
+{
+  // Build a simple map from instruction PC to the variable live in this slot at that PC,
+  // and a map from each variable to variables that flow into it:
+  
+  unsigned last_address=(--amap.end())->first;
+  std::vector<local_variablet*> var_map(last_address+1,0);
+  predecessor_mapt predecessor_map;  
+  for(auto it=firstvar, itend=varlimit; it!=itend; ++it)
+  {
+    for(unsigned idx=it->start_pc,
+          idxlim=it->start_pc+it->length;
+        idx!=idxlim; ++idx)
+    {
+      assert((!var_map[idx]) && "Local variable table clash?");
+      var_map[idx]=&*it;
+    }
+    predecessor_map[&*it].insert(&*it);
+  }
+
+  // Now find variables that flow together by walking backwards to find initialisers
+  // or branches from other live ranges:
+
+  for(auto it=firstvar, itend=varlimit; it!=itend; ++it)
+  {
+    // Don't alter parameters:
+    if(it->start_pc==0)
+      continue;
+
+    // Find the last instruction within the live range:
+    unsigned end_pc=it->start_pc+it->length;
+    auto amapit=amap.find(end_pc);
+    auto old_amapit=amapit;
+    --amapit;
+    if(old_amapit==amap.end())
+      assert(end_pc>amapit->first &&
+             "Instruction live range doesn't align to instruction boundary?");
+
+    // Find vartable entries that flow into this one:
+    unsigned new_start_pc=it->start_pc;
+    for(; amapit->first >= it->start_pc; --amapit)
+    {
+      for(auto pred : amapit->second.predecessors)
+      {
+        auto pred_var=var_map[pred];
+        if(pred_var==&*it)
+        {
+          // Flow from within same live range?
+          continue;
+        }
+        else if(!pred_var)
+        {
+          // Flow from out of range?
+          // Check if this is an initialiser, and if so expand the live range
+          // to include it, but don't check its predecessors:
+          auto inst_before_this=amapit;
+          --inst_before_this;
+          if(amapit->first!=it->start_pc || inst_before_this->first!=pred)
+            throw "Local variable table: unexpected flow from out of range";
+          if(!is_store_to_slot(*(inst_before_this->second.source),it->index))
+            throw "Local variable table: didn't find expected initialising store";
+          new_start_pc=pred;
+        }
+        else {
+          if(pred_var->name!=it->name || pred_var->signature!=it->signature)
+            throw "Local variable table: flow from variable with clashing name or signature";
+          // OK, this is a flow from a similar but distinct entry in the local var table.
+          predecessor_map[&*it].insert(pred_var);
+        }
+      }
+    }
+
+    // If a simple pre-block initialiser was found, add it to the live range now:
+    it->length+=(it->start_pc-new_start_pc);
+    it->start_pc=new_start_pc;
+   
+  }
+
+  // OK, we've established the flows all seem sensible. Now merge vartable entries
+  // according to the predecessor_map:
+
+  // Top-sort we get the bottom variables first:
+  is_predecessor_of comp(predecessor_map);
+  std::vector<local_variablet*> topsorted_vars;
+  for(auto it=firstvar,itend=varlimit; it!=itend; ++it)
+    topsorted_vars.push_back(&*it);
+  
+  std::sort(topsorted_vars.begin(),topsorted_vars.end(),comp);
+
+  // Now merge the entries:
+  for(auto merge_into : topsorted_vars)
+  {
+    std::set<local_variablet*> merge_vars;
+    gather_transitive_predecessors(merge_into,predecessor_map,merge_vars);
+    if(merge_vars.size()==1)
+      continue;
+
+    // Because we need a lexically-scoped declaration, we must have the merged variable
+    // enter scope both in a block that dominates all entries, and which
+    // precedes them in program order.
+    unsigned first_pc=last_address+1;
+    unsigned last_pc=0;
+    for(auto v : merge_vars)
+    {
+      if(v->start_pc < first_pc)
+        first_pc = v->start_pc;
+      if(v->start_pc+v->length > last_pc)
+        last_pc=v->start_pc+v->length;
+    }
+    
+    std::vector<unsigned> candidate_dominators;
+    for(auto v : merge_vars)
+    {
+      const auto& this_var_doms=doms.cfg[doms.cfg.entry_map.at(v->start_pc)].dominators; 
+      for(const auto this_var_dom : this_var_doms)
+        if(this_var_dom <= first_pc)
+          candidate_dominators.push_back(this_var_dom);
+    }
+    std::sort(candidate_dominators.begin(),candidate_dominators.end());
+
+    // Working from the back, simply find the first PC that occurs merge_vars.size()
+    // times and therefore dominates all vars we seek to merge:
+
+    bool found_dominator=false;
+    for(auto domit=candidate_dominators.rbegin(), domitend=candidate_dominators.rend();
+        domit != domitend && !found_dominator; ++domit)
+    {
+      unsigned repeats=0;
+      auto dom=*domit;
+      while(domit!=domitend && *domit==dom)
+      {
+        ++domit;
+        ++repeats;
+      }
+      assert(repeats<=merge_vars.size());
+      if(repeats==merge_vars.size())
+      {
+        found_dominator=true;
+        // Enlarge this variable to range from the common dominator
+        // to the last (in program order) use:
+        merge_into->start_pc=dom;
+        merge_into->length=last_pc-dom;
+        // Nuke the variables that were merged into this one:
+        for(auto v : merge_vars)
+          if(v!=merge_into)
+            v->length=0;
+      }
+    }
+
+    if(!found_dominator)
+      throw "Variable live ranges with no common dominator?";
+  
+  }
+
+}
+
+static void walk_to_next_index(
+  java_bytecode_convert_methodt::local_variable_tablet::iterator& it1,
+  java_bytecode_convert_methodt::local_variable_tablet::iterator& it2,
+  java_bytecode_convert_methodt::local_variable_tablet::iterator itend)
+{
+  if(it2==itend)
+  {
+    it1=itend;
+    return;
+  }
+  
+  auto old_it2=it2;
+  auto index=it2->index;
+  while(it2!=itend && it2->index==index)
+    ++it2;
+  it1=old_it2;
+}
+
+void java_bytecode_convert_methodt::find_initialisers(
+  local_variable_tablet& vars,
+  const address_mapt& amap,
+  const java_cfg_dominatorst& doms)
+{
+  // Handle one stack slot at a time:
+  std::sort(vars.begin(),vars.end(),lt_index);
+
+  auto it1=vars.begin();
+  auto it2=it1;
+  auto itend=vars.end();
+  walk_to_next_index(it1,it2,itend);
+  for(; it1!=itend; walk_to_next_index(it1,it2,itend))
+    find_initialisers_for_slot(it1,it2,amap,doms);
+}
 
 void java_bytecode_convert_methodt::setup_local_variables(const methodt& m,
                                                           const address_mapt& amap)
 {
 
-  java_cfg_dominatorst dominators;
-  dominators(amap);
-#ifdef DEBUG
-  status() << "Dominators for method " << m.base_name << messaget::eom;
-  dominators.output(status());
-  status() << messaget::eom;
-#endif
-  
-  // Find out which local variables have initialisers (store instructions immediately
-  // preceding their stated live range), and where they do expand the live range to include local.
+  // Find out which local variable table entries should be merged:
   local_variable_tablet adjusted_variable_table(m.local_variable_table);
-  std::sort(adjusted_variable_table.begin(),adjusted_variable_table.end(),lt_start_pc);
-  find_initialisers(m.instructions,adjusted_variable_table,amap);
+  java_cfg_dominatorst doms;
+  doms(amap);
+  find_initialisers(adjusted_variable_table,amap,doms);
+
+  // Clean up removed records from the variable table:
+
+  size_t toremove=0;
+  for(size_t i=0; i<(adjusted_variable_table.size()-toremove); ++i)
+  {
+    auto& v=adjusted_variable_table[i];
+    if(v.length==0)
+    {
+      // Move to end; consider the new element we've swapped in:
+      ++toremove;
+      if(i!=adjusted_variable_table.size()-toremove) // Already where it needs to be?
+        std::swap(v,adjusted_variable_table[adjusted_variable_table.size()-toremove]);
+      --i;
+    }
+  }
+
+  // Remove un-needed entries.
+  adjusted_variable_table.resize(adjusted_variable_table.size()-toremove);  
   
   // Do the locals and parameters in the variable table, which is available when
   // compiled with -g or for methods with many local variables in the latter
