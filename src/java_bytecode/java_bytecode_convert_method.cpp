@@ -6,8 +6,6 @@ Author: Daniel Kroening, kroening@kroening.com
 
 \*******************************************************************/
 
-#define DEBUG
-
 #ifdef DEBUG
 #include <iostream>
 #endif
@@ -816,6 +814,12 @@ void java_bytecode_convert_methodt::find_initialisers_for_slot(
     // Apply the changes:
     merge_into->var.start_pc=found_dominator;
     merge_into->var.length=last_pc-found_dominator;
+
+    #ifdef DEBUG
+    status() << "Merging " << merge_vars.size() << " variables named " << merge_into->var.name <<
+      "; new live range " << merge_into->var.start_pc << "-" <<
+      merge_into->var.start_pc + merge_into->var.length << eom;
+    #endif
 
     // Nuke the now-subsumed var-table entries:
     for(auto& v : merge_vars)
