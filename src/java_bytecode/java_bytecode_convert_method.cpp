@@ -21,6 +21,9 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/ieee_float.h>
 #include <util/expr_util.h>
 
+#include <goto-programs/cfg.h>
+#include <analyses/cfg_dominators.h>
+
 #include "java_bytecode_convert_method.h"
 #include "bytecode_info.h"
 #include "java_types.h"
@@ -236,9 +239,11 @@ protected:
     bool done;
   };
 
+public:
   typedef std::map<unsigned, converted_instructiont> address_mapt;
 
-    struct hash_sig_endaddress {
+protected:  
+  struct hash_sig_endaddress {
     size_t operator()(java_bytecode_convert_methodt::local_variablet* ptr) const
       {
         if(ptr==0)
@@ -273,8 +278,6 @@ protected:
     // --- live range begins for slot 2 ---
     // more instructions...
     // If this pattern is found, allow the store to directly initialise the named variable.
-    // Otherwise we'll initialise the local when recovering block structure and inserting
-    // decl instructions at the end of convert_instructions.
 
     // instit points to the instruction where var's annotated live range begins.
     
@@ -714,10 +717,55 @@ namespace {
   }
 }
 
+// Convert the address-map to a cfg-graph so we can compute dominators:
+
+typedef java_bytecode_convert_methodt::address_mapt address_mapt;
+
+template<class T>
+struct procedure_local_cfg_baset<T,const address_mapt,unsigned> :
+    public graph<cfg_base_nodet<T, unsigned> >
+{
+  typedef std::map<unsigned, unsigned> entry_mapt;
+  entry_mapt entry_map;
+
+  procedure_local_cfg_baset() {}
+  
+  void operator()(const address_mapt& amap)
+  {
+    for(const auto& inst : amap)
+    {
+      // Map instruction PCs onto node indices:
+      entry_map[inst.first]=this->add_node();
+      // Map back:
+      (*this)[entry_map[inst.first]].PC=inst.first;
+    }
+    for(const auto& inst : amap)
+    {
+      for(auto succ : inst.second.successors)
+        this->add_edge(entry_map.at(inst.first),entry_map.at(succ));
+    }
+  }
+
+  unsigned get_first_node(const address_mapt& amap) const { return amap.begin()->first; }
+  unsigned get_last_node(const address_mapt& amap) const { return (--amap.end())->first; }
+  unsigned nodes_empty(const address_mapt& amap) const { return amap.empty(); }
+  
+};
+
+typedef cfg_dominators_templatet<const address_mapt,unsigned,false> java_cfg_dominatorst;
+
 void java_bytecode_convert_methodt::setup_local_variables(const methodt& m,
                                                           const address_mapt& amap)
 {
 
+  java_cfg_dominatorst dominators;
+  dominators(amap);
+#ifdef DEBUG
+  status() << "Dominators for method " << m.base_name << messaget::eom;
+  dominators.output(status());
+  status() << messaget::eom;
+#endif
+  
   // Find out which local variables have initialisers (store instructions immediately
   // preceding their stated live range), and where they do expand the live range to include local.
   local_variable_tablet adjusted_variable_table(m.local_variable_table);
