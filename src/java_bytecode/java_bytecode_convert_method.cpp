@@ -599,7 +599,10 @@ struct is_predecessor_of
   bool operator()(local_variable_with_holest* a,
                   local_variable_with_holest* b) const
   {
-    return order.at(a).count(b)>0;
+    auto findit=order.find(a);
+    if(findit==order.end())
+      return false;
+    return findit->second.count(b)>0;
   }
 };
 
@@ -608,9 +611,12 @@ static void gather_transitive_predecessors(
   const predecessor_mapt& predecessor_map,
   std::set<local_variable_with_holest*>& result)
 {
-  if(result.insert(start).second)
+  if(!result.insert(start).second)
     return;
-  for(const auto pred : predecessor_map.at(start))
+  auto findit=predecessor_map.find(start);
+  if(findit==predecessor_map.end())
+    return;
+  for(const auto pred : findit->second)
     gather_transitive_predecessors(pred,predecessor_map,result);
 }
 
@@ -669,7 +675,6 @@ void java_bytecode_convert_methodt::find_initialisers_for_slot(
       assert((!var_map[idx]) && "Local variable table clash?");
       var_map[idx]=&*it;
     }
-    predecessor_map[&*it].insert(&*it);
   }
 
   // Now find variables that flow together by walking backwards to find initialisers
@@ -733,7 +738,7 @@ void java_bytecode_convert_methodt::find_initialisers_for_slot(
   // OK, we've established the flows all seem sensible. Now merge vartable entries
   // according to the predecessor_map:
 
-  // Top-sort we get the bottom variables first:
+  // Top-sort so that we get the bottom variables first:
   is_predecessor_of comp(predecessor_map);
   std::vector<local_variable_with_holest*> topsorted_vars;
   for(auto it=firstvar,itend=varlimit; it!=itend; ++it)
