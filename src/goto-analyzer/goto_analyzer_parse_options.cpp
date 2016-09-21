@@ -45,6 +45,7 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <summaries/summary.h>
 #include <goto-analyzer/taint_summary.h>
+#include <goto-analyzer/taint_summary_dump.h>
 
 #include "goto_analyzer_parse_options.h"
 #include "taint_analysis.h"
@@ -288,6 +289,11 @@ int goto_analyzer_parse_optionst::doit()
           );
       sumfn::database_of_summaries_t  summaries;
       sumfn::taint::summarise_all_functions(goto_model,summaries);
+      sumfn::dump_in_html(
+          summaries,
+          &sumfn::taint::dump_in_html,
+          "./dump_taint_summaries"
+          );
     }
     else
     {

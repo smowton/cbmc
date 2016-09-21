@@ -1,6 +1,10 @@
 SRC = goto_analyzer_main.cpp goto_analyzer_parse_options.cpp \
       taint_parser.cpp taint_analysis.cpp static_analyzer.cpp \
-      unreachable_instructions.cpp taint_summary.cpp
+      unreachable_instructions.cpp \
+      \
+      taint_summary.cpp \
+      taint_summary_dump.cpp
+      
 
 OBJ += ../ansi-c/ansi-c$(LIBEXT) \
       ../cpp/cpp$(LIBEXT) \

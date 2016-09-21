@@ -10,8 +10,8 @@
 //
 /////////////////////////////////////////////////////////////////////////////
 
-#ifndef CPROVER_FUNCTION_SUMMARY_H
-#define CPROVER_FUNCTION_SUMMARY_H
+#ifndef CPROVER_SUMMARY_H
+#define CPROVER_SUMMARY_H
 
 #include <goto-programs/goto_model.h>
 #include <util/irep.h>
@@ -79,10 +79,14 @@ using  object_summary_t = std::pair<summarised_object_id_t,summary_ptr_t>;
 struct  database_of_summaries_t
 {
   using  cache_t = std::unordered_map<summarised_object_id_t,summary_ptr_t>;
+  using  database_t = cache_t;
 
   virtual ~database_of_summaries_t() {}
 
   void  insert(object_summary_t const&  object_and_summary);
+
+  database_t::const_iterator  cbegin() const;
+  database_t::const_iterator  cend() const;
 
   // TODO: add interface for searching and iteration in the database.
 
