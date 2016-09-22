@@ -2003,7 +2003,7 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
         get_value_tree(identifier, input_assigns);
         for(const auto &assign : input_assigns)
         {
-          const typet &tree_typ = symbol_table.lookup(assign.id).type;
+          const typet &tree_typ = ns.follow(assign.value.type());
           if(tree_typ.id()==ID_struct)
           {
             const struct_typet &struct_type=to_struct_type(tree_typ);
@@ -2126,7 +2126,7 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
           const typet &typ = symbol_table.lookup(inputParam.second).type;
           for(const auto &assign : output_assigns)
           {
-            const typet &tree_typ = symbol_table.lookup(assign.id).type;
+            const typet &tree_typ = ns.follow(assign.value.type());
             if(tree_typ.id()==ID_struct)
             {
               const struct_typet &struct_type=to_struct_type(tree_typ);
@@ -2141,16 +2141,22 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
                    // after_expr.type().id()==ID_string ||
                    // after_expr.type().id()==ID_floatbv)
                 {
-                  const exprt &before_expr = valuesBefore[{assign.id, components[fieldidx].get_name()}];
-                  assert(after_expr.type().id()==before_expr.type().id());
-                  mp_integer a, b;
-                  to_integer(after_expr, a);
-                  to_integer(before_expr, b);
-                  if (a != b)
+                  auto findit=valuesBefore.find({assign.id, components[fieldidx].get_name()});
+                  if(findit!=valuesBefore.end())
                   {
-                    valuesDifference.insert({{assign.id, components[fieldidx].get_name()},
-                                             {before_expr, after_expr}});
+                    const exprt &before_expr = findit->second;
+                    assert(after_expr.type().id()==before_expr.type().id());
+                    mp_integer a, b;
+                    to_integer(after_expr, a);
+                    to_integer(before_expr, b);
+                    if (a != b)
+                    {
+                      valuesDifference.insert({{assign.id, components[fieldidx].get_name()},
+                          {before_expr, after_expr}});
+                    }
                   }
+                  // TODO decide what to do when a field wasn't reachable before
+                  // (e.g. inaccessible due to a null pointer)
                 }
               }
             }
