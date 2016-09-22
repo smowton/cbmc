@@ -6,8 +6,6 @@ Author: Daniel Kroening, kroening@kroening.com
 
 \*******************************************************************/
 
-#define DEBUG
-
 #ifdef DEBUG
 #include <iostream>
 #endif
@@ -21,7 +19,11 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/ieee_float.h>
 #include <util/expr_util.h>
 
+#include <goto-programs/cfg.h>
+#include <analyses/cfg_dominators.h>
+
 #include "java_bytecode_convert_method.h"
+#include "java_bytecode_convert_method_class.h"
 #include "bytecode_info.h"
 #include "java_types.h"
 #include "java_opaque_method_stubs.h"
@@ -55,449 +57,6 @@ protected:
   const char *p;
 };
 
-class java_bytecode_convert_methodt:public messaget
-{
-public:
-  java_bytecode_convert_methodt(
-    symbol_tablet &_symbol_table,
-    message_handlert &_message_handler,
-    const bool &_disable_runtime_checks,
-    int _max_array_length):
-    messaget(_message_handler),
-    symbol_table(_symbol_table),
-    disable_runtime_checks(_disable_runtime_checks),
-    max_array_length(_max_array_length)
-  {
-  }
-
-  typedef java_bytecode_parse_treet::methodt methodt;
-  typedef java_bytecode_parse_treet::instructiont instructiont;
-  typedef methodt::instructionst instructionst;
-  typedef methodt::local_variable_tablet local_variable_tablet;
-  typedef methodt::local_variablet local_variablet;
-
-  void operator()(const symbolt &class_symbol, const methodt &method)
-  {
-    convert(class_symbol, method);
-  }
-
-protected:
-  irep_idt method_id;
-  symbol_tablet &symbol_table;
-  const bool &disable_runtime_checks;
-  int max_array_length;
-
-  irep_idt current_method;
-  typet method_return_type;
-
-  class variablet
-  {
-  public:
-    symbol_exprt symbol_expr;
-    size_t start_pc;
-    size_t length;
-    bool is_parameter;
-    variablet() : symbol_expr(), is_parameter(false) {}      
-  };
-  
-  typedef std::vector<variablet> variablest;
-  expanding_vector<variablest> variables;
-  std::set<symbol_exprt> used_local_names;
-  
-  bool method_has_this;
-
-  typedef enum instruction_sizet
-  {
-    INST_INDEX = 2, INST_INDEX_CONST = 3
-  } instruction_sizet;
-
-  // return corresponding reference of variable
-  variablet &find_variable_for_slot(size_t address, variablest &var_list)
-  {
-    for(variablet &var : var_list)
-    {
-      size_t start_pc = var.start_pc;
-      size_t length = var.length;
-      if (address >= start_pc && address < start_pc + length)
-        return var;
-    }
-    // add unnamed local variable to end of list at this index
-    // with scope from 0 to INT_MAX
-    // as it is at the end of the vector, it will only be taken into account
-    // if no other variable is valid
-    size_t list_length = var_list.size();
-    var_list.resize(list_length + 1);
-    var_list[list_length].start_pc = 0;
-    var_list[list_length].length = std::numeric_limits<size_t>::max();
-    return var_list[list_length];
-  }
-
-  // JVM local variables
-  const exprt variable(const exprt &arg, char type_char, size_t address, bool do_cast = true)
-  {
-    irep_idt number=to_constant_expr(arg).get_value();
-    
-    std::size_t number_int=safe_string2size_t(id2string(number));
-    typet t=java_type_from_char(type_char);
-    variablest &var_list = variables[number_int];
-
-    // search variable in list for correct frame / address if necessary
-    variablet &var = find_variable_for_slot(address, var_list);
-
-    if(var.symbol_expr.get_identifier().empty())
-    {
-      // an un-named local variable
-      irep_idt base_name="anonlocal::"+id2string(number)+type_char;
-      irep_idt identifier=id2string(current_method)+"::"+id2string(base_name);
-      
-      symbol_exprt result(identifier, t);
-      result.set(ID_C_base_name, base_name);
-      used_local_names.insert(result);
-      return result;
-    }
-    else
-    {
-      exprt result=var.symbol_expr;
-      if(do_cast && t!=result.type()) result=typecast_exprt(result, t);
-      return result;
-    }
-  }
-
-  // temporary variables
-  std::list<symbol_exprt> tmp_vars;
-
-  symbol_exprt tmp_variable(const std::string &prefix, const typet &type)
-  {
-    irep_idt base_name=prefix+"_tmp"+i2string(tmp_vars.size());
-    irep_idt identifier=id2string(current_method)+"::"+id2string(base_name);
-
-    auxiliary_symbolt tmp_symbol;
-    tmp_symbol.base_name=base_name;
-    tmp_symbol.is_static_lifetime=false;
-    tmp_symbol.mode=ID_java;
-    tmp_symbol.name=identifier;
-    tmp_symbol.type=type;
-    symbol_table.add(tmp_symbol);
-
-    symbol_exprt result(identifier, type);
-    result.set(ID_C_base_name, base_name);
-    tmp_vars.push_back(result);
-
-    return result;
-  }
-
-  // JVM program locations
-  irep_idt label(const irep_idt &address)
-  {
-    return "pc"+id2string(address);
-  }
-
-  // JVM Stack
-  typedef std::vector<exprt> stackt;
-  stackt stack;
-
-  exprt::operandst pop(std::size_t n)
-  {
-    if(stack.size()<n)
-    {
-      error() << "malformed bytecode (pop too high)" << eom;
-      throw 0;
-    }
-
-    exprt::operandst operands;
-    operands.resize(n);
-    for(std::size_t i=0; i<n; i++)
-      operands[i]=stack[stack.size()-n+i];
-
-    stack.resize(stack.size()-n);
-    return operands;
-  }
-
-  void push(const exprt::operandst &o)
-  {
-    stack.resize(stack.size()+o.size());
-
-    for(std::size_t i=0; i<o.size(); i++)
-      stack[stack.size()-o.size()+i]=o[i];
-  }
-
-  struct converted_instructiont
-  {
-    converted_instructiont(
-      const instructionst::const_iterator &it,
-      const codet &_code):source(it), code(_code), done(false)
-      {}
-
-    instructionst::const_iterator source;
-    std::list<unsigned> successors;
-    std::set<unsigned> predecessors;
-    codet code;
-    stackt stack;
-    bool done;
-  };
-
-  typedef std::map<unsigned, converted_instructiont> address_mapt;
-
-    struct hash_sig_endaddress {
-    size_t operator()(java_bytecode_convert_methodt::local_variablet* ptr) const
-      {
-        if(ptr==0)
-          return 0;
-        return std::hash<std::string>()(id2string(ptr->name)) ^
-          std::hash<std::string>()(ptr->signature) ^
-          std::hash<size_t>()(ptr->index) ^
-          std::hash<size_t>()(ptr->start_pc+ptr->length);
-      }
-  };
-
-  struct eq_sig_endaddress {
-    size_t operator()(java_bytecode_convert_methodt::local_variablet* a,
-                      java_bytecode_convert_methodt::local_variablet* b) const
-      {
-        return ((!a) && (!b)) ||
-          (a->name==b->name &&
-           a->signature==b->signature &&
-           a->index == b->index &&
-           (a->start_pc+a->length)==(b->start_pc+b->length));
-      }
-  };
-
-  bool find_trivial_initialiser(local_variablet& var,
-                                const methodt::instructionst& insts,
-                                methodt::instructionst::const_iterator instit)
-  {
-
-    // Look for a trivial initialiser preceding var's live range,
-    // such as:
-    // astore_2
-    // --- live range begins for slot 2 ---
-    // more instructions...
-    // If this pattern is found, allow the store to directly initialise the named variable.
-    // Otherwise we'll initialise the local when recovering block structure and inserting
-    // decl instructions at the end of convert_instructions.
-
-    // instit points to the instruction where var's annotated live range begins.
-    
-    auto slotidx=var.index;
-    if(instit==insts.begin())
-      return false;
-
-    auto previt=instit;
-    --previt;
-    auto& previnst=*previt;
-    const std::string prevstatement=id2string(previnst.statement);
-    if(!(prevstatement.size()>=1 && prevstatement.substr(1,5)=="store"))
-      return false;
-
-    std::string storeslot;
-    if(previnst.args.size()==1)
-    {
-      const auto& arg=previnst.args[0];
-      storeslot=id2string(to_constant_expr(arg).get_value());
-    }
-    else
-    {
-      assert(prevstatement[6]=='_' && prevstatement.size()==8);
-      storeslot=prevstatement[7];
-      assert(isdigit(storeslot[0]));
-    }
-    auto storeslotidx=safe_string2unsigned(storeslot);
-    if(storeslotidx==slotidx)
-    {
-      // The instruction immediately prior to this is an initialiser.
-      var.length+=(var.start_pc-previnst.address);
-      var.start_pc=previnst.address;
-      return true;
-    }
-
-    return false;
-
-  }
-
-  typedef std::unordered_map<local_variablet*,local_variablet*,
-                             hash_sig_endaddress, eq_sig_endaddress> by_sig_and_endaddresst;
-
-  bool find_split_initialiser(local_variablet& var,
-                              const address_mapt& amap,
-                              by_sig_and_endaddresst& by_sig_and_endaddress)
-  {
-    // Second chance: does the live range start at a block header?
-    // If so can we find one or more predecessors with a live variable
-    // with like signature?
-    auto amap_iter=amap.find(var.start_pc);
-    assert(amap_iter!=amap.end() &&
-           "Live range doesn't start on an instruction boundary?");
-
-    if(amap_iter->second.predecessors.size()==0)
-      return false;
-
-    local_variablet* earliest_startpc=0;
-    std::vector<local_variablet> pred_keys;
-    std::vector<local_variablet*> preds;
-    
-    for(auto come_from_address : amap_iter->second.predecessors)
-    {
-    
-      // Try to find a variable like this one, but whose live range ends
-      // after the goto instruction at come_from_address:
-      auto goto_iter=amap.find(come_from_address);
-      assert(goto_iter!=amap.end() &&
-             "Predecessor that doesn't itself appear in the address map?");
-      ++goto_iter;
-      if(goto_iter==amap.end())
-        return false;
-
-      unsigned instruction_after_goto_address=goto_iter->first;
-      // Find a variable that ends there:
-      // (by the nature of the map we search, this will find anything with
-      //  this signature and end-address, not just the particular live range we
-      //  construct here)
-      local_variablet search_key=var;
-      search_key.start_pc=come_from_address;
-      search_key.length=instruction_after_goto_address-come_from_address;
-      auto find_var_iter=by_sig_and_endaddress.find(&search_key);
-
-      if(find_var_iter==by_sig_and_endaddress.end())
-        return false;
-
-      // TODO: handle backward jumps if we encounter code that inits
-      // variables after use in address order in the wild.
-      if(find_var_iter->second->start_pc >= var.start_pc)
-        return false;
-
-      // Find the predecessor with the lowest address:
-      if((!earliest_startpc) || earliest_startpc->start_pc > find_var_iter->second->start_pc)
-        earliest_startpc=find_var_iter->second;
-
-      preds.push_back(find_var_iter->second);
-      pred_keys.push_back(search_key);
-
-    }
-
-    // Remove all variables that will be modified from the end-address map
-    // before we alter their keys:
-    for(auto& key : pred_keys)
-      assert(by_sig_and_endaddress.erase(&key));
-    by_sig_and_endaddress.erase(&var);    
-   
-    // Extend the first predecessor's live range to span all live ranges found:
-    auto& existing_var=*earliest_startpc;
-    existing_var.length=(var.start_pc+var.length)-existing_var.start_pc;
-    
-    // Update the first predecessor's map entry:
-    by_sig_and_endaddress[&existing_var]=&existing_var;
-
-    // Mark this variable for deletion:
-    var.length=0;
-    // Mark all non-first preds for deletion too:
-    for(auto& pred : preds)
-      if(pred!=earliest_startpc)
-        pred->length=0;
-
-    status() << "Found split initialiser for variable " << var.name <<
-      " with " << preds.size() << " predecessors; new live range " <<
-      existing_var.start_pc << "-" << existing_var.start_pc+existing_var.length << eom;
-
-    return true;
-    
-  }
-                                
-
-  void find_initialisers(const methodt::instructionst& insts,
-                         local_variable_tablet& vars,
-                         const address_mapt& amap)
-  {
-
-    // Note: vars is sorted by start_pc.
-
-    // Build a map indexing variables by their signature and the address where their
-    // range ends, for trying to pair up disjoint live ranges:
-
-    by_sig_and_endaddresst by_signature_and_endaddress;
-    for(auto& v : vars)
-      assert(by_signature_and_endaddress.insert(std::make_pair(&v,&v)).second);
-
-    auto variter=vars.begin(), varlim=vars.end();
-    for(auto instit=insts.begin(),instend=insts.end(); instit!=instend; ++instit)
-    {
-      for(; variter!=varlim && variter->start_pc<instit->address; ++variter) {}
-      for(; variter!=varlim && variter->start_pc==instit->address; ++variter)
-      {
-        auto& var=*variter;
-        if(var.start_pc==0) // Parameter
-          continue;
-        bool found_init=find_trivial_initialiser(var,insts,instit);
-        if(!found_init)
-          found_init=find_split_initialiser(var,amap,by_signature_and_endaddress);
-        assert(found_init && "Couldn't find an initialiser for local variable");
-      }
-    }
-
-    // Clean up removed records from the variable table:
-
-    size_t toremove=0;
-    for(size_t i=0; i<(vars.size()-toremove); ++i)
-    {
-      auto& v=vars[i];
-      if(v.length==0)
-      {
-        // Move to end; consider the new element we've swapped in:
-        ++toremove;
-        if(i!=vars.size()-toremove) // Already where it needs to be?
-          std::swap(v,vars[vars.size()-toremove]);
-        --i;
-      }
-    }
-
-    // Remove un-needed entries.
-    vars.resize(vars.size()-toremove);
-    
-  }
-
-  void setup_local_variables(const methodt& m, const address_mapt& amap);
-
-  struct block_tree_node {
-    bool leaf;
-    std::vector<unsigned> branch_addresses;
-    std::vector<block_tree_node> branch;
-    block_tree_node() : leaf(false) {}
-    block_tree_node(bool l) : leaf(l) {}
-    static block_tree_node get_leaf() { return block_tree_node(true); }
-  };
-
-  code_blockt& get_block_for_pcrange(
-    block_tree_node& tree,
-    code_blockt& this_block,
-    unsigned address_start,
-    unsigned address_limit,
-    unsigned next_block_start_address);
-
-  code_blockt& get_or_create_block_for_pcrange(
-    block_tree_node& tree,
-    code_blockt& this_block,
-    unsigned address_start,
-    unsigned address_limit,
-    unsigned next_block_start_address,
-    const address_mapt& amap,
-    bool allow_merge=true);
-  
-  // conversion
-  void convert(const symbolt &class_symbol, const methodt &);
-  void convert(const instructiont &);
-
-  codet convert_instructions(
-    const methodt &, const code_typet &);
-
-  const bytecode_infot &get_bytecode_info(const irep_idt &statement);
-
-  void check_static_field_stub(const symbol_exprt& se,
-			       const irep_idt& basename);
-  
-};
-}
-
-namespace {
-
 const size_t SLOTS_PER_INTEGER(1u);
 const size_t INTEGER_WIDTH(64u);
 size_t count_slots(const size_t value, const code_typet::parametert &param)
@@ -527,6 +86,102 @@ void cast_if_necessary(binary_relation_exprt &condition)
   rhs = typecast_exprt(rhs, lhs_type);
 }
 }
+
+java_bytecode_convert_methodt::java_bytecode_convert_methodt(
+  symbol_tablet &_symbol_table,
+  message_handlert &_message_handler,
+  const bool &_disable_runtime_checks,
+  int _max_array_length):
+  messaget(_message_handler),
+  symbol_table(_symbol_table),
+  disable_runtime_checks(_disable_runtime_checks),
+  max_array_length(_max_array_length)
+{
+}
+
+const exprt java_bytecode_convert_methodt::variable(
+  const exprt &arg, char type_char, size_t address, bool do_cast)
+{
+  irep_idt number=to_constant_expr(arg).get_value();
+    
+  std::size_t number_int=safe_string2size_t(id2string(number));
+  typet t=java_type_from_char(type_char);
+  variablest &var_list = variables[number_int];
+
+  // search variable in list for correct frame / address if necessary
+  variablet &var = find_variable_for_slot(address, var_list);
+
+  if(var.symbol_expr.get_identifier().empty())
+  {
+    // an un-named local variable
+    irep_idt base_name="anonlocal::"+id2string(number)+type_char;
+    irep_idt identifier=id2string(current_method)+"::"+id2string(base_name);
+      
+    symbol_exprt result(identifier, t);
+    result.set(ID_C_base_name, base_name);
+    used_local_names.insert(result);
+    return result;
+  }
+  else
+  {
+    exprt result=var.symbol_expr;
+    if(do_cast && t!=result.type()) result=typecast_exprt(result, t);
+    return result;
+  }
+}
+
+symbol_exprt java_bytecode_convert_methodt::tmp_variable(
+  const std::string &prefix, const typet &type)
+{
+  irep_idt base_name=prefix+"_tmp"+i2string(tmp_vars.size());
+  irep_idt identifier=id2string(current_method)+"::"+id2string(base_name);
+
+  auxiliary_symbolt tmp_symbol;
+  tmp_symbol.base_name=base_name;
+  tmp_symbol.is_static_lifetime=false;
+  tmp_symbol.mode=ID_java;
+  tmp_symbol.name=identifier;
+  tmp_symbol.type=type;
+  symbol_table.add(tmp_symbol);
+
+  symbol_exprt result(identifier, type);
+  result.set(ID_C_base_name, base_name);
+  tmp_vars.push_back(result);
+
+  return result;
+}
+
+irep_idt java_bytecode_convert_methodt::label(const irep_idt &address)
+{
+  return "pc"+id2string(address);
+}
+
+exprt::operandst java_bytecode_convert_methodt::pop(std::size_t n)
+{
+  if(stack.size()<n)
+  {
+    error() << "malformed bytecode (pop too high)" << eom;
+    throw 0;
+  }
+
+  exprt::operandst operands;
+  operands.resize(n);
+  for(std::size_t i=0; i<n; i++)
+    operands[i]=stack[stack.size()-n+i];
+
+  stack.resize(stack.size()-n);
+  return operands;
+}
+
+void java_bytecode_convert_methodt::push(const exprt::operandst &o)
+{
+  stack.resize(stack.size()+o.size());
+
+  for(std::size_t i=0; i<o.size(); i++)
+    stack[stack.size()-o.size()+i]=o[i];
+}
+
+
 
 /*******************************************************************\
 
@@ -701,65 +356,6 @@ void java_bytecode_convert_methodt::convert(
   symbol_table.add(method_symbol);
 }
 
-namespace {
-  bool lt_start_pc(const java_bytecode_convert_methodt::local_variablet& a,
-                   const java_bytecode_convert_methodt::local_variablet& b)
-  {
-    return a.start_pc < b.start_pc;
-  }
-}
-
-void java_bytecode_convert_methodt::setup_local_variables(const methodt& m,
-                                                          const address_mapt& amap)
-{
-
-  // Find out which local variables have initialisers (store instructions immediately
-  // preceding their stated live range), and where they do expand the live range to include local.
-  local_variable_tablet adjusted_variable_table(m.local_variable_table);
-  std::sort(adjusted_variable_table.begin(),adjusted_variable_table.end(),lt_start_pc);
-  find_initialisers(m.instructions,adjusted_variable_table,amap);
-  
-  // Do the locals and parameters in the variable table, which is available when
-  // compiled with -g or for methods with many local variables in the latter
-  // case, different variables can have the same index, depending on the
-  // context.
-  //
-  // to calculate which variable to use, one uses the address of the instruction
-  // that uses the variable, the size of the instruction and the start_pc /
-  // length values in the local variable table
-  for(const auto & v : adjusted_variable_table)
-  {
-    if(v.start_pc==0) // Parameter?
-      continue;
-    
-    typet t=java_type_from_string(v.signature);
-    std::ostringstream id_oss;
-    id_oss << method_id << "::" << v.start_pc << "::" << v.name;
-    irep_idt identifier(id_oss.str());
-    symbol_exprt result(identifier, t);
-    result.set(ID_C_base_name, v.name);
-
-    variables[v.index].push_back(variablet());
-    auto& newv=variables[v.index].back();
-    newv.symbol_expr = result;
-    newv.start_pc = v.start_pc;
-    newv.length = v.length;
-    
-    symbolt new_symbol;
-    new_symbol.name=identifier;
-    new_symbol.type=t;
-    new_symbol.base_name=v.name;
-    new_symbol.pretty_name=id2string(identifier).substr(6, std::string::npos);
-    new_symbol.mode=ID_java;
-    new_symbol.is_type=false;
-    new_symbol.is_file_local=true;
-    new_symbol.is_thread_local=true;
-    new_symbol.is_lvalue=true;
-    symbol_table.add(new_symbol);
-  }
-
-}
-
 /*******************************************************************\
 
 Function: java_bytecode_convert_methodt::get_bytecode_info
@@ -861,6 +457,32 @@ void java_bytecode_convert_methodt::check_static_field_stub(const symbol_exprt& 
   }
 }
 
+symbol_exprt java_bytecode_convert_methodt::check_stub_function(const irep_idt& symname,
+                                                                const irep_idt& basename,
+                                                                const irep_idt& prettyname,
+                                                                const typet& fntype)
+{
+  auto findit=symbol_table.symbols.find(symname);
+  if(findit==symbol_table.symbols.end())
+  {
+    // no, create stub
+    symbolt symbol;
+    symbol.name=symname;
+    symbol.base_name=basename;
+    // XXX: Are all Java class names prefixed java::?
+    symbol.pretty_name=prettyname;
+    symbol.type=fntype;
+    symbol.value.make_nil();
+    symbol.mode=ID_java;
+        
+    assign_parameter_names(to_code_type(symbol.type),symbol.name,symbol_table);
+        
+    symbol_table.add(symbol);
+    return symbol.symbol_expr();  
+  }
+  return findit->second.symbol_expr();
+}
+  
 void replace_goto_target(codet& repl, const irep_idt& old_label, const irep_idt& new_label)
 {
   const auto& stmt=repl.get_statement();
@@ -1332,24 +954,12 @@ codet java_bytecode_convert_methodt::convert_instructions(
 
       // does the function symbol exist?
       irep_idt id=arg0.get(ID_identifier);
-      if(symbol_table.symbols.find(id)==symbol_table.symbols.end())
-      {
-        // no, create stub
-        symbolt symbol;
-        symbol.name=id;
-        symbol.base_name=arg0.get(ID_C_base_name);
-	// XXX: Are all Java class names prefixed java::?
-	symbol.pretty_name = id2string(arg0.get(ID_C_class)).substr(6) + "." +
-	  id2string(symbol.base_name) + "()";
-        symbol.type=arg0.type();
-        symbol.value.make_nil();
-        symbol.mode=ID_java;
-        
-        assign_parameter_names(to_code_type(symbol.type),symbol.name,symbol_table);
-        
-        symbol_table.add(symbol);
-      }
-
+      auto fn_basename=arg0.get(ID_C_base_name);
+      auto fn_prettyname=id2string(arg0.get(ID_C_class)).substr(6) + "." +
+	  id2string(fn_basename) + "()";
+      auto fn_type=arg0.type();
+      check_stub_function(id,fn_basename,fn_prettyname,fn_type);
+      
       if(is_virtual)
       {
         // dynamic binding
@@ -2037,8 +1647,12 @@ codet java_bytecode_convert_methodt::convert_instructions(
       type.return_type()=void_typet();
       type.parameters().resize(1);
       type.parameters()[0].type()=reference_typet(void_typet());
+      auto symexpr=check_stub_function("java::monitorenter",
+                                       "monitorenter",
+                                       "monitorenter",
+                                       type);
       code_function_callt call;
-      call.function()=symbol_exprt("java::monitorenter", type);
+      call.function()=symexpr;
       call.lhs().make_nil();
       call.arguments().push_back(op[0]);
       call.add_source_location()=i_it->source_location;
@@ -2051,8 +1665,12 @@ codet java_bytecode_convert_methodt::convert_instructions(
       type.return_type()=void_typet();
       type.parameters().resize(1);
       type.parameters()[0].type()=reference_typet(void_typet());
+      auto symexpr=check_stub_function("java::monitorexit",
+                                       "monitorexit",
+                                       "monitorexit",
+                                       type);
       code_function_callt call;
-      call.function()=symbol_exprt("java::monitorexit", type);
+      call.function()=symexpr;
       call.lhs().make_nil();
       call.arguments().push_back(op[0]);
       call.add_source_location()=i_it->source_location;

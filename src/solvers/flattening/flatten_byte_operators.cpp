@@ -190,7 +190,8 @@ Function: flatten_byte_update
 
 exprt flatten_byte_update(
   const byte_update_exprt &src,
-  const namespacet &ns)
+  const namespacet &ns,
+  bool negative_offset)
 {
   assert(src.operands().size()==3);
 
@@ -324,7 +325,11 @@ exprt flatten_byte_update(
           if(is_first_cell)
             overwrite_offset=mod_exprt(src.op1(),sub_size_expr);
           else if(is_last_cell)
-            overwrite_offset=minus_exprt(stored_value_offset,minus_exprt(cell_offset,src.op1()));
+          {
+            // This is intentionally negated; passing is_last_cell to flatten below
+            // leads to it being negated again later.
+            overwrite_offset=minus_exprt(minus_exprt(cell_offset,src.op1()),stored_value_offset);
+          }
           else
             overwrite_offset=zero_offset;
           
@@ -333,9 +338,10 @@ exprt flatten_byte_update(
                                              overwrite_offset,
                                              new_value);
 
-          // Call recursively, the array is gone!            
+          // Call recursively, the array is gone!
+          // The last parameter indicates that the 
           exprt flattened_byte_update_expr=
-            flatten_byte_update(byte_update_expr, ns);
+            flatten_byte_update(byte_update_expr, ns, is_last_cell);
 
           with_exprt with_expr(
             result, cell_index, flattened_byte_update_expr);
@@ -386,12 +392,19 @@ exprt flatten_byte_update(
     binary_predicate_exprt offset_ge_zero(offset_times_eight,ID_ge,from_integer(0,offset_type));
         
     // Shift the mask and value. Note either shift might discard some of the new value's bits.
-    if_exprt mask_shifted(offset_ge_zero,
-                          shl_exprt(mask,offset_times_eight),
-                          lshr_exprt(mask,unary_minus_exprt(offset_times_eight)));
-    if_exprt value_shifted(offset_ge_zero,
-                           shl_exprt(value_extended,offset_times_eight),
-                           lshr_exprt(value_extended,unary_minus_exprt(offset_times_eight)));
+    exprt mask_shifted;
+    exprt value_shifted;
+    if(negative_offset)
+    {
+      // In this case we shift right, to mask out higher addresses
+      // rather than left to mask out lower ones as usual.
+      mask_shifted=lshr_exprt(mask,offset_times_eight);
+      value_shifted=lshr_exprt(value_extended,offset_times_eight);
+    }
+    else {
+      mask_shifted=shl_exprt(mask,offset_times_eight);
+      value_shifted=shl_exprt(value_extended,offset_times_eight);
+    }
 
     // original_bits &= ~mask
     bitand_exprt bitand_expr(src.op0(), bitnot_exprt(mask_shifted));

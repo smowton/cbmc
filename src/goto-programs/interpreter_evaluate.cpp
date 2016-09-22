@@ -803,15 +803,13 @@ void interpretert::evaluate(
       if(address > 0 && address < memory.size())
       {
         const auto& memory_record=memory[integer2unsigned(address)];
-        auto findit=dynamic_types.find(memory_record.identifier);
-        if(findit!=dynamic_types.end())
-        {
-          mp_integer offset=memory_record.offset;
-          mp_integer byte_offset=-1;
-          get_cell_byte_offset(findit->second,offset,byte_offset);
-          if(byte_offset!=-1)
-            dest.push_back(byte_offset);
-        }
+        auto obj_type=get_type(memory_record.identifier);
+
+        mp_integer offset=memory_record.offset;
+        mp_integer byte_offset=-1;
+        get_cell_byte_offset(obj_type,offset,byte_offset);
+        if(byte_offset!=-1)
+          dest.push_back(byte_offset);
       }
     }
     return;

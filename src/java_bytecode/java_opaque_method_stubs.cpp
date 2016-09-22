@@ -74,13 +74,6 @@ void insert_nondet_opaque_fields(symbolt &sym,symbol_tablet &symbol_table,
 
   bool is_constructor=sym.type.get_bool(ID_constructor);
 
-  if(!is_constructor)
-  {
-    const auto &needed=required_type.return_type();
-    if(needed==empty_typet())
-      return;
-  }
-
   if(is_constructor)
   {
     const auto &thisarg=required_type.parameters()[0];
@@ -100,19 +93,23 @@ void insert_nondet_opaque_fields(symbolt &sym,symbol_tablet &symbol_table,
   }
   else
   {
-    auto &toreturn_symbol=new_tmp_symbol(symbol_table,"to_return");
-    toreturn_symbol.type=required_type.return_type();
-    auto toreturn_symexpr=toreturn_symbol.symbol_expr();
-    if(toreturn_symbol.type.id()!=ID_pointer)
+    const auto &needed=required_type.return_type();
+    if(needed!=empty_typet())
     {
-      gen_nondet_init(toreturn_symexpr,new_instructions,symbol_table,loc,false,false);
+      auto &toreturn_symbol=new_tmp_symbol(symbol_table,"to_return");
+      toreturn_symbol.type=needed;
+      auto toreturn_symexpr=toreturn_symbol.symbol_expr();
+      if(toreturn_symbol.type.id()!=ID_pointer)
+      {
+        gen_nondet_init(toreturn_symexpr,new_instructions,symbol_table,loc,false,false);
+      }
+      else
+        insert_nondet_opaque_fields_at(
+          needed,toreturn_symexpr,symbol_table,
+          &new_instructions,0,false,assume_non_null,max_nondet_array_length,loc);
+      new_instructions.copy_to_operands(code_returnt(toreturn_symexpr));
+      sym.type.set("opaque_method_capture_symbol",toreturn_symbol.name);
     }
-    else
-      insert_nondet_opaque_fields_at(
-	required_type.return_type(),toreturn_symexpr,symbol_table,
-	&new_instructions,0,false,assume_non_null,max_nondet_array_length,loc);
-    new_instructions.copy_to_operands(code_returnt(toreturn_symexpr));
-    sym.type.set("opaque_method_capture_symbol",toreturn_symbol.name);
   }
 
   sym.value=new_instructions;
