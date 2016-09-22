@@ -663,11 +663,13 @@ void java_bytecode_convert_methodt::find_initialisers_for_slot(
   // Build a simple map from instruction PC to the variable live in this slot at that PC,
   // and a map from each variable to variables that flow into it:
   
-  unsigned last_address=(--amap.end())->first;
-  std::vector<local_variable_with_holest*> var_map(last_address+1,0);
+  std::vector<local_variable_with_holest*> var_map;
   predecessor_mapt predecessor_map;  
   for(auto it=firstvar, itend=varlimit; it!=itend; ++it)
   {
+    if(it->var.start_pc+it->var.length > var_map.size())
+      var_map.resize(it->var.start_pc+it->var.length);
+
     for(unsigned idx=it->var.start_pc,
           idxlim=it->var.start_pc+it->var.length;
         idx!=idxlim; ++idx)
@@ -761,7 +763,7 @@ void java_bytecode_convert_methodt::find_initialisers_for_slot(
     // Because we need a lexically-scoped declaration, we must have the merged variable
     // enter scope both in a block that dominates all entries, and which
     // precedes them in program order.
-    unsigned first_pc=last_address+1;
+    unsigned first_pc=var_map.size();
     unsigned last_pc=0;
     for(auto v : merge_vars)
     {
@@ -784,9 +786,9 @@ void java_bytecode_convert_methodt::find_initialisers_for_slot(
     // Working from the back, simply find the first PC that occurs merge_vars.size()
     // times and therefore dominates all vars we seek to merge:
 
-    unsigned found_dominator=last_address+1;
+    unsigned found_dominator=var_map.size();
     for(auto domit=candidate_dominators.rbegin(), domitend=candidate_dominators.rend();
-        domit != domitend && found_dominator==last_address+1; /* Don't increment here */)
+        domit != domitend && found_dominator==var_map.size(); /* Don't increment here */)
     {
       unsigned repeats=0;
       auto dom=*domit;
@@ -800,7 +802,7 @@ void java_bytecode_convert_methodt::find_initialisers_for_slot(
         found_dominator=dom;
     }
 
-    if(found_dominator==last_address+1)
+    if(found_dominator==var_map.size())
       throw "Variable live ranges with no common dominator?";
 
     // Populate the holes in the live range (addresses where the new variable
