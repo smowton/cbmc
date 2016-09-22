@@ -12,7 +12,6 @@
 #include <util/file_util.h>
 #include <util/msgstream.h>
 #include <analyses/ai.h>
-#include <unordered_set>
 #include <vector>
 #include <algorithm>
 #include <cstdint>
@@ -24,101 +23,29 @@ namespace sumfn { namespace taint { namespace detail { namespace {
 /**
  *
  */
-irept  generate_fresh_symbol()
+value_of_variable_t  make_symbol()
 {
   static uint64_t  counter = 0UL;
   std::string const  symbol_name =
       msgstream() << "T" << counter;
-  return irept(symbol_name);
+  return {irept(symbol_name),false,false};
 }
-
 
 /**
  *
  */
-struct  value_of_variable_t
-{
-  value_of_variable_t(
-      irept const  value,
-      bool  is_bottom,
-      bool  is_top
-      );
-
-  static value_of_variable_t  make_fresh_symbol();
-  static value_of_variable_t  make_bottom();
-  static value_of_variable_t  make_top();
-
-private:
-  irept  m_value;
-  bool  m_is_bottom;
-  bool  m_is_top;
-
-};
-
-value_of_variable_t::value_of_variable_t(
-    irept const  value,
-    bool  is_bottom,
-    bool  is_top
-    )
-  : m_value(generate_fresh_symbol())
-  , m_is_bottom(is_bottom)
-  , m_is_top(is_top)
-{
-  assert(m_is_bottom && m_is_top == false);
-}
-
-value_of_variable_t  value_of_variable_t::make_fresh_symbol()
-{
-  return {generate_fresh_symbol(),false,false};
-}
-
-value_of_variable_t  value_of_variable_t::make_bottom()
+value_of_variable_t  make_bottom()
 {
   return {irept(),true,false};
 }
 
-value_of_variable_t  value_of_variable_t::make_top()
+/**
+ *
+ */
+value_of_variable_t  make_top()
 {
   return {irept(),false,true};
 }
-
-
-/**
- *
- */
-struct  map_from_vars_to_values_t
-{
-  explicit map_from_vars_to_values_t(
-      std::unordered_set<std::string> const&  variables
-      );
-
-private:
-
-  using  dictionary_t =
-      std::unordered_map<std::string,value_of_variable_t>;
-
-  dictionary_t  m_from_vars_to_values;
-};
-
-map_from_vars_to_values_t::map_from_vars_to_values_t(
-    std::unordered_set<std::string> const&  variables
-    )
-  : m_from_vars_to_values()
-{
-  for (auto const&  var : variables)
-    m_from_vars_to_values.insert({
-        var,
-        value_of_variable_t::make_fresh_symbol()
-        });
-}
-
-
-/**
- *
- */
-using  solver_domain_t =
-    std::unordered_map<goto_programt::instructiont const*,
-                       map_from_vars_to_values_t>;
 
 
 /**
@@ -131,12 +58,12 @@ using  solver_work_set_t =
 /**
  *
  */
-void  initialise_solver_domain(
+void  initialise_domain(
     goto_functionst::goto_functiont const&  function,
-    solver_domain_t&  domain
+    domain_t&  domain
     )
 {
-  std::unordered_set<std::string>  variables;
+  std::unordered_set<variable_id_t>  variables;
   for (auto const&  param : function.parameter_identifiers)
     variables.insert(as_string(param));
   domain.insert({
@@ -147,14 +74,15 @@ void  initialise_solver_domain(
   for (auto const&  instr : function.body.instructions)
     domain.insert({
         &instr,
-        map_from_vars_to_values_t(std::unordered_set<std::string>{})
+        map_from_vars_to_values_t(std::unordered_set<variable_id_t>{})
         });
 }
+
 
 /**
  *
  */
-void  initialise_solver_workset(
+void  initialise_workset(
     goto_functionst::goto_functiont const&  function,
     solver_work_set_t&  work_set
     )
@@ -168,6 +96,36 @@ void  initialise_solver_workset(
 }}}}
 
 namespace sumfn { namespace taint {
+
+
+value_of_variable_t::value_of_variable_t(
+    irept const  value,
+    bool  is_bottom,
+    bool  is_top
+    )
+  : m_value(value)
+  , m_is_bottom(is_bottom)
+  , m_is_top(is_top)
+{
+  assert(m_is_bottom && m_is_top == false);
+}
+
+
+map_from_vars_to_values_t::map_from_vars_to_values_t(
+    std::unordered_set<variable_id_t> const&  variables
+    )
+  : m_from_vars_to_values()
+{
+  for (auto const&  var : variables)
+    m_from_vars_to_values.insert({ var, detail::make_symbol() });
+}
+
+
+summary_t::summary_t(domain_ptr_t const  domain)
+  : m_domain(domain)
+{
+  assert(m_domain.operator bool());
+}
 
 
 std::string  summary_t::kind() const
@@ -208,79 +166,19 @@ summary_ptr_t  summarise_function(
   assert(fn_iter != functions.cend());
   assert(fn_iter->second.body_available());
 
-  detail::solver_domain_t  domain;
-  detail::initialise_solver_domain(fn_iter->second,domain);
+  domain_ptr_t  domain = std::make_shared<domain_t>();
+  detail::initialise_domain(fn_iter->second,*domain);
 
   detail::solver_work_set_t  work_set;
-  detail::initialise_solver_workset(fn_iter->second,work_set);
+  detail::initialise_workset(fn_iter->second,work_set);
   while (!work_set.empty())
   {
     // TODO!
     break;
   }
 
-  return std::make_shared<summary_t>();
+  return std::make_shared<summary_t>(domain);
 }
 
 
 }}
-
-
-//void  map_from_vars_to_values_t::transform(
-//    locationt from,
-//    locationt to,
-//    ai_baset &ai,
-//    const namespacet &ns
-//    )
-//{
-//  // TODO!
-//}
-//
-//void map_from_vars_to_values_t::make_bottom()
-//{
-//  std::unordered_set<std::string>  variables;
-//  for (auto const&  elem : m_from_vars_to_values)
-//    variables.insert(elem.first);
-//  m_from_vars_to_values.clear();
-//  for (auto const&  var : variables)
-//    m_from_vars_to_values.insert({
-//        as_string(var),
-//        value_of_variable_t::make_bottom()
-//        });
-//}
-//
-//void map_from_vars_to_values_t::make_top()
-//{
-//  std::unordered_set<std::string>  variables;
-//  for (auto const&  elem : m_from_vars_to_values)
-//    variables.insert(elem.first);
-//  m_from_vars_to_values.clear();
-//  for (auto const&  var : variables)
-//    m_from_vars_to_values.insert({
-//        as_string(var),
-//        value_of_variable_t::make_top()
-//        });
-//}
-//
-//void map_from_vars_to_values_t::make_entry()
-//{
-//  make_bottom();
-//}
-
-
-//summary_domain_t  merge(
-//    summary_domain_t const&  left,
-//    summary_domain_t const&  right,
-//    goto_programt::const_targett const  from,
-//    goto_programt::const_targett const  to
-//    )
-//{
-//  // TODO!
-//  return left;
-//}
-
-
-//struct  taint_summary_solver_t// : public ai<summary_domain_t>
-//{
-//
-//};

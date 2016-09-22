@@ -26,6 +26,7 @@ namespace sumfn { namespace taint {
  */
 std::string  dump_in_html(
     object_summary_t const  obj_summary,
+    goto_modelt const&  program,
     std::ostream&  ostr
     );
 
