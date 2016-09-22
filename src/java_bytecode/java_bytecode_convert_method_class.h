@@ -21,7 +21,7 @@ public:
   java_bytecode_convert_methodt(
     symbol_tablet &_symbol_table,
     message_handlert &_message_handler,
-    const bool &_enable_runtime_checks,
+    const bool &_disable_runtime_checks,
     int _max_array_length);
 
   typedef java_bytecode_parse_treet::methodt methodt;
@@ -51,7 +51,7 @@ public:
 protected:
   irep_idt method_id;
   symbol_tablet &symbol_table;
-  const bool &enable_runtime_checks;
+  const bool &disable_runtime_checks;
   int max_array_length;
 
   irep_idt current_method;

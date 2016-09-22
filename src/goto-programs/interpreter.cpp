@@ -187,7 +187,8 @@ void interpretert::command()
     else if(ch=='n') list_inputs(true);
     else if(ch=='t') {
       list_input_varst ignored;
-      load_counter_example_inputs(steps, ignored);
+      side_effects_differencet diffs;
+      load_counter_example_inputs(steps, ignored, diffs);
     }
     else if(ch==' ') load_counter_example_inputs(command+3);
     else if(ch=='f') {
@@ -1839,6 +1840,29 @@ exprt interpretert::get_value(const irep_idt& id)
   return get_value(get_type,integer2unsigned(whole_lhs_object_address));
 }
 
+const exprt & get_entry_function(const goto_functionst &gf)
+{
+  typedef goto_functionst::function_mapt function_mapt;
+  const function_mapt &fm=gf.function_map;
+  const irep_idt start(goto_functionst::entry_point());
+  const function_mapt::const_iterator entry_func=fm.find(start);
+  assert(fm.end() != entry_func);
+  const goto_programt::instructionst &in=entry_func->second.body.instructions;
+  typedef goto_programt::instructionst::const_reverse_iterator reverse_target;
+  reverse_target codeit=in.rbegin();
+  const reverse_target end=in.rend();
+  assert(end != codeit);
+  // Tolerate 'dead' statements at the end of _start.
+  while(end!=codeit && codeit->code.get_statement()!=ID_function_call)
+    ++codeit;
+  assert(end != codeit);
+  const reverse_target call=codeit;
+  const code_function_callt &func_call=to_code_function_call(call->code);
+  const exprt &func_expr=func_call.function();
+  return func_expr;
+}
+
+
 /*******************************************************************
  Function: load_counter_example_inputs
 
@@ -1851,7 +1875,8 @@ exprt interpretert::get_value(const irep_idt& id)
  \*******************************************************************/
 
 interpretert::input_varst& interpretert::load_counter_example_inputs(
-    const goto_tracet &trace, list_input_varst& function_inputs, const bool filtered) {
+ const goto_tracet &trace, list_input_varst& function_inputs, side_effects_differencet &valuesDifference, const bool filtered)
+{
   show=false;
   stop_on_assertion=false;
 
@@ -1877,10 +1902,26 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
   int expect_parameter_assignments=0;
 
   trace_stack.push_back({goto_functionst::entry_point(),0,irep_idt(),false,{}});
+
+  const exprt &func_expr = get_entry_function(goto_functions);
+  const irep_idt &func_name = to_symbol_expr(func_expr).get_identifier();
+  const code_typet::parameterst &params = to_code_type(func_expr.type()).parameters();
+
+  std::map<std::string, const irep_idt &> parameterSet;
+
+  // mapping <structure, field> -> value
+  std::map<std::pair<const irep_idt, const irep_idt>, const exprt> valuesBefore;
+
+  namespacet ns(symbol_table);
+
+  for(const auto &p : params)
+    parameterSet.insert({id2string(p.get_identifier()), p.get_identifier()});
   
   for(auto it = trace.steps.begin(), itend = trace.steps.end(); it != itend; ++it)
   {
+
     const auto& step=*it;
+
     if(is_assign_step(step))
     {
       mp_integer address;
@@ -1951,6 +1992,38 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
       }
 
       trace_eval.push_back(std::make_pair(address, rhs));
+
+      /********* 8< **********/
+      irep_idt identifier=step.lhs_object.get_identifier();
+      auto param = parameterSet.find(id2string(identifier));
+      if(param != parameterSet.end())
+      {
+        const exprt &expr = step.full_lhs_value;
+        interpretert::function_assignmentst input_assigns;
+        get_value_tree(identifier, input_assigns);
+        for(const auto &assign : input_assigns)
+        {
+          const typet &tree_typ = symbol_table.lookup(assign.id).type;
+          if(tree_typ.id()==ID_struct)
+          {
+            const struct_typet &struct_type=to_struct_type(tree_typ);
+            const struct_typet::componentst &components=struct_type.components();
+            const struct_exprt &struct_expr=to_struct_expr(assign.value);
+            const auto& ops=struct_expr.operands();
+            for(size_t fieldidx=0, fieldlim=ops.size(); fieldidx!=fieldlim; ++fieldidx)
+            {
+              const exprt & expr = ops[fieldidx];
+              // only look at atomic types for now
+              if(expr.type().id()==ID_signedbv ||
+                 expr.type().id()==ID_c_bool)
+              {
+                valuesBefore.insert({{assign.id, components[fieldidx].get_name()}, expr});
+              }
+            }
+          }
+        }
+      }
+      /********* 8< **********/
     }
     else if(step.is_function_call())
     {
@@ -2038,6 +2111,52 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
 	}
       }
       trace_stack.pop_back();
+    }
+    else if(step.type==goto_trace_stept::OUTPUT)
+    {
+      for(const auto &inputParam : parameterSet)
+      {
+        std::size_t found = (inputParam.first).rfind(id2string(step.io_id));
+        if(found!=std::string::npos)
+        {
+          // looping over io_args will ignore atomic types which won't have side
+          // effects
+          interpretert::function_assignmentst output_assigns;
+          get_value_tree(inputParam.second, output_assigns);
+          const typet &typ = symbol_table.lookup(inputParam.second).type;
+          for(const auto &assign : output_assigns)
+          {
+            const typet &tree_typ = symbol_table.lookup(assign.id).type;
+            if(tree_typ.id()==ID_struct)
+            {
+              const struct_typet &struct_type=to_struct_type(tree_typ);
+              const struct_typet::componentst &components=struct_type.components();
+              const struct_exprt &struct_expr=to_struct_expr(assign.value);
+              const auto& ops=struct_expr.operands();
+              for(size_t fieldidx=0, fieldlim=ops.size(); fieldidx!=fieldlim; ++fieldidx)
+              {
+                const exprt &after_expr = ops[fieldidx];
+                if(after_expr.type().id()==ID_signedbv ||
+                   after_expr.type().id()==ID_c_bool)
+                   // after_expr.type().id()==ID_string ||
+                   // after_expr.type().id()==ID_floatbv)
+                {
+                  const exprt &before_expr = valuesBefore[{assign.id, components[fieldidx].get_name()}];
+                  assert(after_expr.type().id()==before_expr.type().id());
+                  mp_integer a, b;
+                  to_integer(after_expr, a);
+                  to_integer(before_expr, b);
+                  if (a != b)
+                  {
+                    valuesDifference.insert({{assign.id, components[fieldidx].get_name()},
+                                             {before_expr, after_expr}});
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 

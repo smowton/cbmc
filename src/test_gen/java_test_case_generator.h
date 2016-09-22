@@ -25,6 +25,7 @@ typedef std::function<
               const interpretert::input_var_functionst&,
               const interpretert::dynamic_typest&,
               const std::string &,
+              const interpretert::side_effects_differencet &,
               const std::string &,
               bool,
               bool,
@@ -42,7 +43,7 @@ class java_test_case_generatort:public messaget
   {
   }
 
-  typedef enum test_case_statust { SUCCESS, FAIL, ERROR } test_case_statust;
+  typedef enum { SUCCESS, FAIL, ERROR } test_case_statust;
   const std::string generate_test_func_name(const symbol_tablet &st,
                                             const goto_functionst &gf,
                                             const size_t test_idx);
@@ -96,7 +97,8 @@ private:
                           const goto_tracet &, interpretert::list_input_varst&,
                           interpretert::input_var_functionst&,
                           interpretert::dynamic_typest&,
-                          const optionst&);
+                          const optionst&,
+                          interpretert::side_effects_differencet &);
   const irep_idt &get_entry_function_id(const goto_functionst &gf);
   const std::string get_test_function_name(const symbol_tablet &st, const goto_functionst &gf, size_t test_idx);
 };
