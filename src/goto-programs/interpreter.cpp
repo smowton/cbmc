@@ -541,7 +541,7 @@ Function: interpretert::get_type
  Purpose:
 
  \*******************************************************************/
-typet interpretert::get_type(const irep_idt &id)
+typet interpretert::get_type(const irep_idt &id) const
 {
   dynamic_typest::const_iterator it=dynamic_types.find(id);
   if (it==dynamic_types.end()) return symbol_table.lookup(id).type;
@@ -1691,7 +1691,7 @@ bool calls_opaque_stub(const code_function_callt& callinst,
 
  Inputs: Symbol to capture, map of current symbol ("input") values.
 
- Outputs: Populates captured with a bottom-up-ordered list of symbol
+ Outputs: Populates captured with a top-down-ordered list of symbol
           values containing every value reachable from capture_symbol.
           For example, if capture_symbol contains a pointer to some
           object x, captured will be populated with x's value and then
@@ -1713,6 +1713,9 @@ void interpretert::get_value_tree(const irep_idt& capture_symbol,
     if(already_captured.id==capture_symbol)
       return;
   exprt defined=get_value(capture_symbol);
+
+  captured.push_back({capture_symbol, defined});
+
   if(defined.type().id()==ID_pointer)
   {
     get_value_tree(defined,captured);
@@ -1732,8 +1735,6 @@ void interpretert::get_value_tree(const irep_idt& capture_symbol,
     // Primitive, just capture this.
   }
 
-  captured.push_back({capture_symbol, defined});
-
 }
 
 void interpretert::get_value_tree(const exprt& capture_expr,
@@ -1746,6 +1747,15 @@ void interpretert::get_value_tree(const exprt& capture_expr,
     get_value_tree(referee,captured);
   }
 }
+
+// Wrapper for above, giving bottom-up ordering
+void interpretert::get_value_tree_bu(const irep_idt& capture_symbol,
+                                     function_assignmentst& captured)
+{
+  get_value_tree(capture_symbol,captured);
+  std::reverse(captured.begin(),captured.end());
+}
+                                  
 
 static bool is_assign_step(const goto_trace_stept& step)
 {
@@ -1963,7 +1973,7 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
             // reachable from them. We use a single actual_params list for all parameters
             // to avoid redundancy e.g. if parameters or objects reachable from them alias,
             // we only need to capture that subtree once.
-            get_value_tree(fp.get_identifier(),actual_params);
+            get_value_tree_bu(fp.get_identifier(),actual_params);
             // Set the actual direct params aside, so we can keep them in order at the back.
             direct_params.push_back(std::move(actual_params.back()));
             actual_params.pop_back();
@@ -1993,7 +2003,7 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
         get_value_tree(identifier, input_assigns);
         for(const auto &assign : input_assigns)
         {
-          const typet &tree_typ = symbol_table.lookup(assign.id).type;
+          const typet &tree_typ = ns.follow(assign.value.type());
           if(tree_typ.id()==ID_struct)
           {
             const struct_typet &struct_type=to_struct_type(tree_typ);
@@ -2092,7 +2102,7 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
         assert(trace_stack.size()>=2);
 	// We must record the value of stub_capture_symbol now.
 	function_assignmentst defined;
-	get_value_tree(ret_func.capture_symbol,defined);
+	get_value_tree_bu(ret_func.capture_symbol,defined);
 	if(defined.size()!=0) // Definition found?
 	{
           const auto& caller=trace_stack[trace_stack.size()-2].func_name;
@@ -2116,7 +2126,7 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
           const typet &typ = symbol_table.lookup(inputParam.second).type;
           for(const auto &assign : output_assigns)
           {
-            const typet &tree_typ = symbol_table.lookup(assign.id).type;
+            const typet &tree_typ = ns.follow(assign.value.type());
             if(tree_typ.id()==ID_struct)
             {
               const struct_typet &struct_type=to_struct_type(tree_typ);
@@ -2131,16 +2141,22 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
                    // after_expr.type().id()==ID_string ||
                    // after_expr.type().id()==ID_floatbv)
                 {
-                  const exprt &before_expr = valuesBefore[{assign.id, components[fieldidx].get_name()}];
-                  assert(after_expr.type().id()==before_expr.type().id());
-                  mp_integer a, b;
-                  to_integer(after_expr, a);
-                  to_integer(before_expr, b);
-                  if (a != b)
+                  auto findit=valuesBefore.find({assign.id, components[fieldidx].get_name()});
+                  if(findit!=valuesBefore.end())
                   {
-                    valuesDifference.insert({{assign.id, components[fieldidx].get_name()},
-                                             {before_expr, after_expr}});
+                    const exprt &before_expr = findit->second;
+                    assert(after_expr.type().id()==before_expr.type().id());
+                    mp_integer a, b;
+                    to_integer(after_expr, a);
+                    to_integer(before_expr, b);
+                    if (a != b)
+                    {
+                      valuesDifference.insert({{assign.id, components[fieldidx].get_name()},
+                          {before_expr, after_expr}});
+                    }
                   }
+                  // TODO decide what to do when a field wasn't reachable before
+                  // (e.g. inaccessible due to a null pointer)
                 }
               }
             }

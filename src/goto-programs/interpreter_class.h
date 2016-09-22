@@ -93,11 +93,12 @@ protected:
 
   irep_idt get_component_id(const irep_idt &object,unsigned offset);
 public:
-  typet get_type(const irep_idt &id);
+  typet get_type(const irep_idt &id) const;
   exprt get_value(const typet &type,unsigned offset=0,bool use_non_det = false);
   exprt get_value(const typet &type,std::vector<mp_integer> &rhs,unsigned offset=0);
   exprt get_value(const irep_idt &id);
   void get_value_tree(const irep_idt& capture_symbol, function_assignmentst& captured);
+  void get_value_tree_bu(const irep_idt& capture_symbol, function_assignmentst& captured);
   void get_value_tree(const exprt& capture_expr, function_assignmentst& captured);
   mp_integer get_this_address(const code_function_callt&);
   char is_opaque_function(const goto_programt::instructionst::const_iterator &it,irep_idt &function_id);

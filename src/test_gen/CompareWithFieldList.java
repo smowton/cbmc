@@ -102,4 +102,17 @@ public class CompareWithFieldList {
     
   }
 
+  public static String findMismatch(Object real, Object primitive_or_fieldlist, String prefix) {
+
+    try {
+      compare(real,primitive_or_fieldlist,prefix);
+      return null;
+    }
+    catch(UnexpectedMockParameterException e)
+    {
+      return e.getMessage();
+    }
+
+  }
+
 }

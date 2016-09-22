@@ -90,6 +90,13 @@ void java_bytecode_typecheckt::typecheck_expr_java_new_array(side_effect_exprt &
   typecheck_type(type);
 }
 
+static void escape_non_alnum(std::string& toescape)
+{
+  for(size_t idx=0, lim=toescape.size(); idx!=lim; ++idx)
+    if(!isalnum(toescape[idx]))
+      toescape[idx]='_';
+}
+
 /*******************************************************************\
 
 Function: java_bytecode_typecheckt::typecheck_expr_java_string_literal
@@ -105,37 +112,46 @@ Function: java_bytecode_typecheckt::typecheck_expr_java_string_literal
 void java_bytecode_typecheckt::typecheck_expr_java_string_literal(exprt &expr)
 { 
   const irep_idt value=expr.get(ID_value);
-
-  // we create a symbol for these
-  const irep_idt identifier="java::java.lang.String.Literal."+
-    id2string(value);
-
-  symbol_tablet::symbolst::const_iterator s_it=
-    symbol_table.symbols.find(identifier);
-
   const symbol_typet string_type("java::java.lang.String");
-  
-  if(s_it==symbol_table.symbols.end())
+
+  auto findit=string_literal_to_symbol_name.find(value);
+  if(findit!=string_literal_to_symbol_name.end())
   {
-    // no, create the symbol
-    symbolt new_symbol;
-    new_symbol.name=identifier;
-    new_symbol.type=pointer_typet(string_type);
-    new_symbol.base_name="Literal";
-    new_symbol.pretty_name=value;
-    new_symbol.mode=ID_java;
-    new_symbol.is_type=false;
-    new_symbol.is_lvalue=true;
-    new_symbol.is_static_lifetime=true; // These are basically const global data.
-    
-    if(symbol_table.add(new_symbol))
-    {
-      error() << "failed to add string literal symbol to symbol table" << eom;
-      throw 0;
-    }
+    expr=symbol_exprt(findit->second, pointer_typet(string_type));
+    return;
   }
+    
+  // Create a new symbol:
+  std::ostringstream identifier_str;
+  std::string escaped=id2string(value);
+  escape_non_alnum(escaped);
+  identifier_str << "java::java.lang.String.Literal." << escaped;
+  // Avoid naming clashes by virtue of escaping:
+  size_t unique_num=++(escaped_string_literal_count[identifier_str.str()]);
+  if(unique_num!=1)
+    identifier_str << unique_num;
+
+  irep_idt identifier_id=identifier_str.str();
+  string_literal_to_symbol_name.insert(std::make_pair(value,identifier_id));
+
+  symbolt new_symbol;
+  new_symbol.name=identifier_id;
+  new_symbol.type=pointer_typet(string_type);
+  new_symbol.base_name="Literal";
+  new_symbol.pretty_name=value;
+  new_symbol.mode=ID_java;
+  new_symbol.is_type=false;
+  new_symbol.is_lvalue=true;
+  new_symbol.is_static_lifetime=true; // These are basically const global data.
+    
+  if(symbol_table.add(new_symbol))
+  {
+    error() << "failed to add string literal symbol to symbol table" << eom;
+    throw 0;
+  }
+
+  expr=new_symbol.symbol_expr();
   
-  expr=symbol_exprt(identifier, pointer_typet(string_type));
 }
 
 /*******************************************************************\
