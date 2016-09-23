@@ -79,7 +79,7 @@ std::string  dump_in_html(
         ostr << "</td>\n";
 
         // Dumping taint domain
-        auto const  vars_to_values_it = summary->domain()->find(&*instr_it);
+        auto const  vars_to_values_it = summary->domain()->find(instr_it);
         if (vars_to_values_it != summary->domain()->cend())
         {
           map_from_vars_to_values_t const&  vars_to_values =
@@ -111,7 +111,14 @@ std::string  dump_in_html(
                 else if (value.is_bottom())
                   ostr << "BOTTOM";
                 else
-                  ostr << "VALUE(S)";
+                {
+                  bool first = true;
+                  for (auto const&  symbol : value.expression())
+                  {
+                     ostr << (first ? "" : " &#x2210 ") << symbol;
+                     first = false;
+                  }
+                }
   //                from_expr(ns, I.function, I.guard)
   //                ostr << to_html_text(as_string(value.value()));
               }

@@ -483,7 +483,6 @@ void  dump_instruction_code_in_html(
     ostr << "&lt;UNKNOWN&gt;";
     break;
   }
-
 }
 
 
