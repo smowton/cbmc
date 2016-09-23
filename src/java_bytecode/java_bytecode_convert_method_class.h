@@ -118,7 +118,8 @@ public:
   // Expose the address map so that the local variable table code
   // can use it in a template specialisation.
   typedef std::map<unsigned, converted_instructiont> address_mapt;
-  typedef cfg_dominators_templatet<const address_mapt,unsigned,false> java_cfg_dominatorst;
+  typedef std::pair<const methodt&, const address_mapt&> method_with_amapt;
+  typedef cfg_dominators_templatet<method_with_amapt,unsigned,false> java_cfg_dominatorst;
 
 protected:
   
