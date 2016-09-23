@@ -23,6 +23,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/pointer_offset_size.h>
 #include <util/i2string.h>
 #include <util/prefix.h>
+#include <util/compare_irep_comments.h>
 #include <ansi-c/c_types.h>
 #include <ansi-c/string_constant.h>
 
@@ -30,6 +31,7 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "java_entry_point.h"
 #include "java_object_factory.h"
+#include "java_types.h"
 
 //#include "zero_initializer.h"
 
@@ -179,6 +181,11 @@ bool java_static_lifetime_init(
   return false;
 }
 
+static bool is_string_array(const typet& t)
+{
+  typet compare_to=java_type_from_string("[Ljava.lang.String;");
+  return irep_equal_with_comments(t,compare_to);
+}
 
 /*******************************************************************\
 
@@ -211,7 +218,14 @@ exprt::operandst java_build_arguments(
   {
     bool is_this=param_number==0 &&
                  parameters[param_number].get_this();
-    bool allow_null=config.main!="" && (!is_this) && !assume_init_pointers_not_null;
+    bool is_main=(config.main=="" ||
+                  (parameters.size()==1 &&
+                   config.main.size()>5 &&
+                   config.main.substr(config.main.size()-5)==".main" &&
+                   to_code_type(function.type).return_type().id()==ID_empty &&
+                   (!to_code_type(function.type).has_this()) &&
+                   is_string_array(parameters[0].type())));
+    bool allow_null=(!is_main) && (!is_this) && !assume_init_pointers_not_null;
 
     main_arguments[param_number]=
       object_factory(parameters[param_number].type(), 
