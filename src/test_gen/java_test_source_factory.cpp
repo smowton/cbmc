@@ -66,10 +66,9 @@ public:
   void add_declare_and_assign(std::string &result, const symbol_tablet &st,
                               const symbolt& symbol, const exprt& value,
                               bool should_declare);
-  void add_global_state_assignments(std::string &result, const symbol_tablet &st,
-				    inputst &in, const interpretert::input_var_functionst&);
   bool add_func_call_parameters(std::string &result, const symbol_tablet &st,
-				const irep_idt &func_id, inputst &inputs);
+				const irep_idt &func_id, inputst &inputs,
+                                bool is_constructor);
   void add_mock_call(const interpretert::function_assignments_contextt,
 		     const java_call_descriptor& desc, const symbol_tablet&);
   void defined_symbols_to_java(const interpretert::function_assignmentst& defined_symbols,
@@ -515,31 +514,6 @@ void reference_factoryt::gather_referenced_symbols(const symbolt& symbol, inputs
   needed.push_back(symbol);
 }
   
-void reference_factoryt::add_global_state_assignments(std::string &result, const symbol_tablet &st,
-    inputst &in, const interpretert::input_var_functionst &input_defn_functions)
-{
-  std::vector<symbolt> needed;
-  for (inputst::const_reverse_iterator it=in.rbegin(); it != in.rend(); ++it)
-  {
-    symbolt fake_symbol;
-    const symbolt &symbol=get_or_fake_symbol(it->first,fake_symbol);
-    if (!symbol.is_static_lifetime) continue;
-    if (!is_input_struct(symbol,st,input_defn_functions)) continue;
-    gather_referenced_symbols(symbol,in,st,needed);
-  }
-  std::set<irep_idt> already_done;
-
-  result+="\n";
-  indent(result,2u) += "/* Populate class variables */\n";
-  for(const auto& symbol : needed)
-  {
-    if(!already_done.insert(symbol.name).second)
-      continue;
-    indent(result, 2u);
-    add_declare_and_assign(result,st,symbol,in[symbol.name],true);
-  }
-}
-
 std::vector<irep_idt> get_parameters(const symbolt &func)
 {
   std::vector<irep_idt> result;
@@ -564,31 +538,41 @@ bool is_instance_method(const symbol_tablet &st, const irep_idt &func_id)
   return false;
 }
 
-bool reference_factoryt::add_func_call_parameters(std::string &result, const symbol_tablet &st,
-    const irep_idt &func_id, inputst &inputs)
+bool reference_factoryt::add_func_call_parameters(
+  std::string &result, const symbol_tablet &st,
+  const irep_idt &func_id, inputst &inputs,
+  bool is_constructor)
 {
   const symbolt &func=st.lookup(func_id);
   const std::vector<irep_idt> params(get_parameters(func));
 
   result+="\n";
   indent(result,2u) += "/* initialize test parameters */\n";
-  for (const irep_idt &param : params)
+
+  std::vector<symbolt> needed;
+  for(const auto& param : params)
   {
-    const symbolt &symbol=st.lookup(param);
-    const inputst::iterator value=inputs.find(param);
-    if(inputs.end()==value) 
+    const symbolt &root=st.lookup(param);
+    bool is_this=root.base_name=="this";
+    if(is_constructor && is_this)
+      continue;
+    gather_referenced_symbols(root,inputs,st,needed);
+    if(is_this)
     {
-      return false;
-    }
-    else
-    {
-      if(symbol.base_name=="this")
-        // do not declare "this" variable  for instance method
-        continue;
-      else
-        add_declare_and_assign(indent(result,2u),st,symbol,value->second,true);
+      // do not declare "this" variable  for instance method
+      needed.pop_back();
     }
   }
+  
+  std::set<irep_idt> already_done;
+  for(const auto& symbol : needed)
+  {
+    if(!already_done.insert(symbol.name).second)
+      continue;
+    indent(result, 2u);
+    add_declare_and_assign(result,st,symbol,inputs[symbol.name],true);
+  }
+
   return true;
 }
 
@@ -1117,6 +1101,7 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
 {
   namespacet ns(st);
   const symbolt &func=st.lookup(func_id);
+  bool is_constructor=func.type.get_bool(ID_constructor);
   std::string result;
 
   if(goals_reached.size()!=0)
@@ -1139,10 +1124,9 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
 
   std::string post_mock_setup_result;
   
-  ref_factory.add_global_state_assignments(post_mock_setup_result, st, inputs, input_defn_functions);
   bool exists_func_call = false;
   if(enters_main)
-    exists_func_call = ref_factory.add_func_call_parameters(post_mock_setup_result, st, func_id, inputs);
+    exists_func_call = ref_factory.add_func_call_parameters(post_mock_setup_result, st, func_id, inputs, is_constructor);
   else
   {
     indent(post_mock_setup_result) += "// NOTE: the given entry-point is not called, perhaps because\n";
@@ -1173,7 +1157,6 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
     std::string declared_name;
     std::string call_expression;
     
-    bool is_constructor=func.type.get_bool(ID_constructor);
     std::string retval_symbol=as_string(func.name)+RETURN_VALUE_SUFFIX;
     const auto findit=st.symbols.find(retval_symbol);
     if(is_constructor)
