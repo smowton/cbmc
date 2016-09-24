@@ -1119,9 +1119,9 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
 
   if(goals_reached.size()!=0)
   {
-    result="/** This test case reaches the following goals:\n";
+    result="/* This test case reaches the following goals:\n";
     for(const auto& g : goals_reached)
-      result+=("  " + g + "\n");
+      result+=(" * " + g + "\n");
     result+="*/\n";
   }
 
