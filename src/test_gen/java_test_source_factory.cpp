@@ -229,7 +229,8 @@ void add_test_method_name(std::string &result, const std::string &func_name)
   //result+=func_name;
   //result+="Test {\n";
   //indent(result)+="public void test";
-  indent(result,2u)+="@org.junit.Test public void ";
+  indent(result,2u)+="@org.junit.Test\n";
+  indent(result,2u)+="public void ";
   result+=func_name;
   result+="() throws Exception {\n";
 }
@@ -397,7 +398,8 @@ void reference_factoryt::add_assign_value(std::string &result, const symbol_tabl
     result+=')';
   }
   add_value(result, st, value, symbol_name);
-  result+=";\n";
+  if(result.back() != '\n')
+    result+=";\n";
 }
 
 symbol_exprt try_find_underlying_symbol_expr(exprt e)
@@ -1122,7 +1124,7 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
     result="/* This test case reaches the following goals:\n";
     for(const auto& g : goals_reached)
       result+=(" * " + g + "\n");
-    result+="*/\n";
+    result+=" */\n";
   }
 
   // Do this first since the mock object creation can require annotations on the test class.
@@ -1196,7 +1198,7 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
     }
     else
     {
-      indent(result) += "/* call function under test */\n";      
+      indent(result,2u) += "/* call function under test */\n";
       if(findit!=st.symbols.end())
       {
         add_decl_from_type(declared_type,st,findit->second.type);

@@ -416,7 +416,7 @@ bool bmc_covert::operator()()
       for(const auto& goalid : test.covered_goals)
         goal_names.push_back(
                              as_string(goal_map.at(goalid).description)
-                             + "\n    "
+                             + "\n *  "
                              + id2string(goal_map.at(goalid).source_location.get_file())
                              + ":"
                              + id2string(goal_map.at(goalid).source_location.get_line()));
