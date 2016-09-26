@@ -23,6 +23,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/pointer_offset_size.h>
 #include <util/i2string.h>
 #include <util/prefix.h>
+#include <util/suffix.h>
 #include <util/compare_irep_comments.h>
 #include <ansi-c/c_types.h>
 #include <ansi-c/string_constant.h>
@@ -184,7 +185,7 @@ bool java_static_lifetime_init(
 static bool is_string_array(const typet& t)
 {
   typet compare_to=java_type_from_string("[Ljava.lang.String;");
-  return irep_equal_with_comments(t,compare_to);
+  return full_eq(t,compare_to);
 }
 
 /*******************************************************************\
@@ -218,13 +219,19 @@ exprt::operandst java_build_arguments(
   {
     bool is_this=param_number==0 &&
                  parameters[param_number].get_this();
-    bool is_main=(config.main=="" ||
-                  (parameters.size()==1 &&
-                   config.main.size()>5 &&
-                   config.main.substr(config.main.size()-5)==".main" &&
-                   to_code_type(function.type).return_type().id()==ID_empty &&
-                   (!to_code_type(function.type).has_this()) &&
-                   is_string_array(parameters[0].type())));
+    bool is_default_entry_point=config.main=="";
+    bool is_main=is_default_entry_point;
+    if(!is_main)
+    {
+      bool named_main=has_suffix(config.main,".main");
+      bool has_correct_type=
+        to_code_type(function.type).return_type().id()==ID_empty &&
+        (!to_code_type(function.type).has_this()) &&
+        parameters.size()==1 &&
+        is_string_array(parameters[0].type());
+      is_main=(named_main && has_correct_type);
+    }
+                   
     bool allow_null=(!is_main) && (!is_this) && !assume_init_pointers_not_null;
 
     main_arguments[param_number]=
