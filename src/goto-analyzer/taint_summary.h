@@ -22,6 +22,7 @@
 #include <set>
 #include <functional>
 #include <string>
+#include <iosfwd>
 
 namespace sumfn { namespace taint { namespace detail {
 
@@ -123,6 +124,9 @@ struct  map_from_vars_to_values_t
       std::unordered_set<variable_id_t> const&  variables
       );
 
+  void  assign(variable_id_t const&  var_name,
+               value_of_variable_t const&  value);
+  void  erase(std::unordered_set<variable_id_t> const&  vars);
   dictionary_t const&  data() const noexcept { return m_from_vars_to_values; }
 
 private:
@@ -166,7 +170,8 @@ inline bool  operator<=(
 map_from_vars_to_values_t  transform(
     map_from_vars_to_values_t const&  a,
     goto_programt::instructiont const&  I,
-    namespacet const&  ns
+    namespacet const&  ns,
+    std::ostream* const  log = nullptr
     );
 
 
@@ -233,7 +238,8 @@ using  summary_ptr_t = std::shared_ptr<summary_t const>;
  */
 void  summarise_all_functions(
     goto_modelt const&  instrumented_program,
-    database_of_summaries_t&  summaries_to_compute
+    database_of_summaries_t&  summaries_to_compute,
+    std::ostream* const  log = nullptr
     );
 
 
@@ -243,7 +249,8 @@ void  summarise_all_functions(
  */
 summary_ptr_t  summarise_function(
     irep_idt const&  function_id,
-    goto_modelt const&  instrumented_program
+    goto_modelt const&  instrumented_program,
+    std::ostream* const  log = nullptr
     );
 
 

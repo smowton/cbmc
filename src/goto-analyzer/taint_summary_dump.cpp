@@ -23,6 +23,54 @@ namespace sumfn { namespace taint { namespace detail { namespace {
 namespace sumfn { namespace taint {
 
 
+void  dump_value_in_html(
+    value_of_variable_t const&  value,
+    std::ostream&  ostr
+    )
+{
+  if (value.is_top())
+    ostr << "TOP";
+  else if (value.is_bottom())
+    ostr << "BOTTOM";
+  else
+  {
+    bool first = true;
+    for (auto const&  symbol : value.expression())
+    {
+       ostr << (first ? "" : " &#x2210 ") << symbol;
+       first = false;
+    }
+  }
+}
+
+void  dump_vars_to_values_in_html(
+    map_from_vars_to_values_t const&  vars_to_values,
+    std::ostream&  ostr
+    )
+{
+  std::set<variable_id_t>  vars;
+  for (auto const&  elem : vars_to_values.data())
+    vars.insert(elem.first);
+
+  if (vars.empty())
+    ostr << "BOTTOM";
+  else
+  {
+    ostr << "    <table>\n";
+    for (auto const&  var : vars)
+    {
+      ostr << "      <tr>\n";
+      ostr << "        <td>" << to_html_text(var) << "</td>\n";
+      ostr << "        <td>";
+      dump_value_in_html(vars_to_values.data().at(var),ostr);
+      ostr << "</td>\n";
+      ostr << "      </tr>\n";
+    }
+    ostr << "    </table>\n";
+  }
+}
+
+
 std::string  dump_in_html(
     object_summary_t const  obj_summary,
     goto_modelt const&  program,
@@ -82,51 +130,8 @@ std::string  dump_in_html(
         auto const  vars_to_values_it = summary->domain()->find(instr_it);
         if (vars_to_values_it != summary->domain()->cend())
         {
-          map_from_vars_to_values_t const&  vars_to_values =
-              vars_to_values_it->second;
-          std::set<variable_id_t>  vars;
-          for (auto const&  elem : vars_to_values.data())
-            vars.insert(elem.first);
-
           ostr << "  <td>\n";
-          if (vars.empty())
-            ostr << "BOTTOM";
-          else
-          {
-            ostr << "    <table>\n"
-  //                  "    <tr>\n"
-  //                  "      <th>Var</th>\n"
-  //                  "      <th>Value</th>\n"
-  //                  "    </tr>\n"
-                 ;
-            for (auto const&  var : vars)
-            {
-              ostr << "      <tr>\n";
-              ostr << "        <td>" << var << "</td>\n";
-              ostr << "        <td>";
-              {
-                value_of_variable_t const&  value = vars_to_values.data().at(var);
-                if (value.is_top())
-                  ostr << "TOP";
-                else if (value.is_bottom())
-                  ostr << "BOTTOM";
-                else
-                {
-                  bool first = true;
-                  for (auto const&  symbol : value.expression())
-                  {
-                     ostr << (first ? "" : " &#x2210 ") << symbol;
-                     first = false;
-                  }
-                }
-  //                from_expr(ns, I.function, I.guard)
-  //                ostr << to_html_text(as_string(value.value()));
-              }
-              ostr << "</td>\n";
-              ostr << "      </tr>\n";
-            }
-            ostr << "    </table>\n";
-          }
+          dump_vars_to_values_in_html(vars_to_values_it->second,ostr);
           ostr << "  </td>\n";
         }
 

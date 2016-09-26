@@ -42,7 +42,8 @@ std::string  dump_in_html(
     database_of_summaries_t const&  computed_summaries,
     callback_dump_derived_summary_in_html const&  summary_dump_callback,
     goto_modelt const&  program,
-    std::string const&  dump_root_directory
+    std::string const&  dump_root_directory,
+    std::ostream* const  log = nullptr
     );
 
 

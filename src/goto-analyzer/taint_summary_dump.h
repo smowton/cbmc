@@ -14,8 +14,33 @@
 
 #include <goto-analyzer/taint_summary.h>
 #include <summaries/summary_dump.h>
+#include <iosfwd>
 
 namespace sumfn { namespace taint {
+
+
+/**
+ *
+ *
+ *
+ *
+ */
+void  dump_value_in_html(
+    value_of_variable_t const&  value,
+    std::ostream&  ostr
+    );
+
+
+/**
+ *
+ *
+ *
+ *
+ */
+void  dump_vars_to_values_in_html(
+    map_from_vars_to_values_t const&  vars_to_values,
+    std::ostream&  ostr
+    );
 
 
 /**

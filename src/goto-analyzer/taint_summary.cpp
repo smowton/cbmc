@@ -9,6 +9,8 @@
 
 
 #include <goto-analyzer/taint_summary.h>
+#include <goto-analyzer/taint_summary_dump.h>
+#include <summaries/summary_dump.h>
 #include <util/std_types.h>
 #include <util/file_util.h>
 #include <util/msgstream.h>
@@ -110,6 +112,18 @@ void  __dbg_learn_goto_model_stuff(goto_modelt const&  model)
 
 }
 
+void  collect_identifiers(
+    exprt const&  expr,
+    std::unordered_set<std::string>&  result
+    )
+{
+  if (expr.id() == ID_symbol)
+    result.insert( as_string(to_symbol_expr(expr).get_identifier()) );
+  else
+    for (exprt const&  op : expr.operands())
+      collect_identifiers(op,result);
+}
+
 
 }}}}
 
@@ -184,6 +198,24 @@ map_from_vars_to_values_t::map_from_vars_to_values_t(
     m_from_vars_to_values.insert({ var, detail::make_symbol() });
 }
 
+void  map_from_vars_to_values_t::assign(variable_id_t const&  var_name,
+                                        value_of_variable_t const&  value)
+{
+  auto const  it = m_from_vars_to_values.find(var_name);
+  if (it == m_from_vars_to_values.end())
+    m_from_vars_to_values.insert({var_name,value});
+  else
+    it->second = value;
+}
+
+void  map_from_vars_to_values_t::erase(
+    std::unordered_set<variable_id_t> const&  vars
+    )
+{
+  for (auto const&  var : vars)
+    m_from_vars_to_values.erase(var);
+}
+
 
 bool  operator==(
     map_from_vars_to_values_t const&  a,
@@ -208,7 +240,7 @@ bool  operator<(
     return false;
   for (auto  a_it = a.data().cbegin(); a_it != a.data().cend(); ++a_it)
   {
-    auto const  b_it = a.data().find(a_it->first);
+    auto const  b_it = b.data().find(a_it->first);
     if (b_it == b.data().cend())
       return false;
     if (!(a_it->second < b_it->second))
@@ -221,78 +253,82 @@ bool  operator<(
 map_from_vars_to_values_t  transform(
     map_from_vars_to_values_t const&  a,
     goto_programt::instructiont const&  I,
-    namespacet const&  ns
+    namespacet const&  ns,
+    std::ostream* const  log
     )
 {
+  map_from_vars_to_values_t  result = a;
   switch(I.type)
   {
+  case ASSIGN:
+    {
+      if (log != nullptr)
+        *log << "<p>\nRecognised ASSIGN instruction.\n";
+
+      code_assignt const&  asgn = to_code_assign(I.code);
+
+      value_of_variable_t  rvalue = detail::make_bottom();
+      {
+        std::unordered_set<std::string>  rhs;
+        detail::collect_identifiers(asgn.rhs(),rhs);
+
+        if (log != nullptr)
+        {
+          *log << "r-values identifiers are {";
+          for (auto const&  ident : rhs)
+            *log << ident << ", ";
+          *log << "}.\n";
+        }
+
+        for (std::string const&  ident : rhs)
+        {
+          auto const  it = a.data().find(ident);
+          if (it != a.data().cend())
+            rvalue = join(rvalue,it->second);
+        }
+      }
+
+      std::unordered_set<std::string>  lhs;
+      detail::collect_identifiers(asgn.lhs(),lhs);
+
+      if (log != nullptr)
+      {
+        *log << "l-values identifiers are {";
+        for (auto const&  ident : lhs)
+          *log << ident << ", ";
+        *log << "}.\n</p>\n";
+      }
+
+      for (std::string const&  ident : lhs)
+        result.assign(ident,rvalue);
+    }
+    break;
+  case DEAD:
+    {
+      code_deadt const&  dead = to_code_dead(I.code);
+      std::unordered_set<std::string>  vars;
+      detail::collect_identifiers(dead.symbol(),vars);
+      result.erase(vars);
+//      if (dead.symbol().type().id() == ID_pointer)
+//        ...
+    }
+    break;
+  case GOTO:
   case NO_INSTRUCTION_TYPE:
   case SKIP:
   case END_FUNCTION:
-    return a;
-  case GOTO:
-//    if (!I.guard.is_true())
-//      ostr << "IF " << to_html_text(from_expr(ns, I.function, I.guard))
-//           << " THEN ";
-//    ostr << "GOTO ";
-//    for (auto  target_it = I.targets.begin();
-//         target_it != I.targets.end();
-//         ++target_it)
-//      ostr << (target_it == I.targets.begin() ? "" : ", ")
-//           << (*target_it)->target_number;
-    break;
-  case DEAD:
   case RETURN:
   case OTHER:
   case DECL:
   case FUNCTION_CALL:
-  case ASSIGN:
   case ASSUME:
   case ASSERT:
   case LOCATION:
   case THROW:
-//    ostr << "THROW ";
-//    {
-//      irept::subt const&  exceptions =
-//          I.code.find(ID_exception_list).get_sub();
-//      for (auto  exceptions_it = exceptions.cbegin();
-//           exceptions_it != exceptions.cend();
-//           ++exceptions_it)
-//        ostr << (exceptions_it == exceptions.cbegin() ? "" : ", ")
-//             << exceptions_it->id()
-//             ;
-//    }
-//    if (I.code.operands().size() == 1)
-//      ostr << ": "
-//           << to_html_text(from_expr(ns, I.function, I.code.op0()))
-//           ;
-    break;
   case CATCH:
-//    if (!I.targets.empty())
-//    {
-//      ostr << "CATCH-PUSH ";
-//      auto  exceptions_it =
-//          I.code.find(ID_exception_list).get_sub().cbegin();
-//      for (auto target_it = I.targets.cbegin();
-//           target_it != I.targets.end();
-//           ++target_it, ++exceptions_it)
-//        ostr << (target_it == I.targets.begin() ? "" : ", ")
-//             << exceptions_it->id() << "->"
-//             << (*target_it)->target_number;
-//    }
-//    else
-//      ostr << "CATCH-POP";
-    break;
   case ATOMIC_BEGIN:
   case ATOMIC_END:
   case START_THREAD:
-//    ostr << "START THREAD ";
-//    for (auto  target_it = I.targets.begin();
-//         target_it != I.targets.end();
-//         ++target_it)
-//      ostr << (target_it == I.targets.begin() ? "" : ", ")
-//           << (*target_it)->target_number;
-    break;
   case END_THREAD:
     break;
   default:
@@ -300,8 +336,7 @@ map_from_vars_to_values_t  transform(
                              "Unknown instruction!");
     break;
   }
-  // TODO!
-  return a;
+  return result;
 }
 
 
@@ -344,7 +379,8 @@ std::string  summary_t::description() const noexcept
 
 void  summarise_all_functions(
     goto_modelt const&  instrumented_program,
-    database_of_summaries_t&  summaries_to_compute
+    database_of_summaries_t&  summaries_to_compute,
+    std::ostream* const  log
     )
 {
   //detail::__dbg_learn_goto_model_stuff(instrumented_program);
@@ -352,15 +388,21 @@ void  summarise_all_functions(
     if (elem.second.body_available())
       summaries_to_compute.insert({
           as_string(elem.first),
-          summarise_function(elem.first,instrumented_program)
+          summarise_function(elem.first,instrumented_program,log),
           });
 }
 
 summary_ptr_t  summarise_function(
     irep_idt const&  function_id,
-    goto_modelt const&  instrumented_program
+    goto_modelt const&  instrumented_program,
+    std::ostream* const  log
     )
 {
+  if (log != nullptr)
+    *log << "<h2>Called sumfn::taint::summarise_function( "
+         << to_html_text(as_string(function_id)) << " )</h2>\n"
+         ;
+
   goto_functionst::function_mapt const&  functions =
       instrumented_program.goto_functions.function_map;
   auto const  fn_iter = functions.find(function_id);
@@ -393,12 +435,64 @@ summary_ptr_t  summarise_function(
         map_from_vars_to_values_t&  dst_value = domain->at(dst_instr_it);
         map_from_vars_to_values_t const  old_dst_value = dst_value;
 
+        if (log != nullptr)
+        {
+          *log << "<h3>Processing transition: "
+               << src_instr_it->location_number << " ---[ "
+               ;
+          dump_instruction_code_in_html(
+              *src_instr_it,
+              instrumented_program,
+              *log
+              );
+          *log << " ]---> " << dst_instr_it->location_number << "</h3>\n"
+               ;
+          *log << "<p>Source value:</p>\n";
+          dump_vars_to_values_in_html(src_value,*log);
+          *log << "<p>Old destination value:</p>\n";
+          dump_vars_to_values_in_html(old_dst_value,*log);
+        }
+
         map_from_vars_to_values_t const  transformed =
-            transform(src_value,*dst_instr_it,ns);
+            transform(src_value,*src_instr_it,ns,log);
         dst_value = join(transformed,dst_value);
 
+        if (log != nullptr)
+        {
+          *log << "<p>Transformed value:</p>\n";
+          dump_vars_to_values_in_html(transformed,*log);
+          *log << "<p>Resulting destination value:</p>\n";
+          dump_vars_to_values_in_html(dst_value,*log);
+
+//          if (src_instr_it->location_number == 3 &&
+//              dst_instr_it->location_number == 4)
+//          {
+//            *log << "<p>COMPARE!!!</p>\n";
+//            *log << "<p>old_dst_value:</p>\n";
+//            dump_vars_to_values_in_html(old_dst_value,*log);
+//            *log << "<p>dst_value:</p>\n";
+//            dump_vars_to_values_in_html(dst_value,*log);
+//            *log << "<p>dst_value <= old_dst_value:"
+//                 << (dst_value <= old_dst_value)
+//                 << "</p>\n";
+//            *log << "<p>dst_value == old_dst_value:"
+//                 << (dst_value == old_dst_value)
+//                 << "</p>\n";
+//            *log << "<p>dst_value < old_dst_value:"
+//                 << (dst_value < old_dst_value)
+//                 << "</p>\n";
+//          }
+        }
+
         if (!(dst_value <= old_dst_value))
+        {
           work_set.insert(dst_instr_it);
+
+          if (log != nullptr)
+            *log << "<p>Inserting instruction at location "
+                 << dst_instr_it->location_number << " into 'work_set'.</p>\n"
+                 ;
+        }
       }
   }
   return std::make_shared<summary_t>(domain);

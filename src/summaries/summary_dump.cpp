@@ -205,6 +205,28 @@ std::string  dump_goto_program_in_html(
   return ""; // no error.
 }
 
+std::string  dump_log_in_html(
+    std::ostream const&  source,
+    std::string const&  dump_root_directory
+    )
+{
+  fileutl::create_directory(dump_root_directory);
+
+  std::string const  log_filename =
+      msgstream() << dump_root_directory << "/index.html";
+  std::fstream  ostr(log_filename, std::ios_base::out);
+  if (!ostr.is_open())
+      return msgstream() << "ERROR: sumfn::dump_log_in_html() : "
+                            "Cannot open the log file '" << log_filename << "'."
+                         ;
+  dump_html_prefix(ostr);
+  ostr << "<h1>Log of taint summary computation</h1>\n";
+  ostr << source.rdbuf();
+  dump_html_suffix(ostr);
+  return ""; // no error.
+}
+
+
 void  replace(
     std::string&  str,
     std::string const&  what,
@@ -229,7 +251,8 @@ std::string  dump_in_html(
     database_of_summaries_t const&  computed_summaries,
     callback_dump_derived_summary_in_html const&  summary_dump_callback,
     goto_modelt const&  program,
-    std::string const&  dump_root_directory
+    std::string const&  dump_root_directory,
+    std::ostream* const  log
     )
 {
   fileutl::create_directory(dump_root_directory);
@@ -251,6 +274,16 @@ std::string  dump_in_html(
         summary_dump_callback,
         program,
         msgstream() << dump_root_directory << "/" << to_file_name(it->first)
+        );
+    if (!err_message.empty())
+      return err_message;
+  }
+
+  if (log != nullptr)
+  {
+    err_message = detail::dump_log_in_html(
+        *log,
+        msgstream() << dump_root_directory << "/log"
         );
     if (!err_message.empty())
       return err_message;
@@ -285,6 +318,12 @@ std::string  dump_in_html(
   ostr << "<p>Dump of whole analysed program is available "
           "<a href=\"./goto_model/index.html\">here</a></p>\n"
          ;
+
+  if (log != nullptr)
+    ostr << "<p>Log from summary computation is available "
+            "<a href=\"./log/index.html\">here</a></p>\n"
+         ;
+
   dump_html_suffix(ostr);
 
   return ""; // no error.
