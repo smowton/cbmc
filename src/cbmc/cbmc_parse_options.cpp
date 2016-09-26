@@ -471,6 +471,9 @@ void cbmc_parse_optionst::get_command_line_options(optionst &options)
   if(cmdline.isset("gen-java-test-case"))
     options.set_option("gen-java-test-case", true);
 
+  if(cmdline.isset("disable-testsuite-minimisation"))
+    options.set_option("disable-testsuite-minimisation", true);
+
   if(cmdline.isset("java-max-vla-length"))
     options.set_option("java-max-vla-length", cmdline.get_value("java-max-vla-length"));
 
@@ -1221,6 +1224,7 @@ void cbmc_parse_optionst::help()
     " --main-class class-name      set the name of the main class\n"
     " --disable-runtime-check      disable runtime checks\n"
     " --gen-java-test-case         generate test case\n" 
+    " --disable-testsuite-minimisation   do not minimise testsuite\n"
     " --cover-function-only        add coverage instrumentation only to the entry function\n"
     " --assertions-as-assumptions  convert assertions from generic checks into assumptions\n"
     " --java-assume-inputs-non-null   never generate tests where direct or indirect parameters are null\n"

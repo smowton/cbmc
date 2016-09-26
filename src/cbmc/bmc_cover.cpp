@@ -394,8 +394,13 @@ bool bmc_covert::operator()()
              << (sat_stop-sat_start) << "s" << eom;
   }
 
-  testst tests_min;
-  minimise_testsuite(tests, tests_min, goal_map.size());
+  // should we minimise testsuite?
+  if(!bmc.options.get_bool_option("disable-testsuite-minimisation"))
+  {
+    testst tests_min;
+    minimise_testsuite(tests, tests_min, goal_map.size());
+    copy_testsuite(tests_min, tests);
+  }
 
   // report
   unsigned goals_covered=0;
@@ -406,7 +411,7 @@ bool bmc_covert::operator()()
   if (bmc.options.get_bool_option("gen-java-test-case"))
   {
     size_t test_case_no=0;
-    for(auto& test : tests_min)
+    for(auto& test : tests)
     {
       java_test_case_generatort gen(get_message_handler());
       std::vector<std::string> goal_names;
@@ -446,7 +451,7 @@ bool bmc_covert::operator()()
                  << eom;
 
       }
-      for(const auto& it : tests_min)
+      for(const auto& it : tests)
       {
         if(it.source_code.length()!=0)
           status() << it.source_code << '\n';
@@ -471,7 +476,7 @@ bool bmc_covert::operator()()
         std::cout << xml_result << "\n";
       }
 
-      for(const auto & test : tests_min)
+      for(const auto & test : tests)
       {
         xmlt xml_result("test");
         if(bmc.options.get_bool_option("trace"))
@@ -526,7 +531,7 @@ bool bmc_covert::operator()()
       json_result["goalsCovered"]=json_numbert(i2string(goals_covered));
 
       json_arrayt &tests_array=json_result["tests"].make_array();
-      for(const auto & test : tests_min)
+      for(const auto & test : tests)
       {
         json_objectt &result=tests_array.push_back().make_object();
         if(bmc.options.get_bool_option("trace"))
@@ -581,7 +586,7 @@ bool bmc_covert::operator()()
   {
     std::cout << "Test suite:" << '\n';
 
-    for(const auto & test : tests_min)
+    for(const auto & test : tests)
       std::cout << get_test(test.goto_trace) << '\n';
   }
 
