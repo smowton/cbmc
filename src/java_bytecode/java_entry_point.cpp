@@ -24,7 +24,6 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/i2string.h>
 #include <util/prefix.h>
 #include <util/suffix.h>
-#include <util/compare_irep_comments.h>
 #include <ansi-c/c_types.h>
 #include <ansi-c/string_constant.h>
 
