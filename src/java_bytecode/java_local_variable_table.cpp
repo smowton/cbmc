@@ -44,8 +44,7 @@ struct procedure_local_cfg_baset<T,java_bytecode_convert_methodt::method_with_am
       for(;findit->first<table_entry.end_pc; ++findit)
       {
         // For now just assume any non-branch instruction could potentially throw.
-        auto succit=findit;
-        ++succit;
+        auto succit=std::next(findit);
         if(succit==amap.end())
           continue;
         const auto& thisinst=findit->second;
@@ -58,7 +57,7 @@ struct procedure_local_cfg_baset<T,java_bytecode_convert_methodt::method_with_am
   unsigned get_first_node(const method_with_amapt& args) const
     { return args.second.begin()->first; }
   unsigned get_last_node(const method_with_amapt& args) const
-    { return (--args.second.end())->first; }
+    { return args.second.rbegin()->first; }
   unsigned nodes_empty(const method_with_amapt& args) const
     { return args.second.empty(); }
   
