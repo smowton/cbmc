@@ -88,8 +88,9 @@ public:
       return instructions.back();
     }
     
-    struct exceptiont
+    class exceptiont
     {
+    public:
       std::size_t start_pc;
       std::size_t end_pc;
       std::size_t handler_pc;
