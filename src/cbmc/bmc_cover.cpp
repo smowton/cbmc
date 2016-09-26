@@ -198,6 +198,9 @@ public:
       }    
     }
 
+    status() << "Reduced from " << tsi.size() << " to " 
+	     << tso.size() << " test cases " <<messaget::eom;
+
     //std::cout << "After minimisation:" << std::endl;
     //print_testsuite(tso);
   }
@@ -251,7 +254,9 @@ void bmc_covert::satisfying_assignment()
   {
     goalt &g=g_it.second;
     
-#if 0
+#if 0 // removed the filtering of already covered goals as we need the list
+    // of all covered goals for subsequent testsuite minimisation.
+
     // covered already?
     if(g.satisfied) continue;
 #endif 
