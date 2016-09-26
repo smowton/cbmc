@@ -6,11 +6,7 @@ Author: Daniel Kroening, kroening@kroening.com
 
 \*******************************************************************/
 
-#define DEBUG
-
-#ifdef DEBUG
 #include <iostream>
-#endif
 
 #include <vector>
 #include <algorithm>    
@@ -182,9 +178,7 @@ public:
     std::vector<irep_idt> goals;
     goals.clear();
 
-#ifdef DEBUG 
-    print_testsuite(tsi);
-#endif
+    //print_testsuite(tsi);
     copy_testsuite(tsi,tss);
 
     while(!tss.empty()) 
@@ -204,10 +198,8 @@ public:
       }    
     }
 
-#ifdef DEBUG
-    std::cout << "After minimisation:" << std::endl;
-    print_testsuite(tso);
-#endif
+    //std::cout << "After minimisation:" << std::endl;
+    //print_testsuite(tso);
   }
   
   std::string get_test(const goto_tracet &goto_trace) const
