@@ -24,7 +24,7 @@ namespace sumfn { namespace taint {
 
 
 void  dump_value_in_html(
-    value_of_variable_t const&  value,
+    svaluet const&  value,
     std::ostream&  ostr
     )
 {
@@ -44,11 +44,11 @@ void  dump_value_in_html(
 }
 
 void  dump_vars_to_values_in_html(
-    map_from_vars_to_values_t const&  vars_to_values,
+    map_from_lvalues_to_svaluest const&  vars_to_values,
     std::ostream&  ostr
     )
 {
-  std::set<variable_id_t>  vars;
+  std::set<lvalue_idt>  vars;
   for (auto const&  elem : vars_to_values.data())
     vars.insert(elem.first);
 
@@ -72,20 +72,48 @@ void  dump_vars_to_values_in_html(
 
 
 std::string  dump_in_html(
-    object_summary_t const  obj_summary,
+    object_summaryt const  obj_summary,
     goto_modelt const&  program,
     std::ostream&  ostr
     )
 {
-  summarised_object_id_t const&  function_id = obj_summary.first;
-  summary_ptr_t const  summary =
-      std::dynamic_pointer_cast<summary_t const>(obj_summary.second);
+  summarised_object_idt const&  function_id = obj_summary.first;
+  summary_ptrt const  summary =
+      std::dynamic_pointer_cast<summaryt const>(obj_summary.second);
   if (!summary.operator bool())
     return "ERROR: cannot cast the passed summary to 'taint' summary.";
 
   ostr << "<h2>Taint summary</h2>\n"
-       << "<p>TODO!</p>\n"
+       << "<p>Mapping of input to symbols:</p>\n"
+          "<table>\n"
+          "  <tr>\n"
+          "    <th>L-value</th>\n"
+          "    <th>Symbol</th>\n"
+          "  </tr>\n"
        ;
+  for (auto const&  elem : summary->input())
+  {
+    ostr << "  <tr>\n";
+    ostr << "    <td>" << elem.first << "</td>\n";
+    ostr << "    <td>"; dump_value_in_html(elem.second,ostr); ostr << "</td>\n";
+    ostr << "  </tr>\n";
+  }
+  ostr << "</table>\n";
+  ostr << "<p>The summary:</p>\n"
+          "<table>\n"
+          "  <tr>\n"
+          "    <th>L-value</th>\n"
+          "    <th>Expression</th>\n"
+          "  </tr>\n"
+       ;
+  for (auto const&  elem : summary->output())
+  {
+    ostr << "  <tr>\n";
+    ostr << "    <td>" << elem.first << "</td>\n";
+    ostr << "    <td>"; dump_value_in_html(elem.second,ostr); ostr << "</td>\n";
+    ostr << "  </tr>\n";
+  }
+  ostr << "</table>\n";
 
   if (summary->domain())
   {

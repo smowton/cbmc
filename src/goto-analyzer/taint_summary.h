@@ -29,7 +29,9 @@ namespace sumfn { namespace taint { namespace detail {
 
 struct  instruction_iterator_hasher
 {
-  std::size_t  operator()(goto_programt::instructiont::const_targett const  it) const
+  std::size_t  operator()(
+      goto_programt::instructiont::const_targett const  it
+      ) const
   {
     return std::hash<goto_programt::instructiont const*>()(&*it);
   }
@@ -41,31 +43,28 @@ struct  instruction_iterator_hasher
 namespace sumfn { namespace taint {
 
 
+
 /**
  *
  *
  *
  */
-using  expression_t = std::set<std::string>;
-
-
-/**
- *
- */
-struct  value_of_variable_t
+struct  svaluet
 {
-  value_of_variable_t(
-      expression_t const&  expression,
+  typedef std::set<std::string>  expressiont;
+
+  svaluet(
+      expressiont const&  expression,
       bool  is_bottom,
       bool  is_top
       );
 
   bool  is_top() const noexcept { return m_is_top; }
   bool  is_bottom() const noexcept { return m_is_bottom; }
-  expression_t const&  expression() const noexcept { return m_expression; }
+  expressiont const&  expression() const noexcept { return m_expression; }
 
 private:
-  expression_t  m_expression;
+  expressiont  m_expression;
   bool  m_is_bottom;
   bool  m_is_top;
 
@@ -77,9 +76,7 @@ private:
  *
  *
  */
-bool  operator==(
-    value_of_variable_t const&  a,
-    value_of_variable_t const&  b);
+bool  operator==(svaluet const&  a, svaluet const&  b);
 
 
 /**
@@ -87,9 +84,7 @@ bool  operator==(
  *
  *
  */
-bool  operator<(
-    value_of_variable_t const&  a,
-    value_of_variable_t const&  b);
+bool  operator<(svaluet const&  a, svaluet const&  b);
 
 
 /**
@@ -97,9 +92,7 @@ bool  operator<(
  *
  *
  */
-value_of_variable_t  join(
-    value_of_variable_t const&  a,
-    value_of_variable_t const&  b);
+svaluet  join(svaluet const&  a, svaluet const&  b);
 
 
 
@@ -107,30 +100,31 @@ value_of_variable_t  join(
  *
  *
  */
-using  variable_id_t = std::string;
+typedef std::string  lvalue_idt;
+
 
 /**
  *
+ *
  */
-struct  map_from_vars_to_values_t
+struct  map_from_lvalues_to_svaluest
 {
-  using  dictionary_t =
-      std::map<variable_id_t,value_of_variable_t>;
+  typedef std::map<lvalue_idt,svaluet>  dictionaryt;
 
-  explicit map_from_vars_to_values_t(
-      dictionary_t const&  data
+  explicit map_from_lvalues_to_svaluest(
+      dictionaryt const&  data
       );
-  explicit map_from_vars_to_values_t(
-      std::unordered_set<variable_id_t> const&  variables
+  explicit map_from_lvalues_to_svaluest(
+      std::unordered_set<lvalue_idt> const&  variables
       );
 
-  void  assign(variable_id_t const&  var_name,
-               value_of_variable_t const&  value);
-  void  erase(std::unordered_set<variable_id_t> const&  vars);
-  dictionary_t const&  data() const noexcept { return m_from_vars_to_values; }
+  void  assign(lvalue_idt const&  var_name,
+               svaluet const&  value);
+  void  erase(std::unordered_set<lvalue_idt> const&  vars);
+  dictionaryt const&  data() const noexcept { return m_from_vars_to_values; }
 
 private:
-  dictionary_t  m_from_vars_to_values;
+  dictionaryt  m_from_vars_to_values;
 };
 
 
@@ -140,8 +134,8 @@ private:
  *
  */
 bool  operator==(
-    map_from_vars_to_values_t const&  a,
-    map_from_vars_to_values_t const&  b);
+    map_from_lvalues_to_svaluest const&  a,
+    map_from_lvalues_to_svaluest const&  b);
 
 
 /**
@@ -150,13 +144,13 @@ bool  operator==(
  *
  */
 bool  operator<(
-    map_from_vars_to_values_t const&  a,
-    map_from_vars_to_values_t const&  b);
+    map_from_lvalues_to_svaluest const&  a,
+    map_from_lvalues_to_svaluest const&  b);
 
 
 inline bool  operator<=(
-    map_from_vars_to_values_t const&  a,
-    map_from_vars_to_values_t const&  b)
+    map_from_lvalues_to_svaluest const&  a,
+    map_from_lvalues_to_svaluest const&  b)
 {
   return a == b || a < b;
 }
@@ -167,8 +161,8 @@ inline bool  operator<=(
  *
  *
  */
-map_from_vars_to_values_t  transform(
-    map_from_vars_to_values_t const&  a,
+map_from_lvalues_to_svaluest  transform(
+    map_from_lvalues_to_svaluest const&  a,
     goto_programt::instructiont const&  I,
     namespacet const&  ns,
     std::ostream* const  log = nullptr
@@ -179,16 +173,16 @@ map_from_vars_to_values_t  transform(
  *
  *
  */
-map_from_vars_to_values_t  join(
-    map_from_vars_to_values_t const&  a,
-    map_from_vars_to_values_t const&  b
+map_from_lvalues_to_svaluest  join(
+    map_from_lvalues_to_svaluest const&  a,
+    map_from_lvalues_to_svaluest const&  b
     );
 
 
 /**
  *
  */
-using  instruction_iterator_t = goto_programt::instructiont::const_targett;
+typedef goto_programt::instructiont::const_targett  instruction_iterator_t;
 
 
 
@@ -196,12 +190,12 @@ using  instruction_iterator_t = goto_programt::instructiont::const_targett;
 /**
  *
  */
-using  domain_t =
-    std::unordered_map<instruction_iterator_t,
-                       map_from_vars_to_values_t,
-                       detail::instruction_iterator_hasher>;
+typedef std::unordered_map<instruction_iterator_t,
+                           map_from_lvalues_to_svaluest,
+                           detail::instruction_iterator_hasher>
+        domain_t;
 
-using  domain_ptr_t = std::shared_ptr<domain_t>;
+typedef std::shared_ptr<domain_t>  domain_ptr_t;
 
 
 /**
@@ -209,17 +203,30 @@ using  domain_ptr_t = std::shared_ptr<domain_t>;
  *
  *
  */
-struct  summary_t : public sumfn::summary_t
+struct  summaryt : public sumfn::summaryt
 {
-  summary_t(domain_ptr_t const  domain);
+
+  typedef std::unordered_map<lvalue_idt,svaluet>
+          map_from_lvalues_to_symbols_t;
+
+  summaryt(map_from_lvalues_to_symbols_t const&  input,
+            map_from_lvalues_to_symbols_t const&  output,
+            domain_ptr_t const  domain);
 
   std::string  kind() const;
   std::string  description() const noexcept;
+
+  map_from_lvalues_to_symbols_t const&  input() const noexcept
+  { return m_input; }
+  map_from_lvalues_to_symbols_t const&  output() const noexcept
+  { return m_output; }
 
   domain_ptr_t  domain() const noexcept { return m_domain; }
   void  drop_domain() { m_domain.reset(); }
 
 private:
+  map_from_lvalues_to_symbols_t  m_input;
+  map_from_lvalues_to_symbols_t  m_output;
   domain_ptr_t  m_domain;
 };
 
@@ -228,7 +235,7 @@ private:
  *
  *
  */
-using  summary_ptr_t = std::shared_ptr<summary_t const>;
+typedef std::shared_ptr<summaryt const>  summary_ptrt;
 
 
 
@@ -238,7 +245,7 @@ using  summary_ptr_t = std::shared_ptr<summary_t const>;
  */
 void  summarise_all_functions(
     goto_modelt const&  instrumented_program,
-    database_of_summaries_t&  summaries_to_compute,
+    database_of_summariest&  summaries_to_compute,
     std::ostream* const  log = nullptr
     );
 
@@ -247,7 +254,7 @@ void  summarise_all_functions(
  *
  *
  */
-summary_ptr_t  summarise_function(
+summary_ptrt  summarise_function(
     irep_idt const&  function_id,
     goto_modelt const&  instrumented_program,
     std::ostream* const  log = nullptr

@@ -16,21 +16,21 @@
 namespace sumfn {
 
 
-void  database_of_summaries_t::insert(
-    object_summary_t const&  object_and_summary
+void  database_of_summariest::insert(
+    object_summaryt const&  object_and_summary
     )
 {
   m_cache.insert(object_and_summary);
 }
 
-database_of_summaries_t::database_t::const_iterator
-database_of_summaries_t::cbegin() const
+database_of_summariest::databaset::const_iterator
+database_of_summariest::cbegin() const
 {
   return m_cache.cbegin();
 }
 
-database_of_summaries_t::database_t::const_iterator
-database_of_summaries_t::cend() const
+database_of_summariest::databaset::const_iterator
+database_of_summariest::cend() const
 {
   return m_cache.cend();
 }

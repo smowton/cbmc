@@ -288,7 +288,7 @@ int goto_analyzer_parse_optionst::doit()
           get_message_handler()
           );
       std::stringstream  log;
-      sumfn::database_of_summaries_t  summaries;
+      sumfn::database_of_summariest  summaries;
       sumfn::taint::summarise_all_functions(goto_model,summaries,&log);
       sumfn::dump_in_html(
           summaries,

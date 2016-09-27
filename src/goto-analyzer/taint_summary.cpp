@@ -30,7 +30,7 @@ namespace sumfn { namespace taint { namespace detail { namespace {
 /**
  *
  */
-value_of_variable_t  make_symbol()
+svaluet  make_symbol()
 {
   static uint64_t  counter = 0UL;
   std::string const  symbol_name =
@@ -41,26 +41,26 @@ value_of_variable_t  make_symbol()
 /**
  *
  */
-value_of_variable_t  make_bottom()
+svaluet  make_bottom()
 {
-  return {expression_t{},true,false};
+  return {svaluet::expressiont{},true,false};
 }
 
 /**
  *
  */
-value_of_variable_t  make_top()
+svaluet  make_top()
 {
-  return {expression_t{},false,true};
+  return {svaluet::expressiont{},false,true};
 }
 
 
 /**
  *
  */
-using  solver_work_set_t =
-    std::unordered_set<instruction_iterator_t,
-                       detail::instruction_iterator_hasher>;
+typedef std::unordered_set<instruction_iterator_t,
+                            detail::instruction_iterator_hasher>
+        solver_work_set_t;
 
 
 /**
@@ -71,12 +71,12 @@ void  initialise_domain(
     domain_t&  domain
     )
 {
-  std::unordered_set<variable_id_t>  variables;
+  std::unordered_set<lvalue_idt>  variables;
   for (auto const&  param : to_code_type(function.type).parameters())
     variables.insert(as_string(param.get_identifier()));
   domain.insert({
       function.body.instructions.cbegin(),
-      map_from_vars_to_values_t(variables)
+      map_from_lvalues_to_svaluest(variables)
       });
 
   for (auto  it = function.body.instructions.cbegin();
@@ -84,7 +84,7 @@ void  initialise_domain(
        ++it)
     domain.insert({
         it,
-        map_from_vars_to_values_t(std::unordered_set<variable_id_t>{})
+        map_from_lvalues_to_svaluest(std::unordered_set<lvalue_idt>{})
         });
 }
 
@@ -125,13 +125,44 @@ void  collect_identifiers(
 }
 
 
+void  build_summary_from_computed_domain(
+      domain_ptr_t const  domain,
+      irep_idt const&  function_id,
+      goto_functionst::function_mapt::const_iterator const  fn_iter,
+      namespacet const&  ns,
+      goto_modelt const&  program,
+      summaryt::map_from_lvalues_to_symbols_t&  input,
+      summaryt::map_from_lvalues_to_symbols_t&  output,
+      std::ostream* const  log
+      )
+{
+  map_from_lvalues_to_svaluest const&  start_value =
+      domain->at(fn_iter->second.body.instructions.cbegin());
+  for (auto const&  param : to_code_type(fn_iter->second.type).parameters())
+  {
+    lvalue_idt const  var = as_string(param.get_identifier());
+    input.insert({var,start_value.data().at(var)});
+  }
+
+  map_from_lvalues_to_svaluest const&  end_value =
+      domain->at(std::prev(fn_iter->second.body.instructions.cend()));
+  for (auto const&  elem : end_value.data())
+  {
+    symbolt const*  symbol = nullptr;
+    ns.lookup(elem.first,symbol);
+    if (symbol != nullptr && symbol->is_static_lifetime)
+      output.insert({elem.first,elem.second});
+  }
+}
+
+
 }}}}
 
 namespace sumfn { namespace taint {
 
 
-value_of_variable_t::value_of_variable_t(
-    expression_t const&  expression,
+svaluet::svaluet(
+    expressiont const&  expression,
     bool  is_bottom,
     bool  is_top
     )
@@ -143,9 +174,7 @@ value_of_variable_t::value_of_variable_t(
 }
 
 
-bool  operator==(
-    value_of_variable_t const&  a,
-    value_of_variable_t const&  b)
+bool  operator==(svaluet const&  a, svaluet const&  b)
 {
   return a.is_top() == b.is_top() &&
          a.is_bottom() == b.is_bottom() &&
@@ -153,9 +182,7 @@ bool  operator==(
          ;
 }
 
-bool  operator<(
-    value_of_variable_t const&  a,
-    value_of_variable_t const&  b)
+bool  operator<(svaluet const&  a, svaluet const&  b)
 {
   if (a.is_top() || b.is_bottom())
     return false;
@@ -165,9 +192,7 @@ bool  operator<(
                        a.expression().cbegin(),a.expression().cend());
 }
 
-value_of_variable_t  join(
-    value_of_variable_t const&  a,
-    value_of_variable_t const&  b)
+svaluet  join(svaluet const&  a, svaluet const&  b)
 {
   if (a.is_bottom())
     return b;
@@ -177,20 +202,20 @@ value_of_variable_t  join(
     return a;
   if (b.is_top())
     return b;
-  expression_t  result_set = a.expression();
+  svaluet::expressiont  result_set = a.expression();
   result_set.insert(b.expression().cbegin(),b.expression().cend());
   return {result_set,false,false};
 }
 
 
-map_from_vars_to_values_t::map_from_vars_to_values_t(
-    dictionary_t const&  data
+map_from_lvalues_to_svaluest::map_from_lvalues_to_svaluest(
+    dictionaryt const&  data
     )
   : m_from_vars_to_values(data)
 {}
 
-map_from_vars_to_values_t::map_from_vars_to_values_t(
-    std::unordered_set<variable_id_t> const&  variables
+map_from_lvalues_to_svaluest::map_from_lvalues_to_svaluest(
+    std::unordered_set<lvalue_idt> const&  variables
     )
   : m_from_vars_to_values()
 {
@@ -198,8 +223,8 @@ map_from_vars_to_values_t::map_from_vars_to_values_t(
     m_from_vars_to_values.insert({ var, detail::make_symbol() });
 }
 
-void  map_from_vars_to_values_t::assign(variable_id_t const&  var_name,
-                                        value_of_variable_t const&  value)
+void  map_from_lvalues_to_svaluest::assign(lvalue_idt const&  var_name,
+                                        svaluet const&  value)
 {
   auto const  it = m_from_vars_to_values.find(var_name);
   if (it == m_from_vars_to_values.end())
@@ -208,8 +233,8 @@ void  map_from_vars_to_values_t::assign(variable_id_t const&  var_name,
     it->second = value;
 }
 
-void  map_from_vars_to_values_t::erase(
-    std::unordered_set<variable_id_t> const&  vars
+void  map_from_lvalues_to_svaluest::erase(
+    std::unordered_set<lvalue_idt> const&  vars
     )
 {
   for (auto const&  var : vars)
@@ -218,8 +243,8 @@ void  map_from_vars_to_values_t::erase(
 
 
 bool  operator==(
-    map_from_vars_to_values_t const&  a,
-    map_from_vars_to_values_t const&  b)
+    map_from_lvalues_to_svaluest const&  a,
+    map_from_lvalues_to_svaluest const&  b)
 {
   auto  a_it = a.data().cbegin();
   auto  b_it = b.data().cbegin();
@@ -233,8 +258,8 @@ bool  operator==(
 
 
 bool  operator<(
-    map_from_vars_to_values_t const&  a,
-    map_from_vars_to_values_t const&  b)
+    map_from_lvalues_to_svaluest const&  a,
+    map_from_lvalues_to_svaluest const&  b)
 {
   if (b.data().empty())
     return false;
@@ -250,14 +275,14 @@ bool  operator<(
 }
 
 
-map_from_vars_to_values_t  transform(
-    map_from_vars_to_values_t const&  a,
+map_from_lvalues_to_svaluest  transform(
+    map_from_lvalues_to_svaluest const&  a,
     goto_programt::instructiont const&  I,
     namespacet const&  ns,
     std::ostream* const  log
     )
 {
-  map_from_vars_to_values_t  result = a;
+  map_from_lvalues_to_svaluest  result = a;
   switch(I.type)
   {
   case ASSIGN:
@@ -267,7 +292,7 @@ map_from_vars_to_values_t  transform(
 
       code_assignt const&  asgn = to_code_assign(I.code);
 
-      value_of_variable_t  rvalue = detail::make_bottom();
+      svaluet  rvalue = detail::make_bottom();
       {
         std::unordered_set<std::string>  rhs;
         detail::collect_identifiers(asgn.rhs(),rhs);
@@ -340,12 +365,12 @@ map_from_vars_to_values_t  transform(
 }
 
 
-map_from_vars_to_values_t  join(
-    map_from_vars_to_values_t const&  a,
-    map_from_vars_to_values_t const&  b
+map_from_lvalues_to_svaluest  join(
+    map_from_lvalues_to_svaluest const&  a,
+    map_from_lvalues_to_svaluest const&  b
     )
 {
-  map_from_vars_to_values_t::dictionary_t  result_dict = b.data();
+  map_from_lvalues_to_svaluest::dictionaryt  result_dict = b.data();
   for (auto  a_it = a.data().cbegin(); a_it != a.data().cend(); ++a_it)
   {
     auto const  r_it = result_dict.find(a_it->first);
@@ -354,23 +379,29 @@ map_from_vars_to_values_t  join(
     else
       r_it->second = join(a_it->second,r_it->second);
   }
-  return map_from_vars_to_values_t{ result_dict };
+  return map_from_lvalues_to_svaluest{ result_dict };
 }
 
 
-summary_t::summary_t(domain_ptr_t const  domain)
-  : m_domain(domain)
+summaryt::summaryt(
+    map_from_lvalues_to_symbols_t const&  input,
+    map_from_lvalues_to_symbols_t const&  output,
+    domain_ptr_t const  domain
+    )
+  : m_input(input)
+  , m_output(output)
+  , m_domain(domain)
 {
   assert(m_domain.operator bool());
 }
 
 
-std::string  summary_t::kind() const
+std::string  summaryt::kind() const
 {
   return "sumfn::taint::summarise_function";
 }
 
-std::string  summary_t::description() const noexcept
+std::string  summaryt::description() const noexcept
 {
   return "Function summary of taint analysis of java web applications.";
 }
@@ -379,7 +410,7 @@ std::string  summary_t::description() const noexcept
 
 void  summarise_all_functions(
     goto_modelt const&  instrumented_program,
-    database_of_summaries_t&  summaries_to_compute,
+    database_of_summariest&  summaries_to_compute,
     std::ostream* const  log
     )
 {
@@ -392,7 +423,7 @@ void  summarise_all_functions(
           });
 }
 
-summary_ptr_t  summarise_function(
+summary_ptrt  summarise_function(
     irep_idt const&  function_id,
     goto_modelt const&  instrumented_program,
     std::ostream* const  log
@@ -422,7 +453,7 @@ summary_ptr_t  summarise_function(
     instruction_iterator_t const  src_instr_it = *work_set.cbegin();
     work_set.erase(work_set.cbegin());
 
-    map_from_vars_to_values_t const&  src_value = domain->at(src_instr_it);
+    map_from_lvalues_to_svaluest const&  src_value = domain->at(src_instr_it);
 
     goto_programt::const_targetst successors;
     fn_iter->second.body.get_successors(src_instr_it, successors);
@@ -432,8 +463,8 @@ summary_ptr_t  summarise_function(
       if (*succ_it != fn_iter->second.body.instructions.cend())
       {
         instruction_iterator_t const  dst_instr_it = *succ_it;
-        map_from_vars_to_values_t&  dst_value = domain->at(dst_instr_it);
-        map_from_vars_to_values_t const  old_dst_value = dst_value;
+        map_from_lvalues_to_svaluest&  dst_value = domain->at(dst_instr_it);
+        map_from_lvalues_to_svaluest const  old_dst_value = dst_value;
 
         if (log != nullptr)
         {
@@ -453,7 +484,7 @@ summary_ptr_t  summarise_function(
           dump_vars_to_values_in_html(old_dst_value,*log);
         }
 
-        map_from_vars_to_values_t const  transformed =
+        map_from_lvalues_to_svaluest const  transformed =
             transform(src_value,*src_instr_it,ns,log);
         dst_value = join(transformed,dst_value);
 
@@ -495,7 +526,19 @@ summary_ptr_t  summarise_function(
         }
       }
   }
-  return std::make_shared<summary_t>(domain);
+  summaryt::map_from_lvalues_to_symbols_t  input;
+  summaryt::map_from_lvalues_to_symbols_t  output;
+  detail::build_summary_from_computed_domain(
+        domain,
+        function_id,
+        fn_iter,
+        ns,
+        instrumented_program,
+        input,
+        output,
+        log
+        );
+  return std::make_shared<summaryt>(input,output,domain);
 }
 
 
