@@ -587,6 +587,7 @@ std::string  summaryt::description() const noexcept
 void  summarise_all_functions(
     goto_modelt const&  instrumented_program,
     database_of_summariest&  summaries_to_compute,
+    call_grapht const&  call_graph,
     std::ostream* const  log
     )
 {
@@ -595,13 +596,18 @@ void  summarise_all_functions(
     if (elem.second.body_available())
       summaries_to_compute.insert({
           as_string(elem.first),
-          summarise_function(elem.first,instrumented_program,log),
+          summarise_function(
+              elem.first,
+              instrumented_program,
+              summaries_to_compute,
+              log),
           });
 }
 
 summary_ptrt  summarise_function(
     irep_idt const&  function_id,
     goto_modelt const&  instrumented_program,
+    database_of_summariest&  database,
     std::ostream* const  log
     )
 {

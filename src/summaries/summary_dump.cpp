@@ -152,8 +152,29 @@ std::string  dump_function_body_in_html(
 }
 
 
+std::string  dump_callgraph_in_svg(
+    call_grapht const&  call_graph,
+    std::string const&  svg_file_pathname
+    )
+{
+  std::string const  dot_filename =
+      msgstream() << svg_file_pathname << ".dot";
+  {
+    std::fstream  ostr(dot_filename, std::ios_base::out);
+    if (!ostr.is_open())
+        return msgstream() << "ERROR: sumfn::dump_callgraph_in_svg() : "
+                              "Cannot open file '" << dot_filename << "'."
+                           ;
+    call_graph.output_dot(ostr);
+  }
+
+  return ""; // No error.
+}
+
+
 std::string  dump_goto_program_in_html(
     goto_modelt const&  program,
+    call_grapht const&  call_graph,
     std::string const&  dump_root_directory
     )
 {
@@ -176,6 +197,11 @@ std::string  dump_goto_program_in_html(
       if (!err_message.empty())
         return err_message;
     }
+
+  dump_callgraph_in_svg(
+        call_graph,
+        msgstream() << dump_root_directory << "/call_graph.svg"
+        );
 
   std::string const  log_filename =
       msgstream() << dump_root_directory << "/index.html";
@@ -251,6 +277,7 @@ std::string  dump_in_html(
     database_of_summariest const&  computed_summaries,
     callback_dump_derived_summary_in_htmlt const&  summary_dump_callback,
     goto_modelt const&  program,
+    call_grapht const&  call_graph,
     std::string const&  dump_root_directory,
     std::ostream* const  log
     )
@@ -260,6 +287,7 @@ std::string  dump_in_html(
   std::string  err_message =
       detail::dump_goto_program_in_html(
           program,
+          call_graph,
           msgstream() << dump_root_directory << "/goto_model"
           );
   if (!err_message.empty())

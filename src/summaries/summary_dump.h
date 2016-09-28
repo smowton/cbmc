@@ -14,6 +14,7 @@
 
 #include <summaries/summary.h>
 #include <goto-programs/goto_model.h>
+#include <analyses/call_graph.h>
 #include <functional>
 #include <string>
 #include <iosfwd>
@@ -42,6 +43,7 @@ std::string  dump_in_html(
     database_of_summariest const&  computed_summaries,
     callback_dump_derived_summary_in_htmlt const&  summary_dump_callback,
     goto_modelt const&  program,
+    call_grapht const&  call_graph,
     std::string const&  dump_root_directory,
     std::ostream* const  log = nullptr
     );

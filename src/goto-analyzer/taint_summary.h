@@ -15,6 +15,7 @@
 #include <summaries/summary.h>
 #include <goto-programs/goto_model.h>
 #include <goto-programs/goto_functions.h>
+#include <analyses/call_graph.h>
 #include <util/irep.h>
 #include <unordered_map>
 #include <unordered_set>
@@ -104,86 +105,18 @@ bool  operator<(svaluet const&  a, svaluet const&  b);
 svaluet  join(svaluet const&  a, svaluet const&  b);
 
 
-
-
-//typedef std::string  lvaluet;
-//typedef std::unordered_map<lvaluet,svaluet>
-//        map_from_lvalues_to_svaluest;
-//typedef std::unordered_set<lvaluet>
-//        lvalues_sett;
-
-//namespace xxx {
-
+/**
+ *
+ *
+ *
+ *
+ */
 typedef exprt  lvaluet;
 
 typedef std::unordered_map<lvaluet,svaluet,irep_hash,irep_full_eq>
         map_from_lvalues_to_svaluest;
 typedef std::unordered_set<lvaluet,irep_hash,irep_full_eq>
         lvalues_sett;
-
-inline void foo(map_from_lvalues_to_svaluest& x, lvalues_sett y)
-{
-
-}
-
-//}
-
-//inline bool  operator==(lvaluet const&  a, lvaluet const&  b)
-//{
-//  return full_eq(a,b);
-//}
-
-
-///**
-// *
-// *
-// *
-// */
-//typedef std::vector<std::string>  access_patht;
-
-//inline  std::string  access_path_arrow() { return "->"; }
-//inline  std::string  access_path_dot() { return "."; }
-//inline  std::string  access_path_array() { return "[]"; }
-
-
-///**
-// *
-// *
-// */
-////typedef std::string  lvaluet;
-//struct  lvaluet
-//{
-//  explicit  lvaluet(std::string const&  var_name);
-//  lvaluet(access_patht const&  access_path);
-
-//  access_patht const&  access_path() const noexcept { return m_access_path; }
-
-//private:
-//  access_patht  m_access_path;
-//};
-
-
-
-/**
- *
- *
- */
-//struct  map_from_lvalues_to_svaluest
-//{
-//  explicit map_from_lvalues_to_svaluest(
-//      lvalues_mapt const&  data
-//      );
-//  explicit map_from_lvalues_to_svaluest(
-//      lvalues_sett const&  lvalues
-//      );
-
-//  void  assign(lvaluet const&  lvalue, svaluet const&  value);
-//  void  erase(lvalues_sett const&  lvalues);
-//  lvalues_mapt const&  data() const noexcept { return m_from_vars_to_values; }
-
-//private:
-//  lvalues_mapt  m_from_vars_to_values;
-//};
 
 
 /**
@@ -263,7 +196,6 @@ typedef std::shared_ptr<domaint>  domain_ptrt;
  */
 struct  summaryt : public sumfn::summaryt
 {
-
   summaryt(map_from_lvalues_to_svaluest const&  input,
            map_from_lvalues_to_svaluest const&  output,
            domain_ptrt const  domain);
@@ -301,6 +233,7 @@ typedef std::shared_ptr<summaryt const>  summary_ptrt;
 void  summarise_all_functions(
     goto_modelt const&  instrumented_program,
     database_of_summariest&  summaries_to_compute,
+    call_grapht const&  call_graph,
     std::ostream* const  log = nullptr
     );
 
@@ -312,6 +245,7 @@ void  summarise_all_functions(
 summary_ptrt  summarise_function(
     irep_idt const&  function_id,
     goto_modelt const&  instrumented_program,
+    database_of_summariest&  database,
     std::ostream* const  log = nullptr
     );
 
