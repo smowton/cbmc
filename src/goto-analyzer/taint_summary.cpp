@@ -171,7 +171,8 @@ void  initialise_domain(
   if (log != nullptr)
     if (!environment.empty())
       *log << " }</p>\n"
-              "<p>Collecting lvalues representing function's environment:</p>\n"
+              "<p>Collecting lvalues representing function's environment "
+              " and mapping them to fresh symbols:</p>\n"
               "<ul>\n"
            ;
 
@@ -185,6 +186,8 @@ void  initialise_domain(
       {
         *log << "<li>";
         dump_lvalue_in_html(lvalue,ns,*log);
+        *log << " &rarr; ";
+        dump_svalue_in_html(map.at(lvalue),*log);
         *log << "</li>\n";
       }
     }
@@ -197,7 +200,12 @@ void  initialise_domain(
       }
 
   if (log != nullptr)
-    *log << "</ul>";
+  {
+    *log << "</ul>\n<p>Updated symbolic value at the entry location "
+         << function.body.instructions.cbegin()->location_number
+         << ":</p>\n";
+    dump_lvalues_to_svalues_in_html(map,ns,*log);
+  }
 }
 
 
@@ -244,7 +252,10 @@ void  build_summary_from_computed_domain(
 {
   if (log != nullptr)
     *log << "<h3>Building summary from the computed domain</h3>\n"
-            "<p>Mapping of input to symbols:</p>\n"
+            "<p>Mapping of input to symbols (computed from the symbolic value "
+            "at location "
+         << fn_iter->second.body.instructions.cbegin()->location_number
+         << "):</p>\n"
             "<ul>\n"
          ;
 
@@ -265,9 +276,22 @@ void  build_summary_from_computed_domain(
         *log << "</li>\n";
       }
     }
+    else
+      if (log != nullptr)
+      {
+        *log << "<li>!! EXCLUDING !! : ";
+        dump_lvalue_in_html(it->first,ns,*log);
+        *log << " &rarr; ";
+        dump_svalue_in_html(it->second,*log);
+        *log << "</li>\n";
+      }
 
   if (log != nullptr)
-    *log << "</ul>\n<p>The summary:</p>\n<ul>\n";
+    *log << "</ul>\n<p>The summary (computed from the symbolic value "
+            "at location "
+         << std::prev(fn_iter->second.body.instructions.cend())->location_number
+         << "):</p>\n<ul>\n"
+         ;
 
   map_from_lvalues_to_svaluest const&  end_svalue =
       domain->at(std::prev(fn_iter->second.body.instructions.cend()));
@@ -285,6 +309,15 @@ void  build_summary_from_computed_domain(
           *log << "</li>\n";
       }
     }
+    else
+      if (log != nullptr)
+      {
+        *log << "<li>!! EXCLUDING !! : ";
+        dump_lvalue_in_html(it->first,ns,*log);
+        *log << " &rarr; ";
+        dump_svalue_in_html(it->second,*log);
+        *log << "</li>\n";
+      }
 
   if (log != nullptr)
     *log << "</ul>\n";
@@ -403,34 +436,36 @@ map_from_lvalues_to_svaluest  transform(
   {
   case ASSIGN:
     {
-      if (log != nullptr)
-        *log << "<p>\nRecognised ASSIGN instruction.\n";
-
       code_assignt const&  asgn = to_code_assign(I.code);
+
+      if (log != nullptr)
+      {
+        *log << "<p>\nRecognised ASSIGN instruction. Left-hand-side "
+                "l-value is { ";
+        dump_lvalue_in_html(asgn.lhs(),ns,*log);
+        *log << " }. Right-hand-side l-values are { ";
+      }
 
       svaluet  rvalue = detail::make_bottom();
       {
         lvalues_sett  rhs;
         detail::collect_lvalues(asgn.rhs(),rhs);
-
-        if (log != nullptr)
+        for (auto const&  lvalue : rhs)
         {
-          *log << "r-values identifiers are {";
-          for (auto const&  lvalue : rhs)
+          auto const  it = a.find(lvalue);
+          if (it != a.cend())
+            rvalue = join(rvalue,it->second);
+
+          if (log != nullptr)
           {
             dump_lvalue_in_html(lvalue,ns,*log);
             *log << ", ";
           }
-          *log << "}.\n";
-        }
-
-        for (auto const&  ident : rhs)
-        {
-          auto const  it = a.find(ident);
-          if (it != a.cend())
-            rvalue = join(rvalue,it->second);
         }
       }
+
+      if (log != nullptr)
+        *log << "}.</p>\n";
 
       detail::assign(result,asgn.lhs(),rvalue);
     }
@@ -438,18 +473,47 @@ map_from_lvalues_to_svaluest  transform(
   case DEAD:
     {
       code_deadt const&  dead = to_code_dead(I.code);
+
+      if (log != nullptr)
+        *log << "<p>\nRecognised DEAD instruction. Removing these l-values { ";
+
       lvalues_sett  lvalues;
       detail::collect_lvalues(dead.symbol(),lvalues);
       for (auto const&  lvalue : lvalues)
+      {
         result.erase(lvalue);
-//      if (dead.symbol().type().id() == ID_pointer)
-//        ...
+
+        if (log != nullptr)
+        {
+          dump_lvalue_in_html(lvalue,ns,*log);
+          *log << ", ";
+        }
+      }
+
+      if (log != nullptr)
+        *log << "}.</p>\n";
     }
     break;
-  case GOTO:
   case NO_INSTRUCTION_TYPE:
+    if (log != nullptr)
+      *log << "<p>Recognised NO_INSTRUCTION_TYPE instruction. "
+              "The transformation function is identity.</p>\n";
+    break;
   case SKIP:
+    if (log != nullptr)
+      *log << "<p>Recognised SKIP instruction. "
+              "The transformation function is identity.</p>\n";
+    break;
   case END_FUNCTION:
+    if (log != nullptr)
+      *log << "<p>Recognised END_FUNCTION instruction. "
+              "The transformation function is identity.</p>\n";
+    break;
+  case GOTO:
+    if (log != nullptr)
+      *log << "<p>Recognised GOTO instruction. "
+              "The transformation function is identity.</p>\n";
+    break;
   case RETURN:
   case OTHER:
   case DECL:
@@ -463,6 +527,10 @@ map_from_lvalues_to_svaluest  transform(
   case ATOMIC_END:
   case START_THREAD:
   case END_THREAD:
+    if (log != nullptr)
+      *log << "<p>!!! WARNING !!! : Unsupported instruction reached. "
+              "So, we use identity as a transformation function.</p>\n";
+    break;
     break;
   default:
     throw std::runtime_error("ERROR: In 'sumfn::taint::transform' - "
