@@ -37,9 +37,12 @@ Function: java_bytecode_languaget::get_language_options
 
 void java_bytecode_languaget::get_language_options(const cmdlinet& cmd)
 {
+  disable_runtime_checks=cmd.isset("disable-runtime-check");
   assume_inputs_non_null=cmd.isset("java-assume-inputs-non-null");
   if(cmd.isset("java-max-input-array-length"))
     max_nondet_array_length=safe_string2int(cmd.get_value("java-max-input-array-length"));
+  if(cmd.isset("java-max-vla-length"))
+    max_user_array_length=safe_string2int(cmd.get_value("java-max-vla-length"));
 }
 
 /*******************************************************************\
@@ -194,7 +197,11 @@ bool java_bytecode_languaget::typecheck(
     debug() << "Converting class " << c_it->first << eom;
 
     if(java_bytecode_convert_class(
-         c_it->second, symbol_table, get_message_handler()))
+         c_it->second, 
+	 disable_runtime_checks,
+	 symbol_table, 
+	 get_message_handler(),
+	 max_user_array_length))
       return true;
   }
 

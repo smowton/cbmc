@@ -187,7 +187,8 @@ void interpretert::command()
     else if(ch=='n') list_inputs(true);
     else if(ch=='t') {
       list_input_varst ignored;
-      load_counter_example_inputs(steps, ignored);
+      side_effects_differencet diffs;
+      load_counter_example_inputs(steps, ignored, diffs);
     }
     else if(ch==' ') load_counter_example_inputs(command+3);
     else if(ch=='f') {
@@ -540,7 +541,7 @@ Function: interpretert::get_type
  Purpose:
 
  \*******************************************************************/
-typet interpretert::get_type(const irep_idt &id)
+typet interpretert::get_type(const irep_idt &id) const
 {
   dynamic_typest::const_iterator it=dynamic_types.find(id);
   if (it==dynamic_types.end()) return symbol_table.lookup(id).type;
@@ -929,8 +930,8 @@ void interpretert::execute_function_call()
     {
       std::vector<mp_integer> value;
       assert(it->second.size()!=0);
-      assert(it->second.front().assignments.size()!=0);
-      evaluate(it->second.front().assignments.back().value,value);
+      assert(it->second.front().return_assignments.size()!=0);
+      evaluate(it->second.front().return_assignments.back().value,value);
       if (return_value_address>0)
       {
         assign(return_value_address,value);
@@ -1030,15 +1031,14 @@ typet interpretert::concretise_type(const typet &type) const
     std::vector<mp_integer> computed_size;
     evaluate(size_expr,computed_size);
     if(computed_size.size()==1 &&
-       computed_size[0]>0 &&
-       computed_size[0]<=max_allowed_dynamic_array_size)
+       computed_size[0]>=0)
     {
-      message->result() << "Concretised array with size " << computed_size[0] << "\n" << messaget::eom;
+      message->result() << "Concretised array with size " << computed_size[0] << messaget::eom;
       return array_typet(type.subtype(),
                          constant_exprt::integer_constant(computed_size[0].to_ulong()));
     }
     else {
-      message->error() << "Failed to concretise variable array\n" << messaget::eom;
+      message->error() << "Failed to concretise variable array" << messaget::eom;
     }
   }
   return type;
@@ -1160,9 +1160,17 @@ unsigned interpretert::get_size(const typet &type) const
 
     unsigned subtype_size=get_size(type.subtype());
 
-    mp_integer i;
-    if(!to_integer(size_expr, i))
-      return subtype_size*integer2unsigned(i);
+    std::vector<mp_integer> i;
+    evaluate(size_expr,i);
+    if(i.size()==1)
+    {
+      // Go via the binary representation to reproduce any
+      // overflow behaviour.
+      exprt size_const=from_integer(i[0],size_expr.type());
+      mp_integer size_mp;
+      assert(!to_integer(size_const,size_mp));
+      return subtype_size*integer2unsigned(size_mp);
+    }
     else
       return subtype_size;
   }
@@ -1464,15 +1472,15 @@ void interpretert::prune_inputs(input_varst &inputs,list_input_varst& function_i
 {
   for(list_input_varst::iterator it=function_inputs.begin(); it!=function_inputs.end();it++) {
     const exprt size=from_integer(it->second.size(), integer_typet());
-    assert(it->second.front().assignments.size()!=0);
-    const auto& first_function_assigns=it->second.front().assignments;
+    assert(it->second.front().return_assignments.size()!=0);
+    const auto& first_function_assigns=it->second.front().return_assignments;
     const auto& toplevel_definition=first_function_assigns.back().value;
     array_typet type=array_typet(toplevel_definition.type(),size);
     array_exprt list(type);
     list.reserve_operands(it->second.size());
     for(auto l_it : it->second)
     {
-      list.copy_to_operands(l_it.assignments.back().value);
+      list.copy_to_operands(l_it.return_assignments.back().value);
     }
     inputs[it->first]=list;
   }
@@ -1683,7 +1691,7 @@ bool calls_opaque_stub(const code_function_callt& callinst,
 
  Inputs: Symbol to capture, map of current symbol ("input") values.
 
- Outputs: Populates captured with a bottom-up-ordered list of symbol
+ Outputs: Populates captured with a top-down-ordered list of symbol
           values containing every value reachable from capture_symbol.
           For example, if capture_symbol contains a pointer to some
           object x, captured will be populated with x's value and then
@@ -1705,6 +1713,9 @@ void interpretert::get_value_tree(const irep_idt& capture_symbol,
     if(already_captured.id==capture_symbol)
       return;
   exprt defined=get_value(capture_symbol);
+
+  captured.push_back({capture_symbol, defined});
+
   if(defined.type().id()==ID_pointer)
   {
     get_value_tree(defined,captured);
@@ -1724,8 +1735,6 @@ void interpretert::get_value_tree(const irep_idt& capture_symbol,
     // Primitive, just capture this.
   }
 
-  captured.push_back({capture_symbol, defined});
-
 }
 
 void interpretert::get_value_tree(const exprt& capture_expr,
@@ -1738,6 +1747,15 @@ void interpretert::get_value_tree(const exprt& capture_expr,
     get_value_tree(referee,captured);
   }
 }
+
+// Wrapper for above, giving bottom-up ordering
+void interpretert::get_value_tree_bu(const irep_idt& capture_symbol,
+                                     function_assignmentst& captured)
+{
+  get_value_tree(capture_symbol,captured);
+  std::reverse(captured.begin(),captured.end());
+}
+                                  
 
 static bool is_assign_step(const goto_trace_stept& step)
 {
@@ -1755,15 +1773,53 @@ static bool is_constructor_call(const goto_trace_stept& step,
   return callee_type.get_bool(ID_constructor);
 }
 
-static bool is_super_call(const irep_idt& called, const irep_idt& caller)
+struct trace_stack_entry {
+  irep_idt func_name;
+  mp_integer this_address;
+  irep_idt capture_symbol;
+  bool is_super_call;
+  std::vector<interpretert::function_assignmentt> param_values;
+};
+
+static bool is_super_call(const trace_stack_entry& called, const trace_stack_entry& caller)
 {
+  // If either call isn't an instance method, it's not a super call:
+  if(called.this_address==0 || caller.this_address==0)
+    return false;
+
+  // If the this-addresses don't match, it's not a super call:
+  if(called.this_address!=caller.this_address)
+    return false;
+  
+  // If the names (including class) match entirely, this is simply a recursive call:
+  if(called.func_name == caller.func_name)
+    return false;
+
   // Check whether the mangled method names (disregarding class) match:
-  std::string calleds=as_string(called);
-  std::string callers=as_string(caller);
+  std::string calleds=as_string(called.func_name);
+  std::string callers=as_string(caller.func_name);
   size_t calledoff=calleds.rfind('.'), calleroff=callers.rfind('.');
   if(calledoff==std::string::npos || calleroff==std::string::npos)
     return false;
   return calleds.substr(calledoff)==callers.substr(calleroff);
+}
+
+mp_integer interpretert::get_this_address(const code_function_callt& call_code)
+{
+  if(!to_code_type(call_code.function().type()).has_this())
+    return 0;
+  
+  std::vector<mp_integer> this_address;
+  assert(call_code.arguments().size()!=0);
+  evaluate(call_code.arguments()[0],this_address);
+  if(this_address.size()==0)
+  {
+    message->warning() << "Failed to evaluate this-arg for " <<
+      from_expr(ns,"",call_code.function()) << messaget::eom;
+    return 0;
+  }
+  assert(this_address.size()==1);
+  return this_address[0];
 }
 
 exprt interpretert::get_value(const irep_idt& id)
@@ -1784,6 +1840,29 @@ exprt interpretert::get_value(const irep_idt& id)
   return get_value(get_type,integer2unsigned(whole_lhs_object_address));
 }
 
+const exprt & get_entry_function(const goto_functionst &gf)
+{
+  typedef goto_functionst::function_mapt function_mapt;
+  const function_mapt &fm=gf.function_map;
+  const irep_idt start(goto_functionst::entry_point());
+  const function_mapt::const_iterator entry_func=fm.find(start);
+  assert(fm.end() != entry_func);
+  const goto_programt::instructionst &in=entry_func->second.body.instructions;
+  typedef goto_programt::instructionst::const_reverse_iterator reverse_target;
+  reverse_target codeit=in.rbegin();
+  const reverse_target end=in.rend();
+  assert(end != codeit);
+  // Tolerate 'dead' statements at the end of _start.
+  while(end!=codeit && codeit->code.get_statement()!=ID_function_call)
+    ++codeit;
+  assert(end != codeit);
+  const reverse_target call=codeit;
+  const code_function_callt &func_call=to_code_function_call(call->code);
+  const exprt &func_expr=func_call.function();
+  return func_expr;
+}
+
+
 /*******************************************************************
  Function: load_counter_example_inputs
 
@@ -1796,7 +1875,8 @@ exprt interpretert::get_value(const irep_idt& id)
  \*******************************************************************/
 
 interpretert::input_varst& interpretert::load_counter_example_inputs(
-    const goto_tracet &trace, list_input_varst& function_inputs, const bool filtered) {
+ const goto_tracet &trace, list_input_varst& function_inputs, side_effects_differencet &valuesDifference, const bool filtered)
+{
   show=false;
   stop_on_assertion=false;
 
@@ -1817,19 +1897,31 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
   // creeps in that needs the current value of local 'i') will be evaluated correctly.
 
   std::vector<std::pair<mp_integer, std::vector<mp_integer> > > trace_eval;
-  struct trace_stack_entry {
-    irep_idt func_name;
-    irep_idt capture_symbol;
-    bool is_super_call;
-  };
   std::vector<trace_stack_entry> trace_stack;
   int outermost_constructor_depth=-1;
+  int expect_parameter_assignments=0;
 
-  trace_stack.push_back({goto_functionst::entry_point(),irep_idt(),false});
+  trace_stack.push_back({goto_functionst::entry_point(),0,irep_idt(),false,{}});
+
+  const exprt &func_expr = get_entry_function(goto_functions);
+  const irep_idt &func_name = to_symbol_expr(func_expr).get_identifier();
+  const code_typet::parameterst &params = to_code_type(func_expr.type()).parameters();
+
+  std::map<std::string, const irep_idt &> parameterSet;
+
+  // mapping <structure, field> -> value
+  std::map<std::pair<const irep_idt, const irep_idt>, const exprt> valuesBefore;
+
+  namespacet ns(symbol_table);
+
+  for(const auto &p : params)
+    parameterSet.insert({id2string(p.get_identifier()), p.get_identifier()});
   
   for(auto it = trace.steps.begin(), itend = trace.steps.end(); it != itend; ++it)
   {
+
     const auto& step=*it;
+
     if(is_assign_step(step))
     {
       mp_integer address;
@@ -1837,15 +1929,101 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
       symbol_exprt symbol_expr=get_assigned_symbol(step);
       irep_idt id=symbol_expr.get_identifier();
 
+      #ifdef DEBUG
+      message->status() << it->pc->function << ": " << from_expr(ns,"",step.full_lhs) << " <- " << from_expr(ns,"",step.full_lhs_value) << messaget::eom;
+      #endif
+
       address=evaluate_address(step.full_lhs);
       if(address==0)
         address=build_memory_map(id,symbol_expr.type());
 
       std::vector<mp_integer> rhs;
       evaluate(step.full_lhs_value,rhs);
+      if(rhs.size()==0)
+      {
+        evaluate(step.full_lhs,rhs);
+        if(rhs.size()!=0)
+        {
+          message->warning() << "symex::build_goto_trace couldn't evaluate this expression, but the interpreter could." << messaget::eom;
+        }
+      }
       assign(address,rhs);
 
+      if(expect_parameter_assignments!=0)
+      {
+        if(!--expect_parameter_assignments)
+        {
+          // Just executed the last parameter assignment for a function we just entered.
+          // Capture the arguments of *every* call as it is entered,
+          // because we might need them for verification if it happens to call a super-method later.
+          std::vector<function_assignmentt> actual_params;
+          const auto& this_function=trace_stack.back().func_name;
+          const auto& formal_params=
+            to_code_type(symbol_table.lookup(this_function).type).parameters();
+          std::vector<function_assignmentt> direct_params;
+          bool is_constructor=id2string(this_function).find("<init>")!=std::string::npos;
+      
+          for(const auto& fp : formal_params)
+          {
+            // Don't capture 'this' on entering a constructor, as it's uninitialised
+            // at this point.
+            if(is_constructor && fp.get_this())
+              continue;
+            // Note this will record the actual parameter values as well as anything
+            // reachable from them. We use a single actual_params list for all parameters
+            // to avoid redundancy e.g. if parameters or objects reachable from them alias,
+            // we only need to capture that subtree once.
+            get_value_tree_bu(fp.get_identifier(),actual_params);
+            // Set the actual direct params aside, so we can keep them in order at the back.
+            direct_params.push_back(std::move(actual_params.back()));
+            actual_params.pop_back();
+          }
+
+          // Put the direct params back on the end of the list:
+          actual_params.insert(actual_params.end(),direct_params.begin(),direct_params.end());
+#ifdef DEBUG
+          for(const auto& id_expr : actual_params)
+            message->status() << "Param " << id_expr.id << " = " <<
+              from_expr(ns,"",id_expr.value) << messaget::eom;
+#endif
+          trace_stack.back().param_values=std::move(actual_params);
+
+        }
+      }
+
       trace_eval.push_back(std::make_pair(address, rhs));
+
+      /********* 8< **********/
+      irep_idt identifier=step.lhs_object.get_identifier();
+      auto param = parameterSet.find(id2string(identifier));
+      if(param != parameterSet.end())
+      {
+        const exprt &expr = step.full_lhs_value;
+        interpretert::function_assignmentst input_assigns;
+        get_value_tree(identifier, input_assigns);
+        for(const auto &assign : input_assigns)
+        {
+          const typet &tree_typ = ns.follow(assign.value.type());
+          if(tree_typ.id()==ID_struct)
+          {
+            const struct_typet &struct_type=to_struct_type(tree_typ);
+            const struct_typet::componentst &components=struct_type.components();
+            const struct_exprt &struct_expr=to_struct_expr(assign.value);
+            const auto& ops=struct_expr.operands();
+            for(size_t fieldidx=0, fieldlim=ops.size(); fieldidx!=fieldlim; ++fieldidx)
+            {
+              const exprt & expr = ops[fieldidx];
+              // only look at atomic types for now
+              if(expr.type().id()==ID_signedbv ||
+                 expr.type().id()==ID_c_bool)
+              {
+                valuesBefore.insert({{assign.id, components[fieldidx].get_name()}, expr});
+              }
+            }
+          }
+        }
+      }
+      /********* 8< **********/
     }
     else if(step.is_function_call())
     {
@@ -1858,11 +2036,22 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
                                      symbol_table,called,capture_symbol);
       bool is_jlo_cons=is_cons &&
                        as_string(called).find("java.lang.Object")!=std::string::npos;
+
+      mp_integer this_address=get_this_address(to_code_function_call(step.pc->code));
+
+      trace_stack.push_back({called,this_address,irep_idt(),false,{}});
+
+      assert(expect_parameter_assignments==0 &&
+             "Entered another function before the parameter assignment chain was done?");
+      // Capture upcoming parameter assignments:
+      expect_parameter_assignments=
+        to_code_type(to_code_function_call(step.pc->code).function().type()).parameters().size();
+      
       bool is_super=(!is_cons) &&
                     trace_stack.size()!=0 &&
-                    is_super_call(called,trace_stack.back().func_name);
+                    is_super_call(trace_stack.back(),trace_stack[trace_stack.size()-2]);
+      trace_stack.back().is_super_call=is_super;
       
-      trace_stack.push_back({called,irep_idt(),is_super});
       if((!is_stub) || is_jlo_cons)
       {
 	if(is_cons)
@@ -1904,22 +2093,76 @@ interpretert::input_varst& interpretert::load_counter_example_inputs(
     else if(step.is_function_return())
     {
       outermost_constructor_depth=-1;
-      assert(trace_stack.size()!=0);
+      assert(trace_stack.size()>=1);
+      assert(expect_parameter_assignments==0 &&
+             "Exited function before the parameter assignment chain was done?");
       const auto& ret_func=trace_stack.back();
       if(ret_func.capture_symbol!=irep_idt())
       {
+        assert(trace_stack.size()>=2);
 	// We must record the value of stub_capture_symbol now.
 	function_assignmentst defined;
-	get_value_tree(ret_func.capture_symbol,defined);
+	get_value_tree_bu(ret_func.capture_symbol,defined);
 	if(defined.size()!=0) // Definition found?
 	{
-	  // Find our calling function:
-	  auto nextit=it; ++nextit;
-	  assert(nextit!=trace.steps.end());
-	  function_inputs[ret_func.func_name].push_front({ nextit->pc->function,defined });
+          const auto& caller=trace_stack[trace_stack.size()-2].func_name;
+	  function_inputs[ret_func.func_name].push_back({
+              caller,std::move(defined),std::move(trace_stack.back().param_values)});
 	}
       }
       trace_stack.pop_back();
+    }
+    else if(step.type==goto_trace_stept::OUTPUT)
+    {
+      for(const auto &inputParam : parameterSet)
+      {
+        std::size_t found = (inputParam.first).rfind(id2string(step.io_id));
+        if(found!=std::string::npos)
+        {
+          // looping over io_args will ignore atomic types which won't have side
+          // effects
+          interpretert::function_assignmentst output_assigns;
+          get_value_tree(inputParam.second, output_assigns);
+          const typet &typ = symbol_table.lookup(inputParam.second).type;
+          for(const auto &assign : output_assigns)
+          {
+            const typet &tree_typ = ns.follow(assign.value.type());
+            if(tree_typ.id()==ID_struct)
+            {
+              const struct_typet &struct_type=to_struct_type(tree_typ);
+              const struct_typet::componentst &components=struct_type.components();
+              const struct_exprt &struct_expr=to_struct_expr(assign.value);
+              const auto& ops=struct_expr.operands();
+              for(size_t fieldidx=0, fieldlim=ops.size(); fieldidx!=fieldlim; ++fieldidx)
+              {
+                const exprt &after_expr = ops[fieldidx];
+                if(after_expr.type().id()==ID_signedbv ||
+                   after_expr.type().id()==ID_c_bool)
+                   // after_expr.type().id()==ID_string ||
+                   // after_expr.type().id()==ID_floatbv)
+                {
+                  auto findit=valuesBefore.find({assign.id, components[fieldidx].get_name()});
+                  if(findit!=valuesBefore.end())
+                  {
+                    const exprt &before_expr = findit->second;
+                    assert(after_expr.type().id()==before_expr.type().id());
+                    mp_integer a, b;
+                    to_integer(after_expr, a);
+                    to_integer(before_expr, b);
+                    if (a != b)
+                    {
+                      valuesDifference.insert({{assign.id, components[fieldidx].get_name()},
+                          {before_expr, after_expr}});
+                    }
+                  }
+                  // TODO decide what to do when a field wasn't reachable before
+                  // (e.g. inaccessible due to a null pointer)
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 

@@ -32,6 +32,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-programs/remove_complex.h>
 #include <goto-programs/remove_vector.h>
 #include <goto-programs/remove_virtual_functions.h>
+#include <goto-programs/remove_instanceof.h>
 
 #include <goto-instrument/cover.h>
 
@@ -406,6 +407,7 @@ bool symex_parse_optionst::process_goto_program(const optionst &options)
     remove_complex(goto_model);
     remove_vector(goto_model);
     remove_virtual_functions(goto_model);
+    remove_instanceof(goto_model);
     
     // recalculate numbers, etc.
     goto_model.goto_functions.update();

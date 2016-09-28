@@ -87,6 +87,21 @@ Function: java_static_lifetime_init
 
 \*******************************************************************/
 
+static bool should_init_symbol(const symbolt& sym)
+{
+  if(sym.type.id()!=ID_code &&
+     sym.is_lvalue &&
+     sym.is_state_var &&
+     sym.is_static_lifetime &&
+     sym.mode==ID_java)
+    return true;
+
+  if(has_prefix(id2string(sym.name),"java::java.lang.String.Literal"))
+    return true;
+  
+  return false;
+}
+
 bool java_static_lifetime_init(
   symbol_tablet &symbol_table,
   const source_locationt &source_location,
@@ -98,42 +113,44 @@ bool java_static_lifetime_init(
   code_blockt &code_block=to_code_block(to_code(initialize_symbol.value));
   
   // we need to zero out all static variables, or nondet-initialize if they're external.
+  // Iterate over a copy of the symtab, as its iterators are invalidated by object_factory:
+
+  std::vector<irep_idt> symnames;
+  symnames.reserve(symbol_table.symbols.size());
+  for(const auto& entry : symbol_table.symbols)
+    symnames.push_back(entry.first);
   
-  for(symbol_tablet::symbolst::const_iterator
-      it=symbol_table.symbols.begin();
-      it!=symbol_table.symbols.end();
-      it++)
+  for(const auto& symname : symnames)
   {
-    if(it->second.type.id()!=ID_code &&
-       it->second.is_lvalue &&
-       it->second.is_state_var &&
-       it->second.is_static_lifetime &&
-       it->second.mode==ID_java)
+    const symbolt& sym=symbol_table.lookup(symname);
+    if(should_init_symbol(sym))
     {
-      if(it->second.value.is_nil() && it->second.type!=empty_typet())
+      if(sym.value.is_nil() && sym.type!=empty_typet())
       {
         bool allow_null=!assume_init_pointers_not_null;
         if(allow_null)
         {
-          std::string namestr=id2string(it->second.symbol_expr().get_identifier());
+          std::string namestr=id2string(sym.symbol_expr().get_identifier());
           const std::string suffix="@class_model";
           // Static '.class' fields are always non-null.
           if(namestr.size() >= suffix.size() &&
              namestr.substr(namestr.size()-suffix.size()) == suffix)
             allow_null=false;
+          if(allow_null && has_prefix(namestr,"java::java.lang.String.Literal"))
+            allow_null=false;
         }
-	auto newsym=object_factory(it->second.type, 
+	auto newsym=object_factory(sym.type, 
 				   code_block,
 				   allow_null,
 				   symbol_table,
 				   max_nondet_array_length,
 				   source_location);
-	code_assignt assignment(it->second.symbol_expr(), newsym);
+	code_assignt assignment(sym.symbol_expr(), newsym);
 	code_block.add(assignment);
       }
-      else if(it->second.value.is_not_nil())
+      else if(sym.value.is_not_nil())
       {
-	code_assignt assignment(it->second.symbol_expr(), it->second.value);
+	code_assignt assignment(sym.symbol_expr(), sym.value);
 	assignment.add_source_location()=source_location;
 	code_block.add(assignment);
       }

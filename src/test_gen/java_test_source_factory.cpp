@@ -72,6 +72,13 @@ public:
 				const irep_idt &func_id, inputst &inputs);
   void add_mock_call(const interpretert::function_assignments_contextt,
 		     const java_call_descriptor& desc, const symbol_tablet&);
+  void defined_symbols_to_java(const interpretert::function_assignmentst& defined_symbols,
+                               const symbol_tablet& st, std::vector<init_statement>& statements);
+  void defined_symbols_to_java_fieldlists(
+    const interpretert::function_assignmentst& defined_symbols,
+    const symbol_tablet& st, std::vector<init_statement>& statements);
+  void struct_to_fieldlist(const irep_idt& listname, const struct_exprt& in_struct,
+                           const symbol_tablet& st, std::vector<init_statement>& statements);
   void add_mock_objects(const symbol_tablet &st,
 			const interpretert::list_input_varst& opaque_function_returns);
   void expand_wildcard(const std::string& s, std::vector<std::string>& out);
@@ -83,7 +90,8 @@ public:
                                  std::vector<symbolt>& needed);
   void gather_referenced_symbols(const symbolt& symbol, inputst& in, const symbol_tablet&,
                                  std::vector<symbolt>& needed);
-
+  std::string verify_mock_objects(const symbol_tablet &st,
+                                  const interpretert::list_input_varst& opaque_function_returns);
 };
 
 bool is_array_tag(const irep_idt& tag)
@@ -221,7 +229,8 @@ void add_test_method_name(std::string &result, const std::string &func_name)
   //result+=func_name;
   //result+="Test {\n";
   //indent(result)+="public void test";
-  indent(result,2u)+="@org.junit.Test public void ";
+  indent(result,2u)+="@org.junit.Test\n";
+  indent(result,2u)+="public void ";
   result+=func_name;
   result+="() throws Exception {\n";
 }
@@ -389,7 +398,8 @@ void reference_factoryt::add_assign_value(std::string &result, const symbol_tabl
     result+=')';
   }
   add_value(result, st, value, symbol_name);
-  result+=";\n";
+  if(result.back() != '\n')
+    result+=";\n";
 }
 
 symbol_exprt try_find_underlying_symbol_expr(exprt e)
@@ -410,10 +420,14 @@ symbol_exprt try_find_underlying_symbol_expr(exprt e)
 }
 
 void reference_factoryt::add_declare_and_assign_noarray(std::string &result, const symbol_tablet &st,
-                                                        const symbolt& symbol, const exprt& value,
+                                                        const symbolt& symbol, const exprt& _value,
                                                         bool should_declare)
 {
   if (should_declare) add_decl_with_init_prefix(result, st, symbol);
+  exprt value=_value;
+  if(value==irept() && symbol.type.id()==ID_array)
+    value=array_exprt(to_array_type(symbol.type));
+
   add_assign_value(result, st, symbol, value);
 }
 
@@ -598,7 +612,7 @@ void add_func_call(std::string &result, const symbol_tablet &st,
   if(instance_method)
     result += '.' + symbol_to_function_name(s, instance_method);
   else
-    indent(result, 2u) += symbol_to_function_name(s, instance_method);
+    result += symbol_to_function_name(s, instance_method);
   result+='(';
   const std::vector<irep_idt> params(get_parameters(s));
   unsigned nparams = 0;
@@ -612,7 +626,7 @@ void add_func_call(std::string &result, const symbol_tablet &st,
       result+=", ";
     add_symbol(result, symbol);
   }
-  result+=");\n";
+  result+=");";
 }
 
 std::string get_escaped_func_name(const symbolt &symbol)
@@ -759,6 +773,96 @@ void reference_factoryt::configure_mocks(
   }
 
 }
+
+void reference_factoryt::defined_symbols_to_java(
+  const interpretert::function_assignmentst& defined_symbols,
+  const symbol_tablet& st,
+  std::vector<init_statement>& statements)
+{
+  for(auto defined : defined_symbols)
+  {
+    symbolt fake_symbol;
+    const symbolt& use_symbol=get_or_fake_symbol(defined.id,fake_symbol);
+
+    // Initial empty statement makes 'string_to_statements' easier
+    std::string this_object_init=";";
+    add_declare_and_assign(this_object_init,st,use_symbol,defined.value,true);
+
+    string_to_statements(this_object_init, statements);
+  }  
+}
+
+void reference_factoryt::struct_to_fieldlist(
+  const irep_idt& listname, const struct_exprt& in_struct,
+  const symbol_tablet& st, std::vector<init_statement>& statements)
+{
+  namespacet ns(st);
+  // Make a FieldList object documenting the name-value pairs we
+  // expect from this object:
+  const auto& comps=to_struct_type(ns.follow(in_struct.type())).components();
+  const auto& ops=in_struct.operands();
+  assert(comps.size()==ops.size());
+      
+  for(size_t fieldidx=0,fieldlim=ops.size(); fieldidx!=fieldlim; ++fieldidx)
+  {
+    std::string compname=id2string(comps[fieldidx].get_pretty_name());
+    assert(compname.size()>=1);
+    if(ns.follow(comps[fieldidx].type()).id()==ID_struct)
+    {
+      // Superclass, I hope.
+      assert(compname[0]=='@');
+      struct_to_fieldlist(listname,to_struct_expr(ops[fieldidx]),st,statements);
+    }
+    else if(compname[0]=='@')
+    {
+      // Internal detail, do not check
+      continue;
+    }
+    else {
+
+      std::string valstr;
+      std::string empty;
+      add_value(valstr, st, ops[fieldidx], empty);
+        
+      std::ostringstream add_field_statement;
+      add_field_statement << listname << ".add(\"" <<
+        id2string(comps[fieldidx].get_pretty_name()) << "\", " <<
+        valstr << ")";
+
+      statements.push_back(init_statement::statement(add_field_statement.str()));
+    }
+  }
+}
+  
+void reference_factoryt::defined_symbols_to_java_fieldlists(
+  const interpretert::function_assignmentst& defined_symbols,
+  const symbol_tablet& st,
+  std::vector<init_statement>& statements)
+{
+  for(auto defined : defined_symbols)
+  {
+    symbolt fake_symbol;
+    const symbolt& use_symbol=get_or_fake_symbol(defined.id,fake_symbol);
+    std::string pretty_name;
+    add_symbol(pretty_name,fake_symbol);
+
+    if(use_symbol.type.id()==ID_struct && !is_array_tag(to_struct_type(use_symbol.type).get_tag()))
+    {
+      std::ostringstream new_statement;
+      new_statement << "com.diffblue.java_testcase.FieldList " << pretty_name <<
+        " = new com.diffblue.java_testcase.FieldList()";
+      statements.push_back(init_statement::statement(new_statement.str()));
+      struct_to_fieldlist(pretty_name,to_struct_expr(defined.value),st,statements);
+    }
+    else {
+      // Initial empty statement makes 'string_to_statements' easier
+      std::string this_object_init=";";
+      add_declare_and_assign(this_object_init,st,use_symbol,defined.value,true);
+
+      string_to_statements(this_object_init, statements);
+    }
+  }  
+}
   
 void reference_factoryt::add_mock_call(
   const interpretert::function_assignments_contextt defined_symbols_context,
@@ -766,7 +870,7 @@ void reference_factoryt::add_mock_call(
   const symbol_tablet& st)
 {
 
-  const auto& defined_symbols=defined_symbols_context.assignments;
+  const auto& defined_symbols=defined_symbols_context.return_assignments;
   std::string return_value;
   assert(defined_symbols.size()!=0);
       
@@ -792,18 +896,9 @@ void reference_factoryt::add_mock_call(
     // Start an anonymous scope, as the symbol names defined below may not be unique
     // if the same method stub was used more than once.
     init_statements.push_back(init_statement::scopeOpen());
-	
-    for(auto defined : defined_symbols)
-    {
-      symbolt fake_symbol;
-      const symbolt& use_symbol=get_or_fake_symbol(defined.id,fake_symbol);
 
-      // Initial empty statement makes the loop below easier.
-      std::string this_object_init=";";
-      add_declare_and_assign(this_object_init,st,use_symbol,defined.value,true);
-
-      string_to_statements(this_object_init, init_statements);
-    }
+    // Define each symbol from the trace:
+    defined_symbols_to_java(defined_symbols,st,init_statements);
 
     const irep_idt& last_sym_name=defined_symbols.back().id;
     init_statements.push_back(
@@ -821,7 +916,8 @@ void reference_factoryt::add_mock_call(
   bool is_constructor=desc.original_type.get_bool(ID_constructor);
       
   if(is_static)
-    mockenv_builder.static_call(desc.classname, desc.funcname, desc.java_arg_types, return_value);
+    mockenv_builder.static_call(desc.classname, desc.funcname, desc.java_arg_types,
+                                desc.java_ret_type, return_value);
   else if(is_constructor)
   {
     std::string caller=as_string(defined_symbols_context.calling_function);
@@ -875,7 +971,7 @@ void reference_factoryt::add_mock_objects(const symbol_tablet &st,
     assert(fn_and_returns.second.size() != 0);
     // Get type from replacement value,
     // as remove_returns passlet has scrubbed the function return type by this point.
-    const auto& last_definition_list=fn_and_returns.second.back().assignments;
+    const auto& last_definition_list=fn_and_returns.second.back().return_assignments;
     const auto& last_toplevel_assignment=last_definition_list.back().value;
     
     populate_descriptor_types(func,last_toplevel_assignment.type(),desc,st);
@@ -911,6 +1007,98 @@ void reference_factoryt::add_mock_objects(const symbol_tablet &st,
 
 }
 
+std::string reference_factoryt::verify_mock_objects(const symbol_tablet &st,
+  const interpretert::list_input_varst& opaque_function_returns)
+{
+
+  namespacet ns(st);
+  std::vector<init_statement> verify_statements;
+  
+  for(auto fn_and_returns : opaque_function_returns)
+  {
+
+    const symbolt &func=st.lookup(fn_and_returns.first);    
+    struct java_call_descriptor desc;
+    populate_descriptor_names(func,desc);
+
+    if(shouldnt_mock_class(desc.classname))
+      continue;
+
+    assert(fn_and_returns.second.size() != 0);
+    // Get type from replacement value,
+    // as remove_returns passlet has scrubbed the function return type by this point.
+    const auto& last_definition_list=fn_and_returns.second.back().return_assignments;
+    const auto& last_toplevel_assignment=last_definition_list.back().value;
+    
+    populate_descriptor_types(func,last_toplevel_assignment.type(),desc,st);
+
+    bool is_static=!desc.original_type.has_this();
+    bool is_constructor=desc.original_type.get_bool(ID_constructor);
+    
+    // Translate call parameters from exprt to Java expressions:
+    // (For now just do primitive types)
+    std::vector<verification_envt> verify_calls;
+    for(const auto& call : fn_and_returns.second)
+    {
+      verify_calls.resize(verify_calls.size()+1);
+      assert(call.param_assignments.size() >= desc.java_arg_types.size());
+
+      // Seperate auxiliary defintions and direct parameters:
+      std::vector<interpretert::function_assignmentt> aux_assignments;
+      std::vector<interpretert::function_assignmentt> direct_assignments;
+
+      auto first_aux=call.param_assignments.begin();
+      size_t param_offset=call.param_assignments.size()-desc.java_arg_types.size();
+      auto first_direct=first_aux;
+      std::advance(first_direct,param_offset);
+
+      aux_assignments.insert(aux_assignments.begin(),
+                             first_aux,
+                             first_direct);
+
+      // Omit implicit 'this' argument for now:
+      if((!is_static) && !is_constructor)
+      {
+        assert(param_offset>0);
+        aux_assignments.pop_back();
+      }
+      
+      direct_assignments.insert(direct_assignments.begin(),
+                                first_direct,
+                                call.param_assignments.end());
+
+      // Render the aux assignments down to a Java statement list:
+      defined_symbols_to_java_fieldlists(aux_assignments,st,verify_calls.back().aux_statements);
+      
+      // Create the direct parameters:
+      for(size_t paramidx=0, paramlim=desc.java_arg_types.size(); paramidx!=paramlim; ++paramidx)
+      {
+        const auto& argtype=desc.java_arg_types[paramidx];
+        const auto& param_assignment=call.param_assignments[paramidx+param_offset];
+        std::string argstring;
+        expr2java(argstring,param_assignment.value,ns);
+        verify_calls.back().arg_strings.push_back(std::move(argstring));
+      }
+    }
+    
+    if(is_static)
+      mockenv_builder.verify_static_calls(desc.classname,desc.funcname,desc.java_arg_types,
+                                          verify_calls,verify_statements);
+    else if(is_constructor)
+      mockenv_builder.verify_constructor_calls(desc.classname,desc.funcname,desc.java_arg_types,
+                                               verify_calls,verify_statements);
+    else
+      mockenv_builder.verify_instance_calls(desc.classname,desc.funcname,desc.java_arg_types,
+                                            verify_calls,verify_statements);
+
+  }
+
+  std::ostringstream statement_stream;
+  mockenv_builder.print_statements(verify_statements,statement_stream);
+  return statement_stream.str();
+  
+}
+  
 } // End of anonymous namespace
 
 std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const irep_idt &func_id,
@@ -918,21 +1106,25 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
     const interpretert::input_var_functionst& input_defn_functions,
     const interpretert::dynamic_typest& dynamic_types,
     const std::string &test_func_name,
+    const interpretert::side_effects_differencet &valuesDifference,
     const std::string &assertCompare, bool emitAssert,
     bool disable_mocks,
+    bool disable_verify_mocks,                                                
     const optionst::value_listt& mock_classes,
     const optionst::value_listt& no_mock_classes,            
-    const std::vector<std::string>& goals_reached)
+    const std::vector<std::string>& goals_reached,
+    const std::string& expect_exception)
 {
+  namespacet ns(st);
   const symbolt &func=st.lookup(func_id);
   std::string result;
 
   if(goals_reached.size()!=0)
   {
-    result="/** This test case reaches the following goals:\n";
+    result="/* This test case reaches the following goals:\n";
     for(const auto& g : goals_reached)
-      result+=("  " + g + "\n");
-    result+="*/\n";
+      result+=(" * " + g + "\n");
+    result+=" */\n";
   }
 
   // Do this first since the mock object creation can require annotations on the test class.
@@ -954,8 +1146,8 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
   else
   {
     indent(post_mock_setup_result) += "// NOTE: the given entry-point is not called, perhaps because\n";
-    indent(post_mock_setup_result) += "we encountered a fault during static initialisation. Instantiating\n";
-    indent(post_mock_setup_result) += "the target class to cause static initialisers run.\n\n";
+    indent(post_mock_setup_result) += "// we encountered a fault during static initialisation. Instantiating\n";
+    indent(post_mock_setup_result) += "// the target class to cause static initialisers run.\n\n";
     java_call_descriptor desc;
     populate_descriptor_names(func,desc);
     indent(post_mock_setup_result)+=force_instantiate(desc.classname);
@@ -965,9 +1157,22 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
   // may have generated mock objects.
   std::string mock_final = ref_factory.mockenv_builder.finalise_instance_calls();
   result += "\n" + ref_factory.mockenv_builder.get_mock_prelude() +
-    "\n" + post_mock_setup_result + "\n" + mock_final;
+    "\n" + post_mock_setup_result + "\n" + mock_final + '\n';
+
+  if(!disable_verify_mocks)
+  {
+    indent(result,2)+="/* Verify that mock-object interactions were as expected: */\n";
+    indent(result,2)+=ref_factory.verify_mock_objects(st,opaque_function_returns);
+    result+='\n';
+  }
+  
   if(exists_func_call)
   {
+
+    std::string declared_type;
+    std::string declared_name;
+    std::string call_expression;
+    
     bool is_constructor=func.type.get_bool(ID_constructor);
     std::string retval_symbol=as_string(func.name)+RETURN_VALUE_SUFFIX;
     const auto findit=st.symbols.find(retval_symbol);
@@ -978,24 +1183,29 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
         java_call_descriptor desc;
         populate_descriptor_names(func,desc);
         indent(result)+="/* creating instance to execute static initializer */\n";
-        indent(result)+=desc.classname + " constructed = (" + desc.classname + ") " + force_instantiate(desc.classname) + "; // ";
+        declared_type=desc.classname;
+        declared_name="constructed";
+        call_expression="(" + desc.classname + ") " + force_instantiate(desc.classname) + "; // ";
       }
       else
       {
         const auto& thistype=to_code_type(func.type).parameters()[0].type();
-        result += "/* creating new object to test contructor */\n";
-        indent(result,2u);
-        add_decl_from_type(result,st,thistype);
-        result += " constructed = new ";
+        indent(result) += "/* creating new object to test constructor */\n";
+        add_decl_from_type(declared_type,st,thistype);
+        declared_name="constructed";
+        call_expression="new ";
       }
     }
-    else if(findit!=st.symbols.end())
+    else
     {
-      result += "/* call function under test */\n";
-      indent(result,2u);
-      add_decl_from_type(result,st,findit->second.type);
-      result += " retval = ";
+      indent(result,2u) += "/* call function under test */\n";
+      if(findit!=st.symbols.end())
+      {
+        add_decl_from_type(declared_type,st,findit->second.type);
+        declared_name="retval";
+      }
     }
+
     if((!is_constructor) && is_instance_method(st, func_id))
     {
       for (const irep_idt &param : get_parameters(st.lookup(func_id)))
@@ -1005,29 +1215,75 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
         {
           const inputst::iterator value=inputs.find(param);
           const namespacet ns(st);
-          expr2java(result, value->second, ns);
+          expr2java(call_expression, value->second, ns);
         }
       }
-      add_func_call(result,st,func_id,true);
+      add_func_call(call_expression,st,func_id,true);
     }
     else
-      add_func_call(result,st,func_id);
+      add_func_call(call_expression,st,func_id);
 
-    if(emitAssert)
+    if(declared_type.length()!=0)
+      indent(result,2)+=(declared_type + ' ' + declared_name + ";\n");
+
+    unsigned indent_call=2u;
+    
+    if(expect_exception.size()!=0)
     {
-      result+="\n";
-      indent(result,2u)+="/* check return value */\n";
-      indent(result,2u)+="assertTrue(retval" + assertCompare + ");\n";
+      indent(result,2)+="try {\n";
+      indent_call=4u;
+    }
+
+    indent(result,indent_call);
+    if(declared_type.length()!=0)
+      result+=(declared_name + " = ");
+    result+=(call_expression+'\n');
+
+    if(expect_exception.size()!=0)
+    {
+      indent(result,2)+="}\n";
+      indent(result,2)+=("catch("+expect_exception+" e) {} // Catch expected exception\n");
+    }
+    
+    if(emitAssert || valuesDifference.size() > 0)
+    {
+      if(emitAssert)
+      {
+        result+="\n";
+        indent(result,2u)+="/* check return value */\n";
+        indent(result,2u)+="assertTrue(retval" + assertCompare + ");\n";
+      }
+      if(valuesDifference.size() > 0)
+      {
+        result+="\n";
+        indent(result,2u)+="/* check detected side effects */\n";
+        for(auto &side_effect : valuesDifference)
+        {
+          auto &objectName = id2string(side_effect.first.first);
+          auto &fieldName = id2string(side_effect.first.second);
+          auto &value_expr = side_effect.second.second;
+          const typet& type = value_expr.type();
+
+          if(type.id()==ID_signedbv)
+          {
+            indent(result,2u)+="assertTrue("
+              + from_expr(ns,"",value_expr)
+              + " == (int) Reflector.getInstanceField("
+              + objectName + ",\"" + fieldName + "\"));\n";
+          }
+        }
+      }
     }
     else
     {
       result+="\n";
-      indent(result,2u)+="/* no assert due to void return value */\n";
+      indent(result,2u)+="/* Method return type is void, or not expected to return */\n";
     }
   }
 
+  result+='\n';
   // closing the method
-  indent(result)+="}\n";
+  indent(result)+="\n}\n";
   return result;
 
 }

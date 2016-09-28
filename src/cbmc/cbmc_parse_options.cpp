@@ -24,6 +24,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-programs/goto_convert_functions.h>
 #include <goto-programs/remove_function_pointers.h>
 #include <goto-programs/remove_virtual_functions.h>
+#include <goto-programs/remove_instanceof.h>
 #include <goto-programs/remove_returns.h>
 #include <goto-programs/remove_vector.h>
 #include <goto-programs/remove_complex.h>
@@ -264,6 +265,12 @@ void cbmc_parse_optionst::get_command_line_options(optionst &options)
   else
     options.set_option("pointer-check", false);
 
+  // disable runtime checks
+  if(cmdline.isset("disable-runtime-check"))
+    options.set_option("disable-runtime-check", true);
+  else
+    options.set_option("disable-runtime-check", false);
+
   // check for memory leaks
   if(cmdline.isset("memory-leak-check"))
     options.set_option("memory-leak-check", true);
@@ -467,6 +474,9 @@ void cbmc_parse_optionst::get_command_line_options(optionst &options)
   if(cmdline.isset("gen-java-test-case"))
     options.set_option("gen-java-test-case", true);
 
+  if(cmdline.isset("disable-testsuite-minimisation"))
+    options.set_option("disable-testsuite-minimisation", true);
+
   if(cmdline.isset("java-max-vla-length"))
     options.set_option("java-max-vla-length", cmdline.get_value("java-max-vla-length"));
 
@@ -478,6 +488,9 @@ void cbmc_parse_optionst::get_command_line_options(optionst &options)
 
   if(cmdline.isset("java-disable-mocks"))
     options.set_option("java-disable-mocks", true);
+
+  if(cmdline.isset("java-verify-mocks"))
+    options.set_option("java-verify-mocks", true);
 
   if(cmdline.isset("java-mock-class"))
     options.set_option("java-mock-class", cmdline.get_values("java-mock-class"));
@@ -604,7 +617,21 @@ int cbmc_parse_optionst::doit()
     {
       bmc.set_ui(get_ui());
       java_test_case_generatort gen(ui_message_handler);
-      return gen.generate_java_test_case(options, symbol_table, goto_functions, bmc);
+      java_test_case_generatort::test_case_statust test_gen_retval =
+        gen.generate_java_test_case(options, symbol_table, goto_functions, bmc);
+      // we currently ignore the return value here, as success for test cases
+      // means somethin different than success for `do_bmc'
+      switch(test_gen_retval)
+      {
+        // Return 0 in case of test case generation. This differs from do_bmc
+        // which returns 0 in case of a valid property
+      case java_test_case_generatort::SUCCESS:
+        return 0;
+      case java_test_case_generatort::FAIL:
+      case java_test_case_generatort::ERROR:
+      default:
+        return 10;
+      }
     }
 
   // do actual BMC
@@ -932,6 +959,8 @@ bool cbmc_parse_optionst::process_goto_program(
     remove_function_pointers(symbol_table, goto_functions,
       cmdline.isset("pointer-check"));
     remove_virtual_functions(symbol_table, goto_functions);
+    // Similar removal of RTTI inspection:
+    remove_instanceof(symbol_table, goto_functions);
 
     // full slice?
     if(cmdline.isset("full-slice"))
@@ -1210,9 +1239,18 @@ void cbmc_parse_optionst::help()
     "Java Bytecode options:\n"
     " --classpath dir/jar          set the classpath\n"
     " --main-class class-name      set the name of the main class\n"
+    " --disable-runtime-check      disable runtime checks\n"
     " --gen-java-test-case         generate test case\n" 
-    " --cover-function-only        add coverage instrumentation only to the entry function"
-    " --assertions-as-assumptions  convert assertions from generic checks into assumptions"
+    " --disable-testsuite-minimisation   do not minimise testsuite\n"
+    " --cover-function-only        add coverage instrumentation only to the entry function\n"
+    " --assertions-as-assumptions  convert assertions from generic checks into assumptions\n"
+    " --java-assume-inputs-non-null   never generate tests where direct or indirect parameters are null\n"
+    " --java-disable-mocks         disable use of Mockito to model opaque functions\n"
+    " --java-verify-mocks          check that runtime mock object interactions match expectations\n"
+    " --java-mock-class            force mocking of given class (wildcards supported)\n"
+    " --java-no-mock-class         disable mocking of given class (wildcards supported; default java.*)\n"
+    " --java-max-input-array-length   limit the length of nondeterministic arrays (default 5)\n"
+    " --java-max-vla-length        limit the length of user-code-created arrays\n"
     "\n"
     "Semantic transformations:\n"
     " --nondet-static              add nondeterministic initialization of variables with static lifetime\n"

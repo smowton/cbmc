@@ -8,6 +8,9 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <iostream>
 
+#include <vector>
+#include <algorithm>    
+
 #include <util/time_stopping.h>
 #include <util/xml.h>
 #include <util/xml_expr.h>
@@ -124,6 +127,83 @@ public:
   goal_mapt goal_map;
   typedef std::vector<testt> testst;
   testst tests;
+
+  static void print_testsuite(const testst &tests) 
+  {
+    int i=1;
+    for(auto &test : tests)
+    {
+      std::cout << "Goals in test " << i << " : " << std::endl;
+      for (auto &goal : test.covered_goals)
+        std::cout << id2string(goal) << ";";
+
+      std::cout << std::endl;
+      i++;
+    }
+  }
+  
+  static void copy_testsuite(const testst &from, testst &to) 
+  {
+    to.clear();
+    for(testst::const_iterator it=from.begin(); it!=from.end(); it++) 
+    {
+      to.push_back(*it);
+    }
+  }
+
+// compute covered goals set difference
+  static void goals_diff(std::vector<irep_idt> &goals1, std::vector<irep_idt> &goals2) 
+  {
+    std::vector<irep_idt>::iterator it1=goals1.begin();
+    std::vector<irep_idt>::iterator it2=goals2.begin();
+    while (it1!=goals1.end() && it2!=goals2.end()) 
+    {
+      if (*it1<*it2) ++it1;
+      else if (*it2<*it1) ++it2;
+      else 
+      {
+        ++it2;
+        it1=goals1.erase(it1);
+      }
+    }
+  }
+  
+  static bool compare_tests(testt x,testt y) { return x.covered_goals.size()>y.covered_goals.size(); }
+
+// greedy n^2 algorithm by descending ordering
+  void minimise_testsuite(testst& tsi, testst& tso, const unsigned no_goals) 
+  {
+    testst tss;
+    unsigned no_covered=0;
+    std::vector<irep_idt> goals;
+    goals.clear();
+
+    //print_testsuite(tsi);
+    copy_testsuite(tsi,tss);
+
+    while(!tss.empty()) 
+    {
+      std::sort(tss.begin(), tss.end(), compare_tests); // descending order of remaining test cases
+      testt tc=*tss.begin(); // pick the first test 
+      if(tc.covered_goals.empty()) break; // break if it does not contribute (and so do the remaining ones)
+      tss.erase(tss.begin()); // remove test case on top
+      tso.push_back(tc); // add it to the output suite
+      no_covered+=tc.covered_goals.size();
+      if(no_covered==no_goals)
+        break; // we've covered all the goals
+      for(auto &it : tss)
+      {
+        if(it.covered_goals.empty()) break; // break if remaining test cases will not contribute anyway
+        goals_diff(it.covered_goals,tc.covered_goals); // remove goals that are covered by the picked one
+      }    
+    }
+
+    status() << "Reduced from " << tsi.size() << " to " 
+	     << tso.size() << " test cases " <<messaget::eom;
+
+    //std::cout << "After minimisation:" << std::endl;
+    //print_testsuite(tso);
+  }
   
   std::string get_test(const goto_tracet &goto_trace) const
   {
@@ -174,9 +254,13 @@ void bmc_covert::satisfying_assignment()
   {
     goalt &g=g_it.second;
     
+#if 0 // removed the filtering of already covered goals as we need the list
+    // of all covered goals for subsequent testsuite minimisation.
+
     // covered already?
     if(g.satisfied) continue;
-  
+#endif 
+ 
     // check whether satisfied
     for(const auto &c_it : g.instances)
     {
@@ -218,6 +302,9 @@ void bmc_covert::satisfying_assignment()
   show_goto_trace(std::cout, bmc.ns, test.goto_trace);
   #endif
 }
+
+
+
 
 /*******************************************************************\
 
@@ -306,7 +393,15 @@ bool bmc_covert::operator()()
     status() << "Runtime decision procedure: "
              << (sat_stop-sat_start) << "s" << eom;
   }
-  
+
+  // should we minimise testsuite?
+  if(!bmc.options.get_bool_option("disable-testsuite-minimisation"))
+  {
+    testst tests_min;
+    minimise_testsuite(tests, tests_min, goal_map.size());
+    copy_testsuite(tests_min, tests);
+  }
+
   // report
   unsigned goals_covered=0;
   
@@ -323,7 +418,7 @@ bool bmc_covert::operator()()
       for(const auto& goalid : test.covered_goals)
         goal_names.push_back(
                              as_string(goal_map.at(goalid).description)
-                             + "\n    "
+                             + "\n *  "
                              + id2string(goal_map.at(goalid).source_location.get_file())
                              + ":"
                              + id2string(goal_map.at(goalid).source_location.get_line()));

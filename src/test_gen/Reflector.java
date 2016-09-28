@@ -56,6 +56,25 @@ public final class Reflector
     }
   }
 
+  private static <T> Object getInstanceField(Class<T> c, Object o, String fieldName)
+    throws NoSuchFieldException, IllegalArgumentException, IllegalAccessException
+  {
+    if (c == null) throw new NoSuchFieldException();
+    Optional<Field> field = Arrays.stream(c.getDeclaredFields()).filter(f -> f.getName().equals(fieldName)).findAny();
+    if (!field.isPresent()) return getInstanceField(c.getSuperclass(), o, fieldName);
+    else
+    {
+      Field property = field.get();
+      property.setAccessible(true);
+
+      try {
+        return property.get(o);
+      } catch (IllegalAccessException e) {
+        throw new RuntimeException(e); // Should never happen.
+      }
+    }
+  }
+
   /**
    * Changes a given field of an object instance via reflection, bypassing the
    * private modifier.
@@ -70,6 +89,11 @@ public final class Reflector
   public static void setInstanceField(Object o, String fieldName, Object newVal) throws NoSuchFieldException, IllegalArgumentException, IllegalAccessException
   {
     setInstanceField(o.getClass(), o, fieldName, newVal);
+  }
+
+  public static Object getInstanceField(Object o, String fieldName) throws NoSuchFieldException, IllegalArgumentException, IllegalAccessException
+  {
+    return getInstanceField(o.getClass(), o, fieldName);
   }
 
   public static String removePackageFromName(String className)

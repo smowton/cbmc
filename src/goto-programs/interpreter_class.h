@@ -19,6 +19,17 @@
 class interpretert
 {
 public:
+  // An assertion that identifier 'id' carries value 'value' in some particular context.
+  struct function_assignmentt {
+    irep_idt id;
+    exprt value;
+  };
+
+  // A list of such assignments.
+  typedef std::vector<function_assignmentt> function_assignmentst;
+  typedef std::map<std::pair<const irep_idt, const irep_idt>,
+                   std::pair<const exprt, const exprt>> side_effects_differencet;
+
   interpretert(
     const symbol_tablet &_symbol_table,
     const goto_functionst &_goto_functions,
@@ -29,9 +40,6 @@ public:
     goto_functions(_goto_functions)
   {
     message = _message_handler;
-    max_allowed_dynamic_array_size=options.get_unsigned_int_option("java-max-vla-length");
-    if(max_allowed_dynamic_array_size==0)
-      max_allowed_dynamic_array_size=65536;
   }
   
   void operator()();
@@ -42,23 +50,16 @@ public:
   typedef std::map<const irep_idt,irep_idt> input_var_functionst;
   typedef std::map<const irep_idt,const typet> dynamic_typest;
 
-  // An assertion that identifier 'id' carries value 'value' in some particular context.
-  struct function_assignmentt {
-    irep_idt id;
-    exprt value;
-  };
-
-  // A list of such assignments.
-  typedef std::vector<function_assignmentt> function_assignmentst;
-
   // An assignment list annotated with the calling context.
   struct function_assignments_contextt {
     irep_idt calling_function;
-    function_assignmentst assignments;
+    function_assignmentst return_assignments;
+    function_assignmentst param_assignments;
   };
   
   // list_input_varst maps function identifiers onto a vector of [name = value] assignments
   // per call to that function.
+  typedef std::list<function_assignments_contextt> function_assignments_contextst;
   typedef std::map<const irep_idt,std::list<function_assignments_contextt> > list_input_varst;
   typedef hash_map_cont<irep_idt, unsigned, irep_id_hash> memory_mapt;
 
@@ -91,12 +92,15 @@ protected:
   unsigned get_size(const typet &type) const;
 
   irep_idt get_component_id(const irep_idt &object,unsigned offset);
-  typet get_type(const irep_idt &id);
+public:
+  typet get_type(const irep_idt &id) const;
   exprt get_value(const typet &type,unsigned offset=0,bool use_non_det = false);
   exprt get_value(const typet &type,std::vector<mp_integer> &rhs,unsigned offset=0);
   exprt get_value(const irep_idt &id);
   void get_value_tree(const irep_idt& capture_symbol, function_assignmentst& captured);
+  void get_value_tree_bu(const irep_idt& capture_symbol, function_assignmentst& captured);
   void get_value_tree(const exprt& capture_expr, function_assignmentst& captured);
+  mp_integer get_this_address(const code_function_callt&);
   char is_opaque_function(const goto_programt::instructionst::const_iterator &it,irep_idt &function_id);
 
 
@@ -153,7 +157,6 @@ protected:
   mutable int num_dynamic_objects;
   int stack_depth;
   int thread_id;
-  size_t max_allowed_dynamic_array_size;
 
   bool evaluate_boolean(const exprt &expr) const
   {
@@ -171,6 +174,11 @@ protected:
     const typet& target_type,
     std::vector<mp_integer> &dest,
     bool should_return_this) const;
+
+  bool get_cell_byte_offset(
+    const typet& source_type,
+    mp_integer& cell_offset,
+    mp_integer& result) const;
   
   void evaluate(
     const exprt &expr,
@@ -194,7 +202,7 @@ protected:
 
  public:
   input_varst& load_counter_example_inputs(const std::string &filename);
-  input_varst& load_counter_example_inputs(const goto_tracet &trace, list_input_varst& opaque_function_returns, const bool filtered=false);
+  input_varst& load_counter_example_inputs(const goto_tracet &trace, list_input_varst& opaque_function_returns, side_effects_differencet &, const bool filtered=false);
   const input_var_functionst& get_input_first_assignments() { return input_first_assignments; }
   const dynamic_typest& get_dynamic_types() { return dynamic_types; }
 };

@@ -38,7 +38,7 @@ public:
   virtual void show_parse(std::ostream &out);
   
   virtual ~java_bytecode_languaget();
- java_bytecode_languaget() : max_nondet_array_length(5) { }
+ java_bytecode_languaget() : max_nondet_array_length(5), max_user_array_length(0) { }
   
   virtual bool from_expr(
     const exprt &expr,
@@ -69,7 +69,9 @@ protected:
   irep_idt main_class;
   java_class_loadert java_class_loader;
   bool assume_inputs_non_null;
+  bool disable_runtime_checks;
   int max_nondet_array_length;
+  int max_user_array_length;
 };
  
 languaget *new_java_bytecode_language();
