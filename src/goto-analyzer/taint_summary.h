@@ -3,7 +3,7 @@
 // Module: taint_summary
 // Author: Marek Trtik
 //
-// This module defines interfaces and functionality for tint summaries.
+// This module defines interfaces and functionality for taint summaries.
 //
 // @ Copyright Diffblue, Ltd.
 //
@@ -28,6 +28,16 @@ namespace sumfn { namespace taint { namespace detail {
 
 
 struct  instruction_iterator_hasher
+{
+  std::size_t  operator()(
+      goto_programt::instructiont::const_targett const  it
+      ) const
+  {
+    return std::hash<goto_programt::instructiont const*>()(&*it);
+  }
+};
+
+struct  lvalue_hasher
 {
   std::size_t  operator()(
       goto_programt::instructiont::const_targett const  it
@@ -67,7 +77,6 @@ private:
   expressiont  m_expression;
   bool  m_is_bottom;
   bool  m_is_top;
-
 };
 
 
@@ -96,36 +105,85 @@ svaluet  join(svaluet const&  a, svaluet const&  b);
 
 
 
-/**
- *
- *
- */
-typedef std::string  lvalue_idt;
 
+//typedef std::string  lvaluet;
+//typedef std::unordered_map<lvaluet,svaluet>
+//        map_from_lvalues_to_svaluest;
+//typedef std::unordered_set<lvaluet>
+//        lvalues_sett;
 
-/**
- *
- *
- */
-struct  map_from_lvalues_to_svaluest
+//namespace xxx {
+
+typedef exprt  lvaluet;
+
+typedef std::unordered_map<lvaluet,svaluet,irep_hash,irep_full_eq>
+        map_from_lvalues_to_svaluest;
+typedef std::unordered_set<lvaluet,irep_hash,irep_full_eq>
+        lvalues_sett;
+
+inline void foo(map_from_lvalues_to_svaluest& x, lvalues_sett y)
 {
-  typedef std::map<lvalue_idt,svaluet>  dictionaryt;
 
-  explicit map_from_lvalues_to_svaluest(
-      dictionaryt const&  data
-      );
-  explicit map_from_lvalues_to_svaluest(
-      std::unordered_set<lvalue_idt> const&  variables
-      );
+}
 
-  void  assign(lvalue_idt const&  var_name,
-               svaluet const&  value);
-  void  erase(std::unordered_set<lvalue_idt> const&  vars);
-  dictionaryt const&  data() const noexcept { return m_from_vars_to_values; }
+//}
 
-private:
-  dictionaryt  m_from_vars_to_values;
-};
+//inline bool  operator==(lvaluet const&  a, lvaluet const&  b)
+//{
+//  return full_eq(a,b);
+//}
+
+
+///**
+// *
+// *
+// *
+// */
+//typedef std::vector<std::string>  access_patht;
+
+//inline  std::string  access_path_arrow() { return "->"; }
+//inline  std::string  access_path_dot() { return "."; }
+//inline  std::string  access_path_array() { return "[]"; }
+
+
+///**
+// *
+// *
+// */
+////typedef std::string  lvaluet;
+//struct  lvaluet
+//{
+//  explicit  lvaluet(std::string const&  var_name);
+//  lvaluet(access_patht const&  access_path);
+
+//  access_patht const&  access_path() const noexcept { return m_access_path; }
+
+//private:
+//  access_patht  m_access_path;
+//};
+
+
+
+/**
+ *
+ *
+ */
+//struct  map_from_lvalues_to_svaluest
+//{
+//  explicit map_from_lvalues_to_svaluest(
+//      lvalues_mapt const&  data
+//      );
+//  explicit map_from_lvalues_to_svaluest(
+//      lvalues_sett const&  lvalues
+//      );
+
+//  void  assign(lvaluet const&  lvalue, svaluet const&  value);
+//  void  erase(lvalues_sett const&  lvalues);
+//  lvalues_mapt const&  data() const noexcept { return m_from_vars_to_values; }
+
+//private:
+//  lvalues_mapt  m_from_vars_to_values;
+//};
 
 
 /**
@@ -193,9 +251,9 @@ typedef goto_programt::instructiont::const_targett  instruction_iterator_t;
 typedef std::unordered_map<instruction_iterator_t,
                            map_from_lvalues_to_svaluest,
                            detail::instruction_iterator_hasher>
-        domain_t;
+        domaint;
 
-typedef std::shared_ptr<domain_t>  domain_ptr_t;
+typedef std::shared_ptr<domaint>  domain_ptrt;
 
 
 /**
@@ -206,28 +264,25 @@ typedef std::shared_ptr<domain_t>  domain_ptr_t;
 struct  summaryt : public sumfn::summaryt
 {
 
-  typedef std::unordered_map<lvalue_idt,svaluet>
-          map_from_lvalues_to_symbols_t;
-
-  summaryt(map_from_lvalues_to_symbols_t const&  input,
-            map_from_lvalues_to_symbols_t const&  output,
-            domain_ptr_t const  domain);
+  summaryt(map_from_lvalues_to_svaluest const&  input,
+           map_from_lvalues_to_svaluest const&  output,
+           domain_ptrt const  domain);
 
   std::string  kind() const;
   std::string  description() const noexcept;
 
-  map_from_lvalues_to_symbols_t const&  input() const noexcept
+  map_from_lvalues_to_svaluest const&  input() const noexcept
   { return m_input; }
-  map_from_lvalues_to_symbols_t const&  output() const noexcept
+  map_from_lvalues_to_svaluest const&  output() const noexcept
   { return m_output; }
 
-  domain_ptr_t  domain() const noexcept { return m_domain; }
+  domain_ptrt  domain() const noexcept { return m_domain; }
   void  drop_domain() { m_domain.reset(); }
 
 private:
-  map_from_lvalues_to_symbols_t  m_input;
-  map_from_lvalues_to_symbols_t  m_output;
-  domain_ptr_t  m_domain;
+  map_from_lvalues_to_svaluest  m_input;
+  map_from_lvalues_to_svaluest  m_output;
+  domain_ptrt  m_domain;
 };
 
 

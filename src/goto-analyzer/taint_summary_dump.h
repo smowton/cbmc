@@ -14,6 +14,8 @@
 
 #include <goto-analyzer/taint_summary.h>
 #include <summaries/summary_dump.h>
+#include <goto-programs/goto_model.h>
+#include <util/namespace.h>
 #include <iosfwd>
 
 namespace sumfn { namespace taint {
@@ -25,7 +27,21 @@ namespace sumfn { namespace taint {
  *
  *
  */
-void  dump_value_in_html(
+void  dump_lvalue_in_html(
+    lvaluet const&  lvalue,
+    namespacet const&  ns,
+    std::ostream&  ostr
+    );
+
+
+
+/**
+ *
+ *
+ *
+ *
+ */
+void  dump_svalue_in_html(
     svaluet const&  value,
     std::ostream&  ostr
     );
@@ -37,8 +53,9 @@ void  dump_value_in_html(
  *
  *
  */
-void  dump_vars_to_values_in_html(
+void  dump_lvalues_to_svalues_in_html(
     map_from_lvalues_to_svaluest const&  vars_to_values,
+    namespacet const&  ns,
     std::ostream&  ostr
     );
 
