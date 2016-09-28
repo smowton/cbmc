@@ -30,7 +30,7 @@ namespace sumfn { namespace taint { namespace detail { namespace {
 /**
  *
  */
-value_of_variable_t  make_symbol()
+svaluet  make_symbol()
 {
   static uint64_t  counter = 0UL;
   std::string const  symbol_name =
@@ -41,26 +41,89 @@ value_of_variable_t  make_symbol()
 /**
  *
  */
-value_of_variable_t  make_bottom()
+svaluet  make_bottom()
 {
-  return {expression_t{},true,false};
+  return {svaluet::expressiont{},true,false};
 }
 
 /**
  *
+ *
  */
-value_of_variable_t  make_top()
+svaluet  make_top()
 {
-  return {expression_t{},false,true};
+  return {svaluet::expressiont{},false,true};
 }
 
 
-/**
- *
- */
-using  solver_work_set_t =
-    std::unordered_set<instruction_iterator_t,
-                       detail::instruction_iterator_hasher>;
+//bool  is_identifier(lvaluet const  lvalue)
+//{
+//  return lvalue.id() == ID_symbol;
+//}
+
+bool  is_parameter(lvaluet const  lvalue, namespacet const&  ns)
+{
+  if (lvalue.id() == ID_symbol)
+  {
+    symbolt const*  symbol = nullptr;
+    ns.lookup(to_symbol_expr(lvalue).get_identifier(),symbol);
+    return symbol != nullptr && symbol->is_parameter;
+  }
+  return false;
+}
+
+bool  is_static(lvaluet const  lvalue, namespacet const&  ns)
+{
+  if (lvalue.id() == ID_symbol)
+  {
+    symbolt const*  symbol = nullptr;
+    ns.lookup(to_symbol_expr(lvalue).get_identifier(),symbol);
+    return symbol != nullptr && symbol->is_static_lifetime;
+  }
+  else if (lvalue.id() == ID_member)
+  {
+  }
+  return false;
+}
+
+bool  is_return_value_auxiliary(lvaluet const  lvalue, namespacet const&  ns)
+{
+  if (lvalue.id() == ID_symbol)
+  {
+    irep_idt const&  name = to_symbol_expr(lvalue).get_identifier();
+    symbolt const*  symbol = nullptr;
+    ns.lookup(name,symbol);
+    return symbol != nullptr &&
+           symbol->is_static_lifetime &&
+           symbol->is_auxiliary &&
+           symbol->is_file_local &&
+           symbol->is_thread_local &&
+           as_string(name).find("#return_value") != std::string::npos
+           ;
+  }
+  return false;
+}
+
+bool  is_pure_local(lvaluet const  lvalue, namespacet const&  ns)
+{
+  return lvalue.id() != ID_member &&
+         !is_parameter(lvalue,ns) &&
+         !is_static(lvalue,ns)
+         ;
+}
+
+
+void  collect_lvalues(
+    exprt const&  expr,
+    lvalues_sett&  result
+    )
+{
+  if (expr.id() == ID_symbol || expr.id() == ID_member)
+    result.insert(expr);
+  else
+    for (exprt const&  op : expr.operands())
+      collect_lvalues(op,result);
+}
 
 
 /**
@@ -68,25 +131,90 @@ using  solver_work_set_t =
  */
 void  initialise_domain(
     goto_functionst::goto_functiont const&  function,
-    domain_t&  domain
+    namespacet const&  ns,
+    domaint&  domain,
+    std::ostream* const  log
     )
 {
-  std::unordered_set<variable_id_t>  variables;
-  for (auto const&  param : to_code_type(function.type).parameters())
-    variables.insert(as_string(param.get_identifier()));
-  domain.insert({
-      function.body.instructions.cbegin(),
-      map_from_vars_to_values_t(variables)
-      });
+  if (log != nullptr)
+  {
+    *log << "<h3>Initialising the domain</h3>\n"
+            "<p>Locations initialised by element ";
+    dump_lvalues_to_svalues_in_html(map_from_lvalues_to_svaluest(),ns,*log);
+    *log << " : { ";
+  }
 
   for (auto  it = function.body.instructions.cbegin();
        it != function.body.instructions.cend();
        ++it)
+  {
     domain.insert({
         it,
-        map_from_vars_to_values_t(std::unordered_set<variable_id_t>{})
+        map_from_lvalues_to_svaluest()
         });
+
+    if (log != nullptr)
+      *log << it->location_number << ", ";
+  }
+
+  lvalues_sett  environment;
+  for (auto  it = function.body.instructions.cbegin();
+       it != function.body.instructions.cend();
+       ++it)
+    if (it->type == ASSIGN)
+    {
+      code_assignt const&  asgn = to_code_assign(it->code);
+      environment.insert(asgn.lhs());
+      collect_lvalues(asgn.rhs(),environment);
+    }
+
+  if (log != nullptr)
+    if (!environment.empty())
+      *log << " }</p>\n"
+              "<p>Collecting lvalues representing function's environment "
+              " and mapping them to fresh symbols:</p>\n"
+              "<ul>\n"
+           ;
+
+  auto& map = domain.at(function.body.instructions.cbegin());
+  for (lvaluet const&  lvalue : environment)
+    if (!is_pure_local(lvalue,ns) && !is_return_value_auxiliary(lvalue,ns))
+    {
+      map.insert({lvalue, detail::make_symbol() });
+
+      if (log != nullptr)
+      {
+        *log << "<li>";
+        dump_lvalue_in_html(lvalue,ns,*log);
+        *log << " &rarr; ";
+        dump_svalue_in_html(map.at(lvalue),*log);
+        *log << "</li>\n";
+      }
+    }
+    else
+      if (log != nullptr)
+      {
+        *log << "<li>!! EXCLUDING !! : ";
+        dump_lvalue_in_html(lvalue,ns,*log);
+        *log << "</li>\n";
+      }
+
+  if (log != nullptr)
+  {
+    *log << "</ul>\n<p>Updated symbolic value at the entry location "
+         << function.body.instructions.cbegin()->location_number
+         << ":</p>\n";
+    dump_lvalues_to_svalues_in_html(map,ns,*log);
+  }
 }
+
+
+/**
+ *
+ */
+typedef std::unordered_set<instruction_iterator_t,
+                            detail::instruction_iterator_hasher>
+        solver_work_set_t;
 
 
 /**
@@ -112,16 +240,100 @@ void  __dbg_learn_goto_model_stuff(goto_modelt const&  model)
 
 }
 
-void  collect_identifiers(
-    exprt const&  expr,
-    std::unordered_set<std::string>&  result
+
+void  build_summary_from_computed_domain(
+    domain_ptrt const  domain,
+    map_from_lvalues_to_svaluest&  input,
+    map_from_lvalues_to_svaluest&  output,
+    goto_functionst::function_mapt::const_iterator const  fn_iter,
+    namespacet const&  ns,
+    std::ostream* const  log
     )
 {
-  if (expr.id() == ID_symbol)
-    result.insert( as_string(to_symbol_expr(expr).get_identifier()) );
+  if (log != nullptr)
+    *log << "<h3>Building summary from the computed domain</h3>\n"
+            "<p>Mapping of input to symbols (computed from the symbolic value "
+            "at location "
+         << fn_iter->second.body.instructions.cbegin()->location_number
+         << "):</p>\n"
+            "<ul>\n"
+         ;
+
+  map_from_lvalues_to_svaluest const&  start_svalue =
+      domain->at(fn_iter->second.body.instructions.cbegin());
+  for (auto  it = start_svalue.cbegin(); it != start_svalue.cend(); ++it)
+    if (!is_pure_local(it->first,ns) &&
+        !is_return_value_auxiliary(it->first,ns))
+    {
+      input.insert(*it);
+
+      if (log != nullptr)
+      {
+        *log << "<li>";
+        dump_lvalue_in_html(it->first,ns,*log);
+        *log << " &rarr; ";
+        dump_svalue_in_html(it->second,*log);
+        *log << "</li>\n";
+      }
+    }
+    else
+      if (log != nullptr)
+      {
+        *log << "<li>!! EXCLUDING !! : ";
+        dump_lvalue_in_html(it->first,ns,*log);
+        *log << " &rarr; ";
+        dump_svalue_in_html(it->second,*log);
+        *log << "</li>\n";
+      }
+
+  if (log != nullptr)
+    *log << "</ul>\n<p>The summary (computed from the symbolic value "
+            "at location "
+         << std::prev(fn_iter->second.body.instructions.cend())->location_number
+         << "):</p>\n<ul>\n"
+         ;
+
+  map_from_lvalues_to_svaluest const&  end_svalue =
+      domain->at(std::prev(fn_iter->second.body.instructions.cend()));
+  for (auto  it = end_svalue.cbegin(); it != end_svalue.cend(); ++it)
+    if (!is_pure_local(it->first,ns))
+    {
+      output.insert(*it);
+
+      if (log != nullptr)
+      {
+        *log << "<li>";
+        dump_lvalue_in_html(it->first,ns,*log);
+        *log << " &rarr; ";
+        dump_svalue_in_html(it->second,*log);
+          *log << "</li>\n";
+      }
+    }
+    else
+      if (log != nullptr)
+      {
+        *log << "<li>!! EXCLUDING !! : ";
+        dump_lvalue_in_html(it->first,ns,*log);
+        *log << " &rarr; ";
+        dump_svalue_in_html(it->second,*log);
+        *log << "</li>\n";
+      }
+
+  if (log != nullptr)
+    *log << "</ul>\n";
+}
+
+void  assign(
+    map_from_lvalues_to_svaluest&  map,
+    lvaluet const&  lvalue,
+    svaluet const&  svalue
+    )
+{
+  auto const  it = map.find(lvalue);
+  if (it == map.end())
+    map.insert({lvalue,svalue});
   else
-    for (exprt const&  op : expr.operands())
-      collect_identifiers(op,result);
+    it->second = svalue;
 }
 
 
@@ -130,8 +342,8 @@ void  collect_identifiers(
 namespace sumfn { namespace taint {
 
 
-value_of_variable_t::value_of_variable_t(
-    expression_t const&  expression,
+svaluet::svaluet(
+    expressiont const&  expression,
     bool  is_bottom,
     bool  is_top
     )
@@ -143,9 +355,7 @@ value_of_variable_t::value_of_variable_t(
 }
 
 
-bool  operator==(
-    value_of_variable_t const&  a,
-    value_of_variable_t const&  b)
+bool  operator==(svaluet const&  a, svaluet const&  b)
 {
   return a.is_top() == b.is_top() &&
          a.is_bottom() == b.is_bottom() &&
@@ -153,9 +363,8 @@ bool  operator==(
          ;
 }
 
-bool  operator<(
-    value_of_variable_t const&  a,
-    value_of_variable_t const&  b)
+
+bool  operator<(svaluet const&  a, svaluet const&  b)
 {
   if (a.is_top() || b.is_bottom())
     return false;
@@ -165,9 +374,8 @@ bool  operator<(
                        a.expression().cbegin(),a.expression().cend());
 }
 
-value_of_variable_t  join(
-    value_of_variable_t const&  a,
-    value_of_variable_t const&  b)
+
+svaluet  join(svaluet const&  a, svaluet const&  b)
 {
   if (a.is_bottom())
     return b;
@@ -177,71 +385,37 @@ value_of_variable_t  join(
     return a;
   if (b.is_top())
     return b;
-  expression_t  result_set = a.expression();
+  svaluet::expressiont  result_set = a.expression();
   result_set.insert(b.expression().cbegin(),b.expression().cend());
   return {result_set,false,false};
 }
 
 
-map_from_vars_to_values_t::map_from_vars_to_values_t(
-    dictionary_t const&  data
-    )
-  : m_from_vars_to_values(data)
-{}
-
-map_from_vars_to_values_t::map_from_vars_to_values_t(
-    std::unordered_set<variable_id_t> const&  variables
-    )
-  : m_from_vars_to_values()
-{
-  for (auto const&  var : variables)
-    m_from_vars_to_values.insert({ var, detail::make_symbol() });
-}
-
-void  map_from_vars_to_values_t::assign(variable_id_t const&  var_name,
-                                        value_of_variable_t const&  value)
-{
-  auto const  it = m_from_vars_to_values.find(var_name);
-  if (it == m_from_vars_to_values.end())
-    m_from_vars_to_values.insert({var_name,value});
-  else
-    it->second = value;
-}
-
-void  map_from_vars_to_values_t::erase(
-    std::unordered_set<variable_id_t> const&  vars
-    )
-{
-  for (auto const&  var : vars)
-    m_from_vars_to_values.erase(var);
-}
-
-
 bool  operator==(
-    map_from_vars_to_values_t const&  a,
-    map_from_vars_to_values_t const&  b)
+    map_from_lvalues_to_svaluest const&  a,
+    map_from_lvalues_to_svaluest const&  b)
 {
-  auto  a_it = a.data().cbegin();
-  auto  b_it = b.data().cbegin();
+  auto  a_it = a.cbegin();
+  auto  b_it = b.cbegin();
   for ( ;
-       a_it != a.data().cend() && b_it != b.data().cend() &&
+       a_it != a.cend() && b_it != b.cend() &&
        a_it->first == b_it->first && a_it->second == b_it->second;
        ++a_it, ++b_it)
     ;
-  return a_it == a.data().cend() && b_it == b.data().cend();
+  return a_it == a.cend() && b_it == b.cend();
 }
 
 
 bool  operator<(
-    map_from_vars_to_values_t const&  a,
-    map_from_vars_to_values_t const&  b)
+    map_from_lvalues_to_svaluest const&  a,
+    map_from_lvalues_to_svaluest const&  b)
 {
-  if (b.data().empty())
+  if (b.empty())
     return false;
-  for (auto  a_it = a.data().cbegin(); a_it != a.data().cend(); ++a_it)
+  for (auto  a_it = a.cbegin(); a_it != a.cend(); ++a_it)
   {
-    auto const  b_it = b.data().find(a_it->first);
-    if (b_it == b.data().cend())
+    auto const  b_it = b.find(a_it->first);
+    if (b_it == b.cend())
       return false;
     if (!(a_it->second < b_it->second))
       return false;
@@ -250,73 +424,96 @@ bool  operator<(
 }
 
 
-map_from_vars_to_values_t  transform(
-    map_from_vars_to_values_t const&  a,
+map_from_lvalues_to_svaluest  transform(
+    map_from_lvalues_to_svaluest const&  a,
     goto_programt::instructiont const&  I,
     namespacet const&  ns,
     std::ostream* const  log
     )
 {
-  map_from_vars_to_values_t  result = a;
+  map_from_lvalues_to_svaluest  result = a;
   switch(I.type)
   {
   case ASSIGN:
     {
-      if (log != nullptr)
-        *log << "<p>\nRecognised ASSIGN instruction.\n";
-
       code_assignt const&  asgn = to_code_assign(I.code);
 
-      value_of_variable_t  rvalue = detail::make_bottom();
-      {
-        std::unordered_set<std::string>  rhs;
-        detail::collect_identifiers(asgn.rhs(),rhs);
-
-        if (log != nullptr)
-        {
-          *log << "r-values identifiers are {";
-          for (auto const&  ident : rhs)
-            *log << ident << ", ";
-          *log << "}.\n";
-        }
-
-        for (std::string const&  ident : rhs)
-        {
-          auto const  it = a.data().find(ident);
-          if (it != a.data().cend())
-            rvalue = join(rvalue,it->second);
-        }
-      }
-
-      std::unordered_set<std::string>  lhs;
-      detail::collect_identifiers(asgn.lhs(),lhs);
-
       if (log != nullptr)
       {
-        *log << "l-values identifiers are {";
-        for (auto const&  ident : lhs)
-          *log << ident << ", ";
-        *log << "}.\n</p>\n";
+        *log << "<p>\nRecognised ASSIGN instruction. Left-hand-side "
+                "l-value is { ";
+        dump_lvalue_in_html(asgn.lhs(),ns,*log);
+        *log << " }. Right-hand-side l-values are { ";
       }
 
-      for (std::string const&  ident : lhs)
-        result.assign(ident,rvalue);
+      svaluet  rvalue = detail::make_bottom();
+      {
+        lvalues_sett  rhs;
+        detail::collect_lvalues(asgn.rhs(),rhs);
+        for (auto const&  lvalue : rhs)
+        {
+          auto const  it = a.find(lvalue);
+          if (it != a.cend())
+            rvalue = join(rvalue,it->second);
+
+          if (log != nullptr)
+          {
+            dump_lvalue_in_html(lvalue,ns,*log);
+            *log << ", ";
+          }
+        }
+      }
+
+      if (log != nullptr)
+        *log << "}.</p>\n";
+
+      detail::assign(result,asgn.lhs(),rvalue);
     }
     break;
   case DEAD:
     {
       code_deadt const&  dead = to_code_dead(I.code);
-      std::unordered_set<std::string>  vars;
-      detail::collect_identifiers(dead.symbol(),vars);
-      result.erase(vars);
-//      if (dead.symbol().type().id() == ID_pointer)
-//        ...
+
+      if (log != nullptr)
+        *log << "<p>\nRecognised DEAD instruction. Removing these l-values { ";
+
+      lvalues_sett  lvalues;
+      detail::collect_lvalues(dead.symbol(),lvalues);
+      for (auto const&  lvalue : lvalues)
+      {
+        result.erase(lvalue);
+
+        if (log != nullptr)
+        {
+          dump_lvalue_in_html(lvalue,ns,*log);
+          *log << ", ";
+        }
+      }
+
+      if (log != nullptr)
+        *log << "}.</p>\n";
     }
     break;
-  case GOTO:
   case NO_INSTRUCTION_TYPE:
+    if (log != nullptr)
+      *log << "<p>Recognised NO_INSTRUCTION_TYPE instruction. "
+              "The transformation function is identity.</p>\n";
+    break;
   case SKIP:
+    if (log != nullptr)
+      *log << "<p>Recognised SKIP instruction. "
+              "The transformation function is identity.</p>\n";
+    break;
   case END_FUNCTION:
+    if (log != nullptr)
+      *log << "<p>Recognised END_FUNCTION instruction. "
+              "The transformation function is identity.</p>\n";
+    break;
+  case GOTO:
+    if (log != nullptr)
+      *log << "<p>Recognised GOTO instruction. "
+              "The transformation function is identity.</p>\n";
+    break;
   case RETURN:
   case OTHER:
   case DECL:
@@ -330,6 +527,10 @@ map_from_vars_to_values_t  transform(
   case ATOMIC_END:
   case START_THREAD:
   case END_THREAD:
+    if (log != nullptr)
+      *log << "<p>!!! WARNING !!! : Unsupported instruction reached. "
+              "So, we use identity as a transformation function.</p>\n";
+    break;
     break;
   default:
     throw std::runtime_error("ERROR: In 'sumfn::taint::transform' - "
@@ -340,13 +541,13 @@ map_from_vars_to_values_t  transform(
 }
 
 
-map_from_vars_to_values_t  join(
-    map_from_vars_to_values_t const&  a,
-    map_from_vars_to_values_t const&  b
+map_from_lvalues_to_svaluest  join(
+    map_from_lvalues_to_svaluest const&  a,
+    map_from_lvalues_to_svaluest const&  b
     )
 {
-  map_from_vars_to_values_t::dictionary_t  result_dict = b.data();
-  for (auto  a_it = a.data().cbegin(); a_it != a.data().cend(); ++a_it)
+  map_from_lvalues_to_svaluest  result_dict = b;
+  for (auto  a_it = a.cbegin(); a_it != a.cend(); ++a_it)
   {
     auto const  r_it = result_dict.find(a_it->first);
     if (r_it == result_dict.cend())
@@ -354,23 +555,29 @@ map_from_vars_to_values_t  join(
     else
       r_it->second = join(a_it->second,r_it->second);
   }
-  return map_from_vars_to_values_t{ result_dict };
+  return map_from_lvalues_to_svaluest{ result_dict };
 }
 
 
-summary_t::summary_t(domain_ptr_t const  domain)
-  : m_domain(domain)
+summaryt::summaryt(
+    map_from_lvalues_to_svaluest const&  input,
+    map_from_lvalues_to_svaluest const&  output,
+    domain_ptrt const  domain
+    )
+  : m_input(input)
+  , m_output(output)
+  , m_domain(domain)
 {
   assert(m_domain.operator bool());
 }
 
 
-std::string  summary_t::kind() const
+std::string  summaryt::kind() const
 {
   return "sumfn::taint::summarise_function";
 }
 
-std::string  summary_t::description() const noexcept
+std::string  summaryt::description() const noexcept
 {
   return "Function summary of taint analysis of java web applications.";
 }
@@ -379,7 +586,7 @@ std::string  summary_t::description() const noexcept
 
 void  summarise_all_functions(
     goto_modelt const&  instrumented_program,
-    database_of_summaries_t&  summaries_to_compute,
+    database_of_summariest&  summaries_to_compute,
     std::ostream* const  log
     )
 {
@@ -392,7 +599,7 @@ void  summarise_all_functions(
           });
 }
 
-summary_ptr_t  summarise_function(
+summary_ptrt  summarise_function(
     irep_idt const&  function_id,
     goto_modelt const&  instrumented_program,
     std::ostream* const  log
@@ -412,8 +619,8 @@ summary_ptr_t  summarise_function(
   assert(fn_iter != functions.cend());
   assert(fn_iter->second.body_available());
 
-  domain_ptr_t  domain = std::make_shared<domain_t>();
-  detail::initialise_domain(fn_iter->second,*domain);
+  domain_ptrt  domain = std::make_shared<domaint>();
+  detail::initialise_domain(fn_iter->second,ns,*domain,log);
 
   detail::solver_work_set_t  work_set;
   detail::initialise_workset(fn_iter->second,work_set);
@@ -422,7 +629,7 @@ summary_ptr_t  summarise_function(
     instruction_iterator_t const  src_instr_it = *work_set.cbegin();
     work_set.erase(work_set.cbegin());
 
-    map_from_vars_to_values_t const&  src_value = domain->at(src_instr_it);
+    map_from_lvalues_to_svaluest const&  src_value = domain->at(src_instr_it);
 
     goto_programt::const_targetst successors;
     fn_iter->second.body.get_successors(src_instr_it, successors);
@@ -432,8 +639,8 @@ summary_ptr_t  summarise_function(
       if (*succ_it != fn_iter->second.body.instructions.cend())
       {
         instruction_iterator_t const  dst_instr_it = *succ_it;
-        map_from_vars_to_values_t&  dst_value = domain->at(dst_instr_it);
-        map_from_vars_to_values_t const  old_dst_value = dst_value;
+        map_from_lvalues_to_svaluest&  dst_value = domain->at(dst_instr_it);
+        map_from_lvalues_to_svaluest const  old_dst_value = dst_value;
 
         if (log != nullptr)
         {
@@ -448,40 +655,40 @@ summary_ptr_t  summarise_function(
           *log << " ]---> " << dst_instr_it->location_number << "</h3>\n"
                ;
           *log << "<p>Source value:</p>\n";
-          dump_vars_to_values_in_html(src_value,*log);
+          dump_lvalues_to_svalues_in_html(src_value,ns,*log);
           *log << "<p>Old destination value:</p>\n";
-          dump_vars_to_values_in_html(old_dst_value,*log);
+          dump_lvalues_to_svalues_in_html(old_dst_value,ns,*log);
         }
 
-        map_from_vars_to_values_t const  transformed =
+        map_from_lvalues_to_svaluest const  transformed =
             transform(src_value,*src_instr_it,ns,log);
         dst_value = join(transformed,dst_value);
 
         if (log != nullptr)
         {
           *log << "<p>Transformed value:</p>\n";
-          dump_vars_to_values_in_html(transformed,*log);
+          dump_lvalues_to_svalues_in_html(transformed,ns,*log);
           *log << "<p>Resulting destination value:</p>\n";
-          dump_vars_to_values_in_html(dst_value,*log);
+          dump_lvalues_to_svalues_in_html(dst_value,ns,*log);
 
-//          if (src_instr_it->location_number == 3 &&
-//              dst_instr_it->location_number == 4)
-//          {
-//            *log << "<p>COMPARE!!!</p>\n";
-//            *log << "<p>old_dst_value:</p>\n";
-//            dump_vars_to_values_in_html(old_dst_value,*log);
-//            *log << "<p>dst_value:</p>\n";
-//            dump_vars_to_values_in_html(dst_value,*log);
-//            *log << "<p>dst_value <= old_dst_value:"
-//                 << (dst_value <= old_dst_value)
-//                 << "</p>\n";
-//            *log << "<p>dst_value == old_dst_value:"
-//                 << (dst_value == old_dst_value)
-//                 << "</p>\n";
-//            *log << "<p>dst_value < old_dst_value:"
-//                 << (dst_value < old_dst_value)
-//                 << "</p>\n";
-//          }
+//if (src_instr_it->location_number == 9 &&
+//    dst_instr_it->location_number == 10)
+//{
+//  *log << "<p>COMPARE!!!</p>\n";
+//  *log << "<p>old_dst_value:</p>\n";
+//  dump_lvalues_to_svalues_in_html(old_dst_value,ns,*log);
+//  *log << "<p>dst_value:</p>\n";
+//  dump_lvalues_to_svalues_in_html(dst_value,ns,*log);
+//  *log << "<p>dst_value <= old_dst_value:"
+//       << (dst_value <= old_dst_value)
+//       << "</p>\n";
+//  *log << "<p>dst_value == old_dst_value:"
+//       << (dst_value == old_dst_value)
+//       << "</p>\n";
+//  *log << "<p>dst_value < old_dst_value:"
+//       << (dst_value < old_dst_value)
+//       << "</p>\n";
+//}
         }
 
         if (!(dst_value <= old_dst_value))
@@ -495,7 +702,17 @@ summary_ptr_t  summarise_function(
         }
       }
   }
-  return std::make_shared<summary_t>(domain);
+  map_from_lvalues_to_svaluest  input;
+  map_from_lvalues_to_svaluest  output;
+  detail::build_summary_from_computed_domain(
+        domain,
+        input,
+        output,
+        fn_iter,
+        ns,
+        log
+        );
+  return std::make_shared<summaryt>(input,output,domain);
 }
 
 

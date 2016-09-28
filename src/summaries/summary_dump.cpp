@@ -248,8 +248,8 @@ namespace sumfn {
 
 
 std::string  dump_in_html(
-    database_of_summaries_t const&  computed_summaries,
-    callback_dump_derived_summary_in_html const&  summary_dump_callback,
+    database_of_summariest const&  computed_summaries,
+    callback_dump_derived_summary_in_htmlt const&  summary_dump_callback,
     goto_modelt const&  program,
     std::string const&  dump_root_directory,
     std::ostream* const  log
@@ -331,8 +331,8 @@ std::string  dump_in_html(
 
 
 std::string  dump_in_html(
-    object_summary_t const  summary,
-    callback_dump_derived_summary_in_html const&  summary_dump_callback,
+    object_summaryt const  summary,
+    callback_dump_derived_summary_in_htmlt const&  summary_dump_callback,
     goto_modelt const&  program,
     std::string const&  dump_root_directory
     )

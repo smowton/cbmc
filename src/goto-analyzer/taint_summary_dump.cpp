@@ -23,19 +23,28 @@ namespace sumfn { namespace taint { namespace detail { namespace {
 namespace sumfn { namespace taint {
 
 
-void  dump_value_in_html(
-    value_of_variable_t const&  value,
+void  dump_lvalue_in_html(
+    lvaluet const&  lvalue,
+    namespacet const&  ns,
     std::ostream&  ostr
     )
 {
-  if (value.is_top())
+  ostr << to_html_text(from_expr(ns, "", lvalue));
+}
+
+void  dump_svalue_in_html(
+    svaluet const&  svalue,
+    std::ostream&  ostr
+    )
+{
+  if (svalue.is_top())
     ostr << "TOP";
-  else if (value.is_bottom())
+  else if (svalue.is_bottom())
     ostr << "BOTTOM";
   else
   {
     bool first = true;
-    for (auto const&  symbol : value.expression())
+    for (auto const&  symbol : svalue.expression())
     {
        ostr << (first ? "" : " &#x2210 ") << symbol;
        first = false;
@@ -43,26 +52,25 @@ void  dump_value_in_html(
   }
 }
 
-void  dump_vars_to_values_in_html(
-    map_from_vars_to_values_t const&  vars_to_values,
+void  dump_lvalues_to_svalues_in_html(
+    map_from_lvalues_to_svaluest const&  vars_to_values,
+    namespacet const&  ns,
     std::ostream&  ostr
     )
 {
-  std::set<variable_id_t>  vars;
-  for (auto const&  elem : vars_to_values.data())
-    vars.insert(elem.first);
-
-  if (vars.empty())
+  if (vars_to_values.empty())
     ostr << "BOTTOM";
   else
   {
     ostr << "    <table>\n";
-    for (auto const&  var : vars)
+    for (auto const&  elem : vars_to_values)
     {
       ostr << "      <tr>\n";
-      ostr << "        <td>" << to_html_text(var) << "</td>\n";
       ostr << "        <td>";
-      dump_value_in_html(vars_to_values.data().at(var),ostr);
+      dump_lvalue_in_html(elem.first,ns,ostr);
+      ostr << "</td>\n";
+      ostr << "        <td>";
+      dump_svalue_in_html(elem.second,ostr);
       ostr << "</td>\n";
       ostr << "      </tr>\n";
     }
@@ -72,20 +80,53 @@ void  dump_vars_to_values_in_html(
 
 
 std::string  dump_in_html(
-    object_summary_t const  obj_summary,
+    object_summaryt const  obj_summary,
     goto_modelt const&  program,
     std::ostream&  ostr
     )
 {
-  summarised_object_id_t const&  function_id = obj_summary.first;
-  summary_ptr_t const  summary =
-      std::dynamic_pointer_cast<summary_t const>(obj_summary.second);
+  namespacet const  ns(program.symbol_table);
+  summarised_object_idt const&  function_id = obj_summary.first;
+  summary_ptrt const  summary =
+      std::dynamic_pointer_cast<summaryt const>(obj_summary.second);
   if (!summary.operator bool())
     return "ERROR: cannot cast the passed summary to 'taint' summary.";
 
   ostr << "<h2>Taint summary</h2>\n"
-       << "<p>TODO!</p>\n"
+       << "<p>Mapping of input to symbols:</p>\n"
+          "<table>\n"
+          "  <tr>\n"
+          "    <th>L-value</th>\n"
+          "    <th>Symbol</th>\n"
+          "  </tr>\n"
        ;
+  for (auto const&  elem : summary->input())
+  {
+    ostr << "  <tr>\n";
+    ostr << "    <td>";
+    dump_lvalue_in_html(elem.first,ns,ostr);
+    ostr << "</td>\n";
+    ostr << "    <td>"; dump_svalue_in_html(elem.second,ostr); ostr << "</td>\n";
+    ostr << "  </tr>\n";
+  }
+  ostr << "</table>\n";
+  ostr << "<p>The summary:</p>\n"
+          "<table>\n"
+          "  <tr>\n"
+          "    <th>L-value</th>\n"
+          "    <th>Expression</th>\n"
+          "  </tr>\n"
+       ;
+  for (auto const&  elem : summary->output())
+  {
+    ostr << "  <tr>\n";
+    ostr << "    <td>";
+    dump_lvalue_in_html(elem.first,ns,ostr);
+    ostr << "</td>\n";
+    ostr << "    <td>"; dump_svalue_in_html(elem.second,ostr); ostr << "</td>\n";
+    ostr << "  </tr>\n";
+  }
+  ostr << "</table>\n";
 
   if (summary->domain())
   {
@@ -103,6 +144,7 @@ std::string  dump_in_html(
               "    <th>Domain value</th>\n"
               "  </tr>\n"
            ;
+      namespacet const  ns(program.symbol_table);
       for (auto  instr_it = fn_body.instructions.cbegin();
           instr_it != fn_body.instructions.cend();
           ++instr_it)
@@ -131,7 +173,7 @@ std::string  dump_in_html(
         if (vars_to_values_it != summary->domain()->cend())
         {
           ostr << "  <td>\n";
-          dump_vars_to_values_in_html(vars_to_values_it->second,ostr);
+          dump_lvalues_to_svalues_in_html(vars_to_values_it->second,ns,ostr);
           ostr << "  </td>\n";
         }
 

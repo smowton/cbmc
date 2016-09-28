@@ -29,13 +29,13 @@ namespace sumfn {
  * functions, modules, etc. But of course, each kind of summary is supposed
  * to have a different (dedicated) implementation.
  *
- * When you creating your summaries, you should subclass this summary_t type
+ * When you creating your summaries, you should subclass this summaryt type
  * and also provide a function object which is responsible for computation
  * of summaries.
  */
-struct  summary_t
+struct  summaryt
 {
-  virtual ~summary_t() {}
+  virtual ~summaryt() {}
 
   /**
    * It should return globally unique identifier of a 'kind' of the
@@ -58,14 +58,14 @@ struct  summary_t
  *    [object-unique-identifier,summary-ptr].
  * This is defined in the following three 'using' statements.
  */
-using  summarised_object_id_t = std::string;
-using  summary_ptr_t = std::shared_ptr<summary_t const>;
-using  object_summary_t = std::pair<summarised_object_id_t,summary_ptr_t>;
+typedef std::string  summarised_object_idt;
+typedef std::shared_ptr<summaryt const>  summary_ptrt;
+typedef std::pair<summarised_object_idt,summary_ptrt>  object_summaryt;
 
 
 /**
  * It holds and caches all computed summaries of the same kind (i.e. those
- * whose method 'summary_t::kind()' returns the same string). The goal is to
+ * whose method 'summaryt::kind()' returns the same string). The goal is to
  * provide fast access to computed summaries. The implementation provides
  * fast caching of frequently used summaries, streaming summaries to/from
  * the disc (to minimise memory occupation), and thread-safety of all accesses.
@@ -76,26 +76,26 @@ using  object_summary_t = std::pair<summarised_object_id_t,summary_ptr_t>;
  * If you want to permanently store the content of the cache to the disc,
  * you have to do that manually (yourself) by enumerating all elements.
  */
-struct  database_of_summaries_t
+struct  database_of_summariest
 {
-  using  cache_t = std::unordered_map<summarised_object_id_t,summary_ptr_t>;
-  using  database_t = cache_t;
+  typedef std::unordered_map<summarised_object_idt,summary_ptrt>  cachet;
+  typedef cachet  databaset;
 
-  virtual ~database_of_summaries_t() {}
+  virtual ~database_of_summariest() {}
 
-  void  insert(object_summary_t const&  object_and_summary);
+  void  insert(object_summaryt const&  object_and_summary);
 
-  database_t::const_iterator  cbegin() const;
-  database_t::const_iterator  cend() const;
+  databaset::const_iterator  cbegin() const;
+  databaset::const_iterator  cend() const;
 
   // TODO: add interface for searching and iteration in the database.
 
 private:
-  cache_t  m_cache;
+  cachet  m_cache;
 };
 
 
-using  database_of_summaries_ptr_t = std::shared_ptr<database_of_summaries_t>;
+typedef std::shared_ptr<database_of_summariest>  database_of_summaries_ptrt;
 
 
 }
