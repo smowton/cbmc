@@ -1107,7 +1107,7 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
     const interpretert::dynamic_typest& dynamic_types,
     const std::string &test_func_name,
     const interpretert::side_effects_differencet &valuesDifference,
-    const std::string &assertCompare, bool emitAssert,
+    const exprt &assertExpr, bool emitAssert,
     bool disable_mocks,
     bool disable_verify_mocks,                                                
     const optionst::value_listt& mock_classes,
@@ -1201,7 +1201,7 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
       indent(result,2u) += "/* call function under test */\n";
       if(findit!=st.symbols.end())
       {
-        add_decl_from_type(declared_type,st,findit->second.type);
+        declared_type="Object";
         declared_name="retval";
       }
     }
@@ -1251,7 +1251,9 @@ std::string generate_java_test_case_from_inputs(const symbol_tablet &st, const i
       {
         result+="\n";
         indent(result,2u)+="/* check return value */\n";
-        indent(result,2u)+="assertTrue(retval" + assertCompare + ");\n";
+        std::string expr_string;
+        expr2java(expr_string, assertExpr, ns);
+        indent(result,2u)+="assertTrue(" + declared_name + ".equals(" + expr_string + "));\n";
       }
       if(valuesDifference.size() > 0)
       {

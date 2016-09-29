@@ -42,7 +42,7 @@ std::string generate_java_test_case_from_inputs(
     const interpretert::dynamic_typest& dynamic_types,
     const std::string &,
     const interpretert::side_effects_differencet &,
-    const std::string &,
+    const exprt &,
     bool emitAssert,
     bool disable_mocks,
     bool disable_verify_mocks,
