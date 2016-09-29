@@ -83,6 +83,11 @@ struct  database_of_summariest
 
   virtual ~database_of_summariest() {}
 
+  template<typename  summary_typet>
+  std::shared_ptr<summary_typet const>  find(
+      summarised_object_idt const&  object_id
+      ) const;
+
   void  insert(object_summaryt const&  object_and_summary);
 
   databaset::const_iterator  cbegin() const;
@@ -93,6 +98,19 @@ struct  database_of_summariest
 private:
   cachet  m_cache;
 };
+
+
+template<typename  summary_typet>
+std::shared_ptr<summary_typet const>  database_of_summariest::find(
+    summarised_object_idt const&  object_id
+    ) const
+{
+  auto const  it = m_cache.find(object_id);
+  return it == m_cache.cend() ?
+            std::shared_ptr<summary_typet const>() :
+            std::dynamic_pointer_cast<summary_typet const>(it->second)
+            ;
+}
 
 
 typedef std::shared_ptr<database_of_summariest>  database_of_summaries_ptrt;

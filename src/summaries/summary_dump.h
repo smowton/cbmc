@@ -80,7 +80,10 @@ std::string  to_html_text(std::string  result);
  *
  *
  */
-void  dump_html_prefix(std::ostream&  ostr);
+void  dump_html_prefix(
+    std::ostream&  ostr,
+    std::string const&  page_name = ""
+    );
 
 
 /**

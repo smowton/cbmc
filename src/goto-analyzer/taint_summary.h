@@ -70,6 +70,12 @@ struct  svaluet
       bool  is_top
       );
 
+  svaluet(svaluet const&  other);
+  svaluet(svaluet&&  other);
+
+  svaluet&  operator=(svaluet const&  other);
+  svaluet&  operator=(svaluet&&  other);
+
   bool  is_top() const noexcept { return m_is_top; }
   bool  is_bottom() const noexcept { return m_is_bottom; }
   expressiont const&  expression() const noexcept { return m_expression; }
@@ -155,6 +161,7 @@ inline bool  operator<=(
 map_from_lvalues_to_svaluest  transform(
     map_from_lvalues_to_svaluest const&  a,
     goto_programt::instructiont const&  I,
+    database_of_summariest const&  database,
     namespacet const&  ns,
     std::ostream* const  log = nullptr
     );
@@ -245,7 +252,7 @@ void  summarise_all_functions(
 summary_ptrt  summarise_function(
     irep_idt const&  function_id,
     goto_modelt const&  instrumented_program,
-    database_of_summariest&  database,
+    database_of_summariest const&  database,
     std::ostream* const  log = nullptr
     );
 

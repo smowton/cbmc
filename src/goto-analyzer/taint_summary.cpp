@@ -232,15 +232,6 @@ void  initialise_workset(
 }
 
 
-void  __dbg_learn_goto_model_stuff(goto_modelt const&  model)
-{
-  //namespacet const  ns(instrumented_program.symbol_table);
-  for (auto const&  id_sym : model.symbol_table.symbols)
-    std::cout << "  " << id_sym.first << " -> " << id_sym.second.name << "\n";
-
-}
-
-
 void  build_summary_from_computed_domain(
     domain_ptrt const  domain,
     map_from_lvalues_to_svaluest&  input,
@@ -336,6 +327,26 @@ void  assign(
     it->second = svalue;
 }
 
+void  erase_dead_lvalue(
+    lvaluet const&  lvalue,
+    namespacet const&  ns,
+    map_from_lvalues_to_svaluest&  map
+    )
+{
+  if (map.erase(lvalue) == 0ULL && lvalue.id() == ID_symbol)
+  {
+    //map_from_lvalues_to_svaluest::iterator  lvalue_it = map.end();
+    irep_idt const&  ident = to_symbol_expr(lvalue).get_identifier();
+    for (auto  it = map.begin(); it != map.end(); ++it)
+      if (is_pure_local(it->first,ns) && it->first.id() == ID_symbol &&
+          to_symbol_expr(it->first).get_identifier() == ident)
+      {
+        map.erase(it);
+        return;
+      }
+  }
+}
+
 
 }}}}
 
@@ -352,6 +363,38 @@ svaluet::svaluet(
   , m_is_top(is_top)
 {
   assert((m_is_bottom && m_is_top) == false);
+}
+
+
+svaluet::svaluet(svaluet const&  other)
+  : m_expression(other.m_expression)
+  , m_is_bottom(other.m_is_bottom)
+  , m_is_top(other.m_is_top)
+{}
+
+
+svaluet::svaluet(svaluet&&  other)
+  : m_expression(other.m_expression)
+  , m_is_bottom(other.m_is_bottom)
+  , m_is_top(other.m_is_top)
+{}
+
+
+svaluet&  svaluet::operator=(svaluet const&  other)
+{
+  m_expression = other.m_expression;
+  m_is_bottom = other.m_is_bottom;
+  m_is_top = other.m_is_top;
+  return *this;
+}
+
+
+svaluet&  svaluet::operator=(svaluet&&  other)
+{
+  m_expression.swap(other.m_expression);
+  m_is_bottom = other.m_is_bottom;
+  m_is_top = other.m_is_top;
+  return *this;
 }
 
 
@@ -427,6 +470,7 @@ bool  operator<(
 map_from_lvalues_to_svaluest  transform(
     map_from_lvalues_to_svaluest const&  a,
     goto_programt::instructiont const&  I,
+    database_of_summariest const&  database,
     namespacet const&  ns,
     std::ostream* const  log
     )
@@ -470,6 +514,69 @@ map_from_lvalues_to_svaluest  transform(
       detail::assign(result,asgn.lhs(),rvalue);
     }
     break;
+  case FUNCTION_CALL:
+    {
+      code_function_callt const&  fn_call = to_code_function_call(I.code);
+      if (fn_call.function().id() == ID_symbol)
+      {
+        irep_idt const&  fn_ident =
+            to_symbol_expr(fn_call.function()).get_identifier();
+
+        if (log != nullptr)
+        {
+          *log << "<p>Recognised FUNCTION_CALL instruction:</p>\n"
+                  "<ul>\n"
+                  "  <li>Called function name: " << fn_ident << "</li>\n"
+                  "  <li>Left-hand-side expression: "
+               ;
+          if (fn_call.lhs().is_nil())
+            *log << "NONE";
+          else
+            dump_lvalue_in_html(fn_call.lhs(),ns,*log);
+          *log << "</li>\n";
+
+          int  arg_idx = 0;
+          for (exprt const&  arg : fn_call.arguments())
+          {
+            lvalues_sett  lvalues;
+            detail::collect_lvalues(arg,lvalues);
+            *log << "  <li>L-values stored in argument " << arg_idx+1 << ": { ";
+            for (auto const&  lvalue : lvalues)
+            {
+              dump_lvalue_in_html(lvalue,ns,*log);
+              *log << ", ";
+            }
+            *log << "}</li>\n";
+
+            ++arg_idx;
+          }
+          *log << "</li>\n";
+
+          *log << "</ul>\n";
+        }
+
+        summary_ptrt const  summary =
+            database.find<summaryt>(as_string(fn_ident));
+        if (summary.operator bool())
+        {
+          if (log != nullptr)
+            *log << "<p>!!! WARNING !!! : NOT IMPLEMENTED YET! So, we use "
+                    "identity as a transformation function.</p>\n";
+        }
+        else
+          if (log != nullptr)
+            *log << "<p>!!! WARNING !!! : No summary was found for the called "
+                    "function " << as_string(fn_ident) << "So, we use identity "
+                    "as a transformation function.</p>\n";
+      }
+      else
+        if (log != nullptr)
+          *log << "<p>!!! WARNING !!! : Recognised FUNCTION_CALL instruction "
+                  "using non-identifier call expression. Such call is not "
+                  "supported. So, we use identity as a transformation "
+                  "function.</p>\n";
+    }
+    break;
   case DEAD:
     {
       code_deadt const&  dead = to_code_dead(I.code);
@@ -481,7 +588,7 @@ map_from_lvalues_to_svaluest  transform(
       detail::collect_lvalues(dead.symbol(),lvalues);
       for (auto const&  lvalue : lvalues)
       {
-        result.erase(lvalue);
+        detail::erase_dead_lvalue(lvalue,ns,result);
 
         if (log != nullptr)
         {
@@ -517,7 +624,6 @@ map_from_lvalues_to_svaluest  transform(
   case RETURN:
   case OTHER:
   case DECL:
-  case FUNCTION_CALL:
   case ASSUME:
   case ASSERT:
   case LOCATION:
@@ -591,23 +697,38 @@ void  summarise_all_functions(
     std::ostream* const  log
     )
 {
-  //detail::__dbg_learn_goto_model_stuff(instrumented_program);
-  for (auto const&  elem : instrumented_program.goto_functions.function_map)
-    if (elem.second.body_available())
+  std::vector<irep_idt>  inverted_topological_order;
+  {
+    std::unordered_set<irep_idt,dstring_hash>  processed;
+    for (auto const&  elem : instrumented_program.goto_functions.function_map)
+      inverted_partial_topological_order(
+            call_graph,
+            elem.first,
+            processed,
+            inverted_topological_order
+            );
+  }
+  for (auto const&  fn_name : inverted_topological_order)
+  {
+    goto_functionst::function_mapt  const  functions_map =
+        instrumented_program.goto_functions.function_map;
+    auto const  fn_it = functions_map.find(fn_name);
+    if (fn_it != functions_map.cend() && fn_it->second.body_available())
       summaries_to_compute.insert({
-          as_string(elem.first),
+          as_string(fn_name),
           summarise_function(
-              elem.first,
+              fn_name,
               instrumented_program,
               summaries_to_compute,
               log),
           });
+  }
 }
 
 summary_ptrt  summarise_function(
     irep_idt const&  function_id,
     goto_modelt const&  instrumented_program,
-    database_of_summariest&  database,
+    database_of_summariest const&  database,
     std::ostream* const  log
     )
 {
@@ -667,7 +788,7 @@ summary_ptrt  summarise_function(
         }
 
         map_from_lvalues_to_svaluest const  transformed =
-            transform(src_value,*src_instr_it,ns,log);
+            transform(src_value,*src_instr_it,database,ns,log);
         dst_value = join(transformed,dst_value);
 
         if (log != nullptr)
