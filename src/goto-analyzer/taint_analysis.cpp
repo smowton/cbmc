@@ -12,6 +12,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/prefix.h>
 #include <util/simplify_expr.h>
 #include <util/json.h>
+#include <util/file_util.h>
+#include <json/json_parser.h>
 
 #include <ansi-c/string_constant.h>
 
@@ -19,8 +21,12 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <analyses/custom_bitvector_analysis.h>
 
+#include <summaries/summary.h>
+
 #include "taint_analysis.h"
 #include "taint_parser.h"
+#include "taint_summary.h"
+#include "taint_summary_json.h"
 
 /*******************************************************************\
 
@@ -42,7 +48,8 @@ public:
     const symbol_tablet &,
     goto_functionst &,
     bool show_full,
-    const std::string &json_file_name);
+    const std::string &json_file_name,
+    const std::string &summaries_directory);
 
 protected:
   taint_parse_treet taint;
@@ -50,6 +57,20 @@ protected:
   
   void instrument(const namespacet &, goto_functionst &);
   void instrument(const namespacet &, goto_functionst::goto_functiont &);
+
+  void read_summaries(const std::string&, sumfn::database_of_summariest&);
+};
+
+class bitvector_analysis_with_summariest:public custom_bitvector_analysist
+{
+public:
+  typedef sumfn::database_of_summariest database_of_summariest;
+  bitvector_analysis_with_summariest(const database_of_summariest& _db) : summarydb(_db) {}
+
+protected:
+  const database_of_summariest& summarydb;
+  virtual bool should_enter_function(const irep_idt& id) { return !summarydb.count(id2string(id)); }
+  virtual void transform_function_call_stub(locationt, ai_baset&, const namespacet&);  
 };
 
 /*******************************************************************\
@@ -238,6 +259,62 @@ void taint_analysist::instrument(
   }
 }
 
+void bitvector_analysis_with_summariest::transform_function_call_stub(
+  locationt loc, ai_baset& ai, const namespacet& ns)
+{
+  const goto_programt::instructiont &instruction=*loc;
+  const code_function_callt &code_function_call=to_code_function_call(instruction.code);
+  const exprt &function=code_function_call.function();
+  if(function.id()==ID_symbol)
+  {
+    const irep_idt &identifier=to_symbol_expr(function).get_identifier();
+    if(summarydb.count(id2string(identifier)))
+      std::cout << "Transform stub with summary: " << identifier << '\n';
+    else
+      std::cout << "Transform stub without summary: " << identifier << '\n';
+  }
+  else
+    std::cout << "Transform non-symbol function call" << '\n';
+}
+
+void taint_analysist::read_summaries(
+  const std::string& dir,
+  sumfn::database_of_summariest& summarydb)
+{
+  std::string index_filename=dir+"/"+"__index.json";
+  if(!fileutl::file_exists(index_filename))
+    throw "Summaries: __index.json not found";
+  jsont index;
+  {
+    std::ifstream index_stream(index_filename);
+    if(!parse_json(index_stream,index_filename,get_message_handler(),index))
+      throw "Failed to parse summaries index";
+  }
+  // In future, we'll load summaries on demand. For now, load everything in the index:
+  assert(index.is_object() && "Summaries: expected __index to contain an object");
+  for(const auto& entry : index.object)
+  {
+    assert(entry.second.is_string() && "Summaries: expected __index value to be a string");
+    std::string entry_filename=dir+"/"+entry.second.value;
+    if(!fileutl::file_exists(entry_filename))
+      throw "Summaries: function json not found";
+
+    jsont entry_json;
+    {
+      std::ifstream entry_stream(entry_filename);
+      if(!parse_json(entry_stream,entry_filename,get_message_handler(),entry_json))
+	throw "Failed to parse entry json";
+    }
+    if(!entry_json.is_object())
+      throw "Summaries: expected entry json to contain an object";
+
+    const auto& entry_obj=static_cast<const json_objectt&>(entry_json);
+    auto deserialised_entry=summary_from_json(entry_obj,sumfn::taint::domain_ptrt());
+    summarydb.insert(deserialised_entry);
+  }
+}
+   
+
 /*******************************************************************\
 
 Function: taint_analysist::operator()
@@ -255,7 +332,8 @@ bool taint_analysist::operator()(
   const symbol_tablet &symbol_table,
   goto_functionst &goto_functions,
   bool show_full,
-  const std::string &json_file_name)
+  const std::string &json_file_name,
+  const std::string &summaries_directory)
 {
   try
   {
@@ -330,7 +408,11 @@ bool taint_analysist::operator()(
 
     status() << "Data-flow analysis" << eom;
 
-    custom_bitvector_analysist custom_bitvector_analysis;
+    sumfn::database_of_summariest summarydb;
+    if(summaries_directory!="")
+      read_summaries(summaries_directory,summarydb);
+    
+    bitvector_analysis_with_summariest custom_bitvector_analysis(summarydb);
     custom_bitvector_analysis(goto_functions, ns);
     
     if(show_full)
@@ -445,12 +527,14 @@ bool taint_analysis(
   const std::string &taint_file_name,
   message_handlert &message_handler,
   bool show_full,
-  const std::string &json_file_name)
+  const std::string &json_file_name,
+  const std::string &summaries_directory)
 {
   taint_analysist taint_analysis;
   taint_analysis.set_message_handler(message_handler);
   return taint_analysis(
-    taint_file_name, goto_model.symbol_table, goto_model.goto_functions, show_full, json_file_name);
+    taint_file_name, goto_model.symbol_table, goto_model.goto_functions,
+    show_full, json_file_name, summaries_directory);
 }
 
 std::string  taint_analysis_instrument_knowledge(

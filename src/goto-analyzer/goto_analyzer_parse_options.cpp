@@ -275,10 +275,11 @@ int goto_analyzer_parse_optionst::doit()
   if(cmdline.isset("taint"))
   {
     std::string taint_file=cmdline.get_value("taint");
+    std::string summary_directory=cmdline.get_value("taint-use-summaries");
 
     if(cmdline.isset("show-taint"))
     {
-      taint_analysis(goto_model, taint_file, get_message_handler(), true, "");
+      taint_analysis(goto_model, taint_file, get_message_handler(), true, "", summary_directory);
       return 0;
     }
     else if (cmdline.isset("summary-only"))
@@ -314,7 +315,7 @@ int goto_analyzer_parse_optionst::doit()
     {
       std::string json_file=cmdline.get_value("json");
       bool result=
-        taint_analysis(goto_model, taint_file, get_message_handler(), false, json_file);
+        taint_analysis(goto_model, taint_file, get_message_handler(), false, json_file, summary_directory);
       return result?10:0;
     }
   }

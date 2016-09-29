@@ -88,9 +88,10 @@ struct  database_of_summariest
   databaset::const_iterator  cbegin() const;
   databaset::const_iterator  begin() const { return cbegin(); }  
   databaset::const_iterator  cend() const;
-  databaset::const_iterator  end() const { return cend(); }  
+  databaset::const_iterator  end() const { return cend(); }
 
-  // TODO: add interface for searching and iteration in the database.
+  int count(const summarised_object_idt& id) const { return m_cache.count(id); }
+  const summary_ptrt& operator[](const summarised_object_idt& id) const { return m_cache.at(id); }
 
 private:
   cachet  m_cache;

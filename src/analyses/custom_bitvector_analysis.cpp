@@ -455,6 +455,10 @@ void custom_bitvector_domaint::transform(
             }
           }
         }
+        else
+        {
+          cba.transform_function_call_stub(from,ai,ns);
+        }
       }
     }
     break;
@@ -910,3 +914,4 @@ void custom_bitvector_analysist::check(
     out << "SUMMARY: " << pass << " pass, " << fail << " fail, "
         << unknown << " unknown\n";
 }
+

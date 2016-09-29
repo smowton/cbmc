@@ -347,7 +347,7 @@ bool ai_baset::do_function_call(
   const goto_functionst::goto_functiont &goto_function=
     f_it->second;
 
-  if(!goto_function.body_available())
+  if((!goto_function.body_available()) || !should_enter_function(f_it->first))
   {
     // if we don't have a body, we just do an edige call -> return
     std::unique_ptr<statet> tmp_state(make_temporary_state(get_state(l_call)));

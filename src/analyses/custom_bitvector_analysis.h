@@ -156,6 +156,11 @@ protected:
   local_may_alias_factoryt local_may_alias_factory;
   
   std::set<exprt> aliases(const exprt &, locationt loc);
+
+  // Override if you want to do something special with a stub function
+  // other than the may_set, must_sink etc intrinsics.
+  virtual void transform_function_call_stub(locationt,ai_baset&,const namespacet&) {}
+    
 };
 
 #endif
