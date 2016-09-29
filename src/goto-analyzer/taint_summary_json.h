@@ -9,8 +9,8 @@
 //
 /////////////////////////////////////////////////////////////////////////////
 
-#ifndef CPROVER_TAINT_SUMMARY_DUMP_H
-#define CPROVER_TAINT_SUMMARY_DUMP_H
+#ifndef CPROVER_TAINT_SUMMARY_JSON_H
+#define CPROVER_TAINT_SUMMARY_JSON_H
 
 #include <util/json.h>
 #include <summaries/summary.h>

@@ -46,6 +46,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <summaries/summary.h>
 #include <goto-analyzer/taint_summary.h>
 #include <goto-analyzer/taint_summary_dump.h>
+#include <goto-analyzer/taint_summary_json.h>
 
 #include "goto_analyzer_parse_options.h"
 #include "taint_analysis.h"
@@ -290,13 +291,24 @@ int goto_analyzer_parse_optionst::doit()
       std::stringstream  log;
       sumfn::database_of_summariest  summaries;
       sumfn::taint::summarise_all_functions(goto_model,summaries,&log);
-      sumfn::dump_in_html(
+      std::string json_directory=cmdline.get_value("json");
+      if(json_directory=="")
+      {
+        sumfn::dump_in_html(
           summaries,
           &sumfn::taint::dump_in_html,
           static_cast<goto_modelt const&>(goto_model),
           "./dump_taint_summaries",
           &log
           );
+      }
+      else
+      {
+        sumfn::write_database_as_json(
+          summaries,
+          &sumfn::taint::summary_to_json,
+          json_directory);
+      }
     }
     else
     {
