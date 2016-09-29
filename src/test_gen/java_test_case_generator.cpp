@@ -128,7 +128,7 @@ const std::string java_test_case_generatort::generate_test_case(
     previous_function=step.pc->function;
   }
 
-  std::string assertCompare;
+  exprt assertCompare;
   /* can we emit an assert, i.e., does the function return a non-void value? */
   bool emitAssert = false;
   /* does the trace cover a complete flow through the function, i.e., not just
@@ -146,68 +146,10 @@ const std::string java_test_case_generatort::generate_test_case(
       if(id2string(identifier)=="return'")
       {
         const exprt &expr = step.full_lhs_value;
-
-        // from json_expr.cpp
         if(expr.id()==ID_constant)
         {
-          status() << "FUNCTION: " << id2string(source_location.get_function()) << eom;
-          status() << "ID      : " << id2string(identifier) << eom;
-          status() << "VAL     : " << expr.get_string(ID_value) << eom;
-
-
-          const typet &type=ns.follow(expr.type());
-
-          // no unsinged ints in Java
-          if(// type.id()==ID_unsignedbv ||
-             type.id()==ID_signedbv ||
-             type.id()==ID_c_bit_field)
-          {
-            std::size_t width = to_bitvector_type(type).get_width();
-            if(width==8 || width==16 || width==32 || width==64)
-            {
-              mp_integer i;
-              to_integer(expr, i);
-              assertCompare=(" == " + integer2string(i));
-              emitAssert = true;
-            }
-          }
-          else if(type.id()==ID_c_enum)
-          {
-            assertCompare=(" == " + expr.get_string(ID_value));
-            emitAssert = true;
-          }
-          else if(type.id()==ID_c_enum_tag)
-          {
-            assertCompare=(" == " + expr.get_string(ID_value));
-            emitAssert = true;
-          }
-          else if(type.id()==ID_floatbv)
-          {
-            std::size_t width = to_bitvector_type(type).get_width();
-            if(width==32 || width==64)
-            {
-              assertCompare=(" == " + expr.get_string(ID_value));
-              emitAssert = true;
-            }
-          }
-          else if(type.id()==ID_bool || type.id()==ID_c_bool)
-          {
-            if(expr.is_true())
-              assertCompare=(" == true");
-            else
-              assertCompare=(" == false");
-            emitAssert = true;
-          }
-          else if(type.id()==ID_string)
-          {
-            assertCompare=(".equals(" + expr.get_string(ID_value) +")");
-            emitAssert = true;
-          }
-          else
-          {
-            assertCompare=" != null";
-            emitAssert = true;
-          }
+          assertCompare = expr;
+          emitAssert = true;
         }
       }
     }

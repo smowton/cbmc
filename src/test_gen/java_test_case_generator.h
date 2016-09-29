@@ -26,7 +26,7 @@ typedef std::function<
               const interpretert::dynamic_typest&,
               const std::string &,
               const interpretert::side_effects_differencet &,
-              const std::string &,
+              const exprt &,
               bool,
               bool,
               bool,
