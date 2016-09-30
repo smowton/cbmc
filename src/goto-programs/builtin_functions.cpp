@@ -735,17 +735,6 @@ void goto_convertt::do_java_new(
   t_i->source_location=location;
 }
 
-namespace
-{
-bool is_constant(const exprt &array_size)
-{
-  // TODO: Check effectively final
-  if (ID_typecast == array_size.id())
-    return is_constant(to_typecast_expr(array_size).op());
-  return array_size.is_constant();
-}
-}
-
 /*******************************************************************\
 
 Function: goto_convertt::do_java_new_array
@@ -899,22 +888,11 @@ void goto_convertt::do_java_new_array(
     else
     {
       const typet &elem_type=data.type().subtype();
-      message_handlert &msg=get_message_handler();
-      const exprt zero_element(zero_initializer(elem_type, location, ns, msg));
-      if (is_constant(rhs.op0()))
-      {
-        codet array_set_statement(ID_array_set);
-        codet::operandst &ops=array_set_statement.operands();
-        ops.push_back(data);
-        ops.push_back(zero_element);
-        copy(array_set_statement, OTHER, dest);
-      } else
-      {
-        for_body.copy_to_operands(code_assignt(deref_expr, zero_element));
-        for_loop.body()=for_body;
-        convert(for_loop, tmp);
-        dest.destructive_append(tmp);
-      }
+      codet array_set_statement(ID_array_set);
+      codet::operandst &ops=array_set_statement.operands();
+      ops.push_back(data);
+      ops.push_back(gen_zero(elem_type));
+      copy(array_set_statement, OTHER, dest);
     }
   }
 }
