@@ -42,7 +42,7 @@ void  dump_lvalue_in_html(
  *
  */
 void  dump_svalue_in_html(
-    svaluet const&  value,
+    svaluet const&  svalue,
     std::ostream&  ostr
     );
 
@@ -54,7 +54,7 @@ void  dump_svalue_in_html(
  *
  */
 void  dump_lvalues_to_svalues_in_html(
-    map_from_lvalues_to_svaluest const&  vars_to_values,
+    map_from_lvalues_to_svaluest const&  lvalues_to_svalues,
     namespacet const&  ns,
     std::ostream&  ostr
     );

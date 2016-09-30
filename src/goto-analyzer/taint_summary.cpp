@@ -10,6 +10,7 @@
 
 #include <goto-analyzer/taint_summary.h>
 #include <goto-analyzer/taint_summary_dump.h>
+#include <summaries/utility.h>
 #include <summaries/summary_dump.h>
 #include <util/std_types.h>
 #include <util/file_util.h>
@@ -22,7 +23,6 @@
 #include <stdexcept>
 
 #include <iostream>
-
 
 namespace sumfn { namespace taint { namespace detail { namespace {
 
@@ -60,57 +60,6 @@ svaluet  make_top()
 //{
 //  return lvalue.id() == ID_symbol;
 //}
-
-bool  is_parameter(lvaluet const  lvalue, namespacet const&  ns)
-{
-  if (lvalue.id() == ID_symbol)
-  {
-    symbolt const*  symbol = nullptr;
-    ns.lookup(to_symbol_expr(lvalue).get_identifier(),symbol);
-    return symbol != nullptr && symbol->is_parameter;
-  }
-  return false;
-}
-
-bool  is_static(lvaluet const  lvalue, namespacet const&  ns)
-{
-  if (lvalue.id() == ID_symbol)
-  {
-    symbolt const*  symbol = nullptr;
-    ns.lookup(to_symbol_expr(lvalue).get_identifier(),symbol);
-    return symbol != nullptr && symbol->is_static_lifetime;
-  }
-  else if (lvalue.id() == ID_member)
-  {
-  }
-  return false;
-}
-
-bool  is_return_value_auxiliary(lvaluet const  lvalue, namespacet const&  ns)
-{
-  if (lvalue.id() == ID_symbol)
-  {
-    irep_idt const&  name = to_symbol_expr(lvalue).get_identifier();
-    symbolt const*  symbol = nullptr;
-    ns.lookup(name,symbol);
-    return symbol != nullptr &&
-           symbol->is_static_lifetime &&
-           symbol->is_auxiliary &&
-           symbol->is_file_local &&
-           symbol->is_thread_local &&
-           as_string(name).find("#return_value") != std::string::npos
-           ;
-  }
-  return false;
-}
-
-bool  is_pure_local(lvaluet const  lvalue, namespacet const&  ns)
-{
-  return lvalue.id() != ID_member &&
-         !is_parameter(lvalue,ns) &&
-         !is_static(lvalue,ns)
-         ;
-}
 
 
 void  collect_lvalues(
@@ -347,6 +296,169 @@ void  erase_dead_lvalue(
   }
 }
 
+void  build_symbols_substitution(
+    std::unordered_map<svaluet::symbolt,svaluet>&  symbols_substitution,
+    map_from_lvalues_to_svaluest const&  a,
+    summary_ptrt const  summary,
+    irep_idt const&  caller_ident,
+    code_function_callt const&  fn_call,
+    code_typet const&  fn_type,
+    namespacet const&  ns,
+    std::ostream* const  log
+    )
+{
+  if (log != nullptr)
+    *log << "<p>Building 'symbols substitution map':</p>\n"
+            "<ul>\n";
+
+  std::unordered_map<std::string,std::size_t>  parameter_indices;
+  for (std::size_t  i = 0UL; i != fn_type.parameters().size(); ++i)
+    parameter_indices.insert({
+          as_string(fn_type.parameters().at(i).get_identifier()),
+          i
+          });
+
+  std::string const  callee_ident =
+      as_string(to_symbol_expr(fn_call.function()).get_identifier());
+
+  for (auto const&  lvalue_svalue : summary->input())
+  {
+    assert(!lvalue_svalue.second.is_top());
+    assert(!lvalue_svalue.second.is_bottom());
+    assert(lvalue_svalue.second.expression().size() == 1UL);
+
+    if (is_parameter(lvalue_svalue.first,ns))
+    {
+      std::size_t  param_idx;
+      {
+        auto const  it = parameter_indices.find(
+              name_of_symbol_access_path(lvalue_svalue.first)
+              );
+        assert(it != parameter_indices.cend());
+        param_idx = it->second;
+      }
+
+      assert(param_idx < fn_call.arguments().size());
+
+      svaluet  argument_svalue = detail::make_bottom();
+      {
+        lvalues_sett  argument_lvalues;
+        detail::collect_lvalues(
+              fn_call.arguments().at(param_idx),
+              argument_lvalues
+              );
+        for (auto const&  lvalue : argument_lvalues)
+        {
+          auto const  it = a.find(lvalue);
+          if (it != a.cend())
+            argument_svalue = join(argument_svalue,it->second);
+        }
+      }
+
+      symbols_substitution.insert({
+          *lvalue_svalue.second.expression().cbegin(),
+          argument_svalue
+          });
+
+      if (log != nullptr)
+      {
+        *log << "<li>From parameter no. " << param_idx << "(lvalue=";
+        dump_lvalue_in_html(lvalue_svalue.first,ns,*log);
+        *log << "): "
+             << *lvalue_svalue.second.expression().cbegin()
+             << " &rarr; "
+             ;
+        dump_svalue_in_html(argument_svalue,*log);
+        *log << "</li>\n";
+      }
+    }
+    else
+    {
+      lvaluet const  translated_lvalue = scope_translation(
+            lvalue_svalue.first,
+            callee_ident,
+            caller_ident
+            );
+      auto const  it = a.find(translated_lvalue);
+      if (it != a.cend())
+      {
+        symbols_substitution.insert({
+            *lvalue_svalue.second.expression().cbegin(),
+            it->second
+            });
+
+        if (log != nullptr)
+        {
+          *log << "<li>From exterior scope of the function (lvalue=";
+          dump_lvalue_in_html(lvalue_svalue.first,ns,*log);
+          *log << "): "
+               << *lvalue_svalue.second.expression().cbegin()
+               << " &rarr; "
+               ;
+          dump_svalue_in_html(it->second,*log);
+          *log << "</li>\n";
+        }
+      }
+      else
+        if (log != nullptr)
+        {
+          *log << "<li>SKIPPING lvalue '";
+          dump_lvalue_in_html(lvalue_svalue.first,ns,*log);
+          *log << "'.</li>\n";
+        }
+    }
+  }
+
+  if (log != nullptr)
+    *log << "</ul>\n";
+}
+
+
+void  build_substituted_summary(
+    map_from_lvalues_to_svaluest&  substituted_summary,
+    map_from_lvalues_to_svaluest const&  original_summary,
+    std::unordered_map<svaluet::symbolt,svaluet> const&  symbols_substitution,
+    irep_idt const&  caller_ident,
+    irep_idt const&  callee_ident,
+    namespacet const&  ns,
+    std::ostream* const  log
+    )
+{
+  for (auto const&  lvalue_svalue : original_summary)
+  {
+    lvaluet const  translated_lvalue = scope_translation(
+          lvalue_svalue.first,
+          callee_ident,
+          caller_ident
+          );
+    if (translated_lvalue.is_not_nil())
+    {
+      if (lvalue_svalue.second.is_bottom() || lvalue_svalue.second.is_top())
+        substituted_summary.insert({translated_lvalue,lvalue_svalue.second});
+      else
+      {
+        svaluet  substituted_svalue = detail::make_bottom();
+        for (auto const&  symbol : lvalue_svalue.second.expression())
+        {
+          auto const  it = symbols_substitution.find(symbol);
+          if (it != symbols_substitution.cend())
+            substituted_svalue = join(substituted_svalue,it->second);
+          else
+            substituted_svalue =
+                join(substituted_svalue,{{symbol},false,false});
+        }
+        substituted_summary.insert({translated_lvalue,substituted_svalue});
+      }
+    }
+  }
+
+  if (log != nullptr)
+  {
+    *log << "<p>Substituted summary:</p>\n";
+    dump_lvalues_to_svalues_in_html(substituted_summary,ns,*log);
+  }
+}
+
 
 }}}}
 
@@ -363,6 +475,8 @@ svaluet::svaluet(
   , m_is_top(is_top)
 {
   assert((m_is_bottom && m_is_top) == false);
+  assert(m_is_bottom || m_is_top || !m_expression.empty());
+  assert(!(m_is_bottom || m_is_top) || m_expression.empty());
 }
 
 
@@ -470,6 +584,8 @@ bool  operator<(
 map_from_lvalues_to_svaluest  transform(
     map_from_lvalues_to_svaluest const&  a,
     goto_programt::instructiont const&  I,
+    irep_idt const&  caller_ident,
+    goto_functionst::function_mapt const&  functions_map,
     database_of_summariest const&  database,
     namespacet const&  ns,
     std::ostream* const  log
@@ -519,55 +635,79 @@ map_from_lvalues_to_svaluest  transform(
       code_function_callt const&  fn_call = to_code_function_call(I.code);
       if (fn_call.function().id() == ID_symbol)
       {
-        irep_idt const&  fn_ident =
-            to_symbol_expr(fn_call.function()).get_identifier();
-
         if (log != nullptr)
-        {
-          *log << "<p>Recognised FUNCTION_CALL instruction:</p>\n"
-                  "<ul>\n"
-                  "  <li>Called function name: " << fn_ident << "</li>\n"
-                  "  <li>Left-hand-side expression: "
-               ;
-          if (fn_call.lhs().is_nil())
-            *log << "NONE";
-          else
-            dump_lvalue_in_html(fn_call.lhs(),ns,*log);
-          *log << "</li>\n";
+          *log << "<p>Recognised FUNCTION_CALL instruction.</p>\n";
 
-          int  arg_idx = 0;
-          for (exprt const&  arg : fn_call.arguments())
-          {
-            lvalues_sett  lvalues;
-            detail::collect_lvalues(arg,lvalues);
-            *log << "  <li>L-values stored in argument " << arg_idx+1 << ": { ";
-            for (auto const&  lvalue : lvalues)
-            {
-              dump_lvalue_in_html(lvalue,ns,*log);
-              *log << ", ";
-            }
-            *log << "}</li>\n";
+        std::string const  callee_ident =
+            as_string(to_symbol_expr(fn_call.function()).get_identifier());
 
-            ++arg_idx;
-          }
-          *log << "</li>\n";
 
-          *log << "</ul>\n";
-        }
+//        if (log != nullptr)
+//        {
+//          *log << "<p>Recognised FUNCTION_CALL instruction:</p>\n"
+//                  "<ul>\n"
+//                  "  <li>Called function name: " << callee_ident << "</li>\n"
+//                  "  <li>Left-hand-side expression: "
+//               ;
+//          if (fn_call.lhs().is_nil())
+//            *log << "NONE";
+//          else
+//            dump_lvalue_in_html(fn_call.lhs(),ns,*log);
+//          *log << "</li>\n";
 
-        summary_ptrt const  summary =
-            database.find<summaryt>(as_string(fn_ident));
+//          int  arg_idx = 0;
+//          for (exprt const&  arg : fn_call.arguments())
+//          {
+//            lvalues_sett  lvalues;
+//            detail::collect_lvalues(arg,lvalues);
+//            *log << "  <li>L-values stored in argument " << arg_idx+1 << ": { ";
+//            for (auto const&  lvalue : lvalues)
+//            {
+//              dump_lvalue_in_html(lvalue,ns,*log);
+//              *log << ", ";
+//            }
+//            *log << "}</li>\n";
+
+//            ++arg_idx;
+//          }
+//          *log << "</li>\n";
+
+//          *log << "</ul>\n";
+//        }
+
+        summary_ptrt const  summary = database.find<summaryt>(callee_ident);
         if (summary.operator bool())
         {
-          if (log != nullptr)
-            *log << "<p>!!! WARNING !!! : NOT IMPLEMENTED YET! So, we use "
-                    "identity as a transformation function.</p>\n";
+          map_from_lvalues_to_svaluest  substituted_summary;
+          {
+            std::unordered_map<svaluet::symbolt,svaluet>  symbols_substitution;
+            detail::build_symbols_substitution(
+                  symbols_substitution,
+                  a,
+                  summary,
+                  caller_ident,
+                  fn_call,
+                  functions_map.at(callee_ident).type,
+                  ns,
+                  log
+                  );
+            detail::build_substituted_summary(
+                  substituted_summary,
+                  summary->output(),
+                  symbols_substitution,
+                  caller_ident,
+                  callee_ident,
+                  ns,
+                  log
+                  );
+          }
+          result = join(result,substituted_summary);
         }
         else
           if (log != nullptr)
             *log << "<p>!!! WARNING !!! : No summary was found for the called "
-                    "function " << as_string(fn_ident) << "So, we use identity "
-                    "as a transformation function.</p>\n";
+                    "function " << as_string(callee_ident) << "So, we use "
+                    "identity as a transformation function.</p>\n";
       }
       else
         if (log != nullptr)
@@ -788,7 +928,15 @@ summary_ptrt  summarise_function(
         }
 
         map_from_lvalues_to_svaluest const  transformed =
-            transform(src_value,*src_instr_it,database,ns,log);
+            transform(
+                src_value,
+                *src_instr_it,
+                function_id,
+                functions,
+                database,
+                ns,
+                log
+                );
         dst_value = join(transformed,dst_value);
 
         if (log != nullptr)
@@ -797,25 +945,6 @@ summary_ptrt  summarise_function(
           dump_lvalues_to_svalues_in_html(transformed,ns,*log);
           *log << "<p>Resulting destination value:</p>\n";
           dump_lvalues_to_svalues_in_html(dst_value,ns,*log);
-
-//if (src_instr_it->location_number == 9 &&
-//    dst_instr_it->location_number == 10)
-//{
-//  *log << "<p>COMPARE!!!</p>\n";
-//  *log << "<p>old_dst_value:</p>\n";
-//  dump_lvalues_to_svalues_in_html(old_dst_value,ns,*log);
-//  *log << "<p>dst_value:</p>\n";
-//  dump_lvalues_to_svalues_in_html(dst_value,ns,*log);
-//  *log << "<p>dst_value <= old_dst_value:"
-//       << (dst_value <= old_dst_value)
-//       << "</p>\n";
-//  *log << "<p>dst_value == old_dst_value:"
-//       << (dst_value == old_dst_value)
-//       << "</p>\n";
-//  *log << "<p>dst_value < old_dst_value:"
-//       << (dst_value < old_dst_value)
-//       << "</p>\n";
-//}
         }
 
         if (!(dst_value <= old_dst_value))

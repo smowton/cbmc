@@ -46,24 +46,24 @@ void  dump_svalue_in_html(
     bool first = true;
     for (auto const&  symbol : svalue.expression())
     {
-       ostr << (first ? "" : " &#x2210 ") << symbol;
+       ostr << (first ? "" : " &#x2210; ") << symbol;
        first = false;
     }
   }
 }
 
 void  dump_lvalues_to_svalues_in_html(
-    map_from_lvalues_to_svaluest const&  vars_to_values,
+    map_from_lvalues_to_svaluest const&  lvalues_to_svalues,
     namespacet const&  ns,
     std::ostream&  ostr
     )
 {
-  if (vars_to_values.empty())
+  if (lvalues_to_svalues.empty())
     ostr << "BOTTOM";
   else
   {
     ostr << "    <table>\n";
-    for (auto const&  elem : vars_to_values)
+    for (auto const&  elem : lvalues_to_svalues)
     {
       ostr << "      <tr>\n";
       ostr << "        <td>";

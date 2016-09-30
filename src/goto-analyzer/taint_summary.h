@@ -13,6 +13,7 @@
 #define CPROVER_TAINT_SUMMARY_H
 
 #include <summaries/summary.h>
+#include <summaries/utility.h>
 #include <goto-programs/goto_model.h>
 #include <goto-programs/goto_functions.h>
 #include <analyses/call_graph.h>
@@ -54,7 +55,6 @@ struct  lvalue_hasher
 namespace sumfn { namespace taint {
 
 
-
 /**
  *
  *
@@ -62,7 +62,8 @@ namespace sumfn { namespace taint {
  */
 struct  svaluet
 {
-  typedef std::set<std::string>  expressiont;
+  typedef  std::string  symbolt;
+  typedef std::set<symbolt>  expressiont;
 
   svaluet(
       expressiont const&  expression,
@@ -117,7 +118,7 @@ svaluet  join(svaluet const&  a, svaluet const&  b);
  *
  *
  */
-typedef exprt  lvaluet;
+typedef access_path_to_memoryt  lvaluet;
 
 typedef std::unordered_map<lvaluet,svaluet,irep_hash,irep_full_eq>
         map_from_lvalues_to_svaluest;
@@ -161,6 +162,7 @@ inline bool  operator<=(
 map_from_lvalues_to_svaluest  transform(
     map_from_lvalues_to_svaluest const&  a,
     goto_programt::instructiont const&  I,
+    goto_functionst::function_mapt const&  functions_map,
     database_of_summariest const&  database,
     namespacet const&  ns,
     std::ostream* const  log = nullptr

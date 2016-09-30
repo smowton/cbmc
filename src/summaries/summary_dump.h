@@ -9,8 +9,8 @@
 //
 /////////////////////////////////////////////////////////////////////////////
 
-#ifndef CPROVER_SUMMARY_DUMP_H
-#define CPROVER_SUMMARY_DUMP_H
+#ifndef CPROVER_SUMMARIES_SUMMARY_DUMP_H
+#define CPROVER_SUMMARIES_SUMMARY_DUMP_H
 
 #include <summaries/summary.h>
 #include <goto-programs/goto_model.h>
@@ -18,6 +18,22 @@
 #include <functional>
 #include <string>
 #include <iosfwd>
+
+namespace sumfn { namespace detail {
+
+
+/**
+ *
+ *
+ */
+void  dump_irept(
+    irept const&  irep,
+    std::ostream&  ostr,
+    std::string const&  shift = ""
+    );
+
+
+}}
 
 namespace sumfn {
 

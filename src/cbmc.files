@@ -1319,6 +1319,8 @@ summaries/summary.cpp
 summaries/summary.h
 summaries/summary_dump.cpp
 summaries/summary_dump.h
+summaries/utility.cpp
+summaries/utility.h
 symex/path_search.cpp
 symex/path_search.h
 symex/symex_cover.cpp

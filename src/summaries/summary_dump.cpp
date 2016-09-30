@@ -19,7 +19,6 @@
 #include <iomanip>
 #include <cstdlib>
 
-
 namespace sumfn { namespace detail { namespace {
 
 
@@ -301,6 +300,38 @@ void  replace(
 
 
 }}}
+
+namespace sumfn { namespace detail {
+
+
+void  dump_irept(
+    irept const&  irep,
+    std::ostream&  ostr,
+    std::string const&  shift)
+{
+  std::string const  local_shift = msgstream() << shift << "    ";
+  std::string const  sub_shift = msgstream() << local_shift << "    ";
+  ostr << shift << "IREP{\n"
+       << local_shift << "id { " << irep.id() << "}\n"
+       << local_shift << "sub {\n"
+       ;
+  for (auto const&  sub : irep.get_sub())
+    dump_irept(sub,ostr,sub_shift);
+  ostr << local_shift << "}\n"
+       << local_shift << "named_sub {\n"
+       ;
+  for (auto const&  name_irep : irep.get_named_sub())
+  {
+    ostr << sub_shift << name_irep.first << "\n";
+    dump_irept(name_irep.second,ostr,sub_shift);
+  }
+  ostr << local_shift << "}\n"
+       << shift << "}\n"
+       ;
+}
+
+
+}}
 
 namespace sumfn {
 

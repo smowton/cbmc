@@ -7,7 +7,7 @@
 #
 #############################################################################
 
-SRC = summary.cpp  summary_dump.cpp
+SRC = summary.cpp  summary_dump.cpp  utility.cpp
 
 INCLUDES= -I ..
 

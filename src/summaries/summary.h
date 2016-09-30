@@ -10,8 +10,8 @@
 //
 /////////////////////////////////////////////////////////////////////////////
 
-#ifndef CPROVER_SUMMARY_H
-#define CPROVER_SUMMARY_H
+#ifndef CPROVER_SUMMARIES_SUMMARY_H
+#define CPROVER_SUMMARIES_SUMMARY_H
 
 #include <goto-programs/goto_model.h>
 #include <util/irep.h>
