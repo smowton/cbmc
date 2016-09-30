@@ -366,7 +366,8 @@ void reference_factoryt::add_value(std::string &result, const symbol_tablet &st,
   else
     instance_expr = force_instantiate(qualified_class_file_name);
 
-  result+='(' + qualified_class_name + ") " + instance_expr;
+  result+='(' + qualified_class_name + ") " + instance_expr + ";\n";
+  indent(result,2u);
 
   if(should_mock)
     result+=mockenv_builder.register_mock_instance(qualified_class_name, this_name);
