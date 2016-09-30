@@ -17,6 +17,19 @@
 namespace sumfn {
 
 
+access_path_to_memoryt const&  empty_access_path()
+{
+  static access_path_to_memoryt const  null_path(ID_nil);
+  return null_path;
+}
+
+
+bool  is_empty(access_path_to_memoryt const&  path)
+{
+  return path.is_nil();
+}
+
+
 bool  is_identifier(access_path_to_memoryt const&  lvalue)
 {
   return lvalue.id() == ID_symbol;

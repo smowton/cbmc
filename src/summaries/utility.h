@@ -28,6 +28,14 @@ namespace sumfn {
 typedef  exprt  access_path_to_memoryt;
 
 
+/**
+ *
+ *
+ *
+ */
+access_path_to_memoryt const&  empty_access_path();
+bool  is_empty(access_path_to_memoryt const&  path);
+
 
 /**
  *

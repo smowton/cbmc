@@ -56,12 +56,11 @@ svaluet  make_top()
 }
 
 
-//bool  is_identifier(lvaluet const  lvalue)
-//{
-//  return lvalue.id() == ID_symbol;
-//}
-
-
+/**
+ *
+ *
+ *
+ */
 void  collect_lvalues(
     exprt const&  expr,
     lvalues_sett&  result
@@ -284,7 +283,6 @@ void  erase_dead_lvalue(
 {
   if (map.erase(lvalue) == 0ULL && lvalue.id() == ID_symbol)
   {
-    //map_from_lvalues_to_svaluest::iterator  lvalue_it = map.end();
     irep_idt const&  ident = to_symbol_expr(lvalue).get_identifier();
     for (auto  it = map.begin(); it != map.end(); ++it)
       if (is_pure_local(it->first,ns) && it->first.id() == ID_symbol &&
@@ -431,7 +429,7 @@ void  build_substituted_summary(
           callee_ident,
           caller_ident
           );
-    if (translated_lvalue.is_not_nil())
+    if (!is_empty(translated_lvalue))
     {
       if (lvalue_svalue.second.is_bottom() || lvalue_svalue.second.is_top())
         substituted_summary.insert({translated_lvalue,lvalue_svalue.second});
@@ -640,40 +638,6 @@ map_from_lvalues_to_svaluest  transform(
 
         std::string const  callee_ident =
             as_string(to_symbol_expr(fn_call.function()).get_identifier());
-
-
-//        if (log != nullptr)
-//        {
-//          *log << "<p>Recognised FUNCTION_CALL instruction:</p>\n"
-//                  "<ul>\n"
-//                  "  <li>Called function name: " << callee_ident << "</li>\n"
-//                  "  <li>Left-hand-side expression: "
-//               ;
-//          if (fn_call.lhs().is_nil())
-//            *log << "NONE";
-//          else
-//            dump_lvalue_in_html(fn_call.lhs(),ns,*log);
-//          *log << "</li>\n";
-
-//          int  arg_idx = 0;
-//          for (exprt const&  arg : fn_call.arguments())
-//          {
-//            lvalues_sett  lvalues;
-//            detail::collect_lvalues(arg,lvalues);
-//            *log << "  <li>L-values stored in argument " << arg_idx+1 << ": { ";
-//            for (auto const&  lvalue : lvalues)
-//            {
-//              dump_lvalue_in_html(lvalue,ns,*log);
-//              *log << ", ";
-//            }
-//            *log << "}</li>\n";
-
-//            ++arg_idx;
-//          }
-//          *log << "</li>\n";
-
-//          *log << "</ul>\n";
-//        }
 
         summary_ptrt const  summary = database.find<summaryt>(callee_ident);
         if (summary.operator bool())

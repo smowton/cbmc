@@ -173,7 +173,7 @@ public:
   }
   #endif
   
-  virtual ~irept()
+  inline ~irept()
   {
     remove_ref(data);
   }
