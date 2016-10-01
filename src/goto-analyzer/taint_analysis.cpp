@@ -13,6 +13,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/simplify_expr.h>
 #include <util/json.h>
 #include <util/file_util.h>
+#include <util/suffix.h>
 #include <json/json_parser.h>
 
 #include <ansi-c/string_constant.h>
@@ -70,7 +71,8 @@ public:
 protected:
   const database_of_summariest& summarydb;
   virtual bool should_enter_function(const irep_idt& id) { return !summarydb.count(id2string(id)); }
-  virtual void transform_function_call_stub(locationt, ai_baset&, const namespacet&);  
+  virtual void transform_function_call_stub(locationt, custom_bitvector_domaint&, const namespacet&);
+  const sumfn::summary_ptrt& get_summary(const irep_idt& identifier);
 };
 
 /*******************************************************************\
@@ -259,22 +261,93 @@ void taint_analysist::instrument(
   }
 }
 
-void bitvector_analysis_with_summariest::transform_function_call_stub(
-  locationt loc, ai_baset& ai, const namespacet& ns)
+const sumfn::summary_ptrt& bitvector_analysis_with_summariest::get_summary(const irep_idt& identifier)
 {
+  return summarydb[id2string(identifier)];
+}
+
+namespace {
+
+typedef custom_bitvector_domaint::vectorst vectorst;
+typedef custom_bitvector_domaint::bit_vectort bit_vectort;
+
+vectorst substitute_taint(
+  const sumfn::taint::svaluet& in,
+  const std::map<std::string,vectorst>& subs)
+{
+  if(in.is_top())
+    return vectorst();
+
+  if(in.is_bottom())
+  {
+    vectorst ret;
+    // Set 'may' for all possible taints.
+    ret.may_bits=(bit_vectort)-1;
+    return ret;
+  }
+
+  // Otherwise merge all taint sources given:
+  vectorst ret;
+  for(const auto& taint : in.expression())
+  {
+    const auto& vec=subs.at(taint);
+    ret=custom_bitvector_domaint::merge(vec,ret);
+  }
+  return ret;  
+}
+
+}
+
+void bitvector_analysis_with_summariest::transform_function_call_stub(
+  locationt loc, custom_bitvector_domaint& domain, const namespacet& ns)
+{
+ 
   const goto_programt::instructiont &instruction=*loc;
   const code_function_callt &code_function_call=to_code_function_call(instruction.code);
   const exprt &function=code_function_call.function();
-  if(function.id()==ID_symbol)
+  if(function.id()!=ID_symbol)
+    throw "transform_function_call_stub with non-symbol argument";
+  
+  const irep_idt &identifier=to_symbol_expr(function).get_identifier();
+  const auto& summary=*(sumfn::taint::summaryt*)(&*get_summary(identifier));
+
+  // The summary should declare a symbol like "Tn" giving a symbolic taint name for each param.
+  // Build a map from such symbolic names to actual taint vectors:
+  
+  std::map<std::string,vectorst> actual_input_taint;
+  const auto& ftype=to_code_type(function.type());
+  for(const auto& param : ftype.parameters())
   {
-    const irep_idt &identifier=to_symbol_expr(function).get_identifier();
-    if(summarydb.count(id2string(identifier)))
-      std::cout << "Transform stub with summary: " << identifier << '\n';
-    else
-      std::cout << "Transform stub without summary: " << identifier << '\n';
+    symbol_exprt param_symbol(param.get_identifier(),param.type());
+    auto param_taints=domain.get_rhs(param_symbol);
+    auto findit=summary.input().find(param_symbol);
+    if(findit==summary.input().end())
+      continue;
+    auto param_taint_object=findit->second;
+    assert(param_taint_object.expression().size()==1);
+    actual_input_taint[*(param_taint_object.expression().begin())]=param_taints;
   }
-  else
-    std::cout << "Transform non-symbol function call" << '\n';
+
+  // Now the summary maps symbolic taints onto actual expressions. Assign actual
+  // taint to each given target.
+  for(const auto& output : summary.output())
+  {
+    auto actual_output_taint=substitute_taint(output.second,actual_input_taint);
+    if(output.first.id()==ID_symbol &&
+       has_suffix(id2string(to_symbol_expr(output.first).get_identifier()),"#return_value"))
+    {
+      // Overwritten for certain:
+      domain.assign_lhs(output.first,actual_output_taint);
+    }
+    else
+    {
+      // May be tainted:
+      auto existing_taint=domain.get_rhs(output.first);
+      auto merged_taint=custom_bitvector_domaint::merge(existing_taint,actual_output_taint);
+      domain.assign_lhs(output.first,merged_taint);
+    }
+  }
+  
 }
 
 void taint_analysist::read_summaries(
@@ -287,7 +360,7 @@ void taint_analysist::read_summaries(
   jsont index;
   {
     std::ifstream index_stream(index_filename);
-    if(!parse_json(index_stream,index_filename,get_message_handler(),index))
+    if(parse_json(index_stream,index_filename,get_message_handler(),index))
       throw "Failed to parse summaries index";
   }
   // In future, we'll load summaries on demand. For now, load everything in the index:
@@ -302,7 +375,7 @@ void taint_analysist::read_summaries(
     jsont entry_json;
     {
       std::ifstream entry_stream(entry_filename);
-      if(!parse_json(entry_stream,entry_filename,get_message_handler(),entry_json))
+      if(parse_json(entry_stream,entry_filename,get_message_handler(),entry_json))
 	throw "Failed to parse entry json";
     }
     if(!entry_json.is_object())

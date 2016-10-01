@@ -159,8 +159,9 @@ protected:
 
   // Override if you want to do something special with a stub function
   // other than the may_set, must_sink etc intrinsics.
-  virtual void transform_function_call_stub(locationt,ai_baset&,const namespacet&) {}
-    
+  // Awkward declaring this here rather than on the domain, but not as awkward
+  // as trying to re-derive ait with a new domain type!
+  virtual void transform_function_call_stub(locationt,custom_bitvector_domaint&,const namespacet&) {}
 };
 
 #endif
