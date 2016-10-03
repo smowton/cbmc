@@ -113,7 +113,7 @@ public:
   struct testt
   {
     goto_tracet goto_trace;
-    std::vector<irep_idt> covered_goals;
+    std::set<irep_idt> covered_goals;
     std::string source_code;
     std::string test_function_name;
   };
@@ -152,10 +152,10 @@ public:
   }
 
 // compute covered goals set difference
-  static void goals_diff(std::vector<irep_idt> &goals1, std::vector<irep_idt> &goals2) 
+  static void goals_diff(std::set<irep_idt> &goals1, std::set<irep_idt> &goals2) 
   {
-    std::vector<irep_idt>::iterator it1=goals1.begin();
-    std::vector<irep_idt>::iterator it2=goals2.begin();
+    std::set<irep_idt>::iterator it1=goals1.begin();
+    std::set<irep_idt>::iterator it2=goals2.begin();
     while (it1!=goals1.end() && it2!=goals2.end()) 
     {
       if (*it1<*it2) ++it1;
@@ -270,7 +270,7 @@ void bmc_covert::satisfying_assignment()
       {
         status() << "Covered " << g.description << messaget::eom;
         g.satisfied=true;
-        test.covered_goals.push_back(g_it.first);
+        test.covered_goals.insert(g_it.first);
         break;
       }
     }
