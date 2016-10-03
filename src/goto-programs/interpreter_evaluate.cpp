@@ -149,12 +149,11 @@ bool interpretert::extract_member_at(
   else if(source_type.id()==ID_array)
   {
     const auto& at=to_array_type(source_type);
-    if(at.size().id()!=ID_constant)
+    std::vector<mp_integer> array_size_vec;
+    evaluate(at.size(),array_size_vec);
+    if(array_size_vec.size()!=1)
       return false;
-    const auto& array_size_expr=to_constant_expr(at.size());
-    mp_integer array_size;
-    if(to_integer(array_size_expr,array_size))
-      return false;
+    mp_integer array_size=array_size_vec[0];
     mp_integer elem_size=pointer_offset_size(at.subtype(),ns);
     if(elem_size==-1)
       return false;
