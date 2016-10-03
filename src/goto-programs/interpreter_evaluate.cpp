@@ -859,6 +859,29 @@ void interpretert::evaluate(
               return;
           }
         }
+        else if(expr.op0().id()=="array-list")
+        {
+          // This sort of construct comes from boolbv_get, but doesn't seem
+          // to have an exprt yet. Its operands are a list of key-value pairs.
+          const auto& ops=expr.op0().operands();
+          assert(ops.size() % 2 == 0);
+          for(size_t listidx=0, listlim=ops.size(); listidx!=listlim; listidx+=2)
+          {
+            std::vector<mp_integer> elem_idx;
+            evaluate(ops[listidx],elem_idx);
+            assert(elem_idx.size()==1);
+            if(elem_idx[0]==idx[0])
+            {
+              evaluate(ops[listidx+1],dest);
+              if(dest.size()!=0)
+                return;
+              else
+                break;
+            }
+          }
+          // If we fall out the end of this loop then the constant array-list
+          // didn't define an element matching the index we're looking for.
+        }
       }
       evaluate_address(expr); // Evaluate again to print error message.
     }
