@@ -63,96 +63,112 @@ svaluet  make_top()
  */
 void  collect_lvalues(
     exprt const&  expr,
+    namespacet const&  ns,
     lvalues_sett&  result
     )
 {
   if (expr.id() == ID_symbol || expr.id() == ID_member)
-    result.insert(expr);
+    result.insert(normalise(expr,ns));
   else
     for (exprt const&  op : expr.operands())
-      collect_lvalues(op,result);
+      collect_lvalues(op,ns,result);
 }
 
 
 /**
  *
+ *
+ *
+ *
  */
 void  initialise_domain(
+    irep_idt const&  function_id,
     goto_functionst::goto_functiont const&  function,
+    goto_functionst::function_mapt const&  functions_map,
     namespacet const&  ns,
+    database_of_summariest const&  database,
     domaint&  domain,
     std::ostream* const  log
     )
 {
-  if (log != nullptr)
+  lvalues_sett  environment;
   {
-    *log << "<h3>Initialising the domain</h3>\n"
-            "<p>Locations initialised by element ";
-    dump_lvalues_to_svalues_in_html(map_from_lvalues_to_svaluest(),ns,*log);
-    *log << " : { ";
+    for (auto  it = function.body.instructions.cbegin();
+         it != function.body.instructions.cend();
+         ++it)
+      if (it->type == ASSIGN)
+      {
+        code_assignt const&  asgn = to_code_assign(it->code);
+        environment.insert(normalise(asgn.lhs(),ns));
+        collect_lvalues(asgn.rhs(),ns,environment);
+      }
+      else if (it->type == FUNCTION_CALL)
+      {
+        code_function_callt const&  fn_call = to_code_function_call(it->code);
+        if (fn_call.function().id() == ID_symbol)
+        {
+          std::string const  callee_ident =
+              as_string(to_symbol_expr(fn_call.function()).get_identifier());
+
+          auto const&  fn_type = functions_map.at(callee_ident).type;
+
+          summary_ptrt const  summary = database.find<summaryt>(callee_ident);
+          if (summary.operator bool())
+            for (auto const&  lvalue_svalue : summary->input())
+              if (!is_parameter(lvalue_svalue.first,ns) &&
+                  !is_return_value_auxiliary(lvalue_svalue.first,ns))
+                environment.insert(
+                      scope_translation(
+                          lvalue_svalue.first,
+                          callee_ident,
+                          function_id,
+                          fn_call,
+                          fn_type,
+                          ns
+                          )
+                      );
+        }
+      }
   }
 
-  for (auto  it = function.body.instructions.cbegin();
+  map_from_lvalues_to_svaluest  entry_map;
+  map_from_lvalues_to_svaluest  others_map;
+  for (lvaluet const&  lvalue : environment)
+    if (!is_pure_local(lvalue,ns) &&
+        !is_return_value_auxiliary(lvalue,ns) &&
+        !is_this(lvalue,ns))
+    {
+      entry_map.insert({lvalue, detail::make_symbol() });
+      others_map.insert({lvalue, detail::make_bottom() });
+    }
+
+  domain.insert({function.body.instructions.cbegin(),entry_map});
+  for (auto  it = std::next(function.body.instructions.cbegin());
        it != function.body.instructions.cend();
        ++it)
   {
-    domain.insert({
-        it,
-        map_from_lvalues_to_svaluest()
-        });
+    domain.insert({it,others_map});
 
     if (log != nullptr)
       *log << it->location_number << ", ";
   }
 
-  lvalues_sett  environment;
-  for (auto  it = function.body.instructions.cbegin();
-       it != function.body.instructions.cend();
-       ++it)
-    if (it->type == ASSIGN)
-    {
-      code_assignt const&  asgn = to_code_assign(it->code);
-      environment.insert(asgn.lhs());
-      collect_lvalues(asgn.rhs(),environment);
-    }
-
-  if (log != nullptr)
-    if (!environment.empty())
-      *log << " }</p>\n"
-              "<p>Collecting lvalues representing function's environment "
-              " and mapping them to fresh symbols:</p>\n"
-              "<ul>\n"
-           ;
-
-  auto& map = domain.at(function.body.instructions.cbegin());
-  for (lvaluet const&  lvalue : environment)
-    if (!is_pure_local(lvalue,ns) && !is_return_value_auxiliary(lvalue,ns))
-    {
-      map.insert({lvalue, detail::make_symbol() });
-
-      if (log != nullptr)
-      {
-        *log << "<li>";
-        dump_lvalue_in_html(lvalue,ns,*log);
-        *log << " &rarr; ";
-        dump_svalue_in_html(map.at(lvalue),*log);
-        *log << "</li>\n";
-      }
-    }
-    else
-      if (log != nullptr)
-      {
-        *log << "<li>!! EXCLUDING !! : ";
-        dump_lvalue_in_html(lvalue,ns,*log);
-        *log << "</li>\n";
-      }
-
   if (log != nullptr)
   {
-    *log << "</ul>\n<p>Updated symbolic value at the entry location "
-         << function.body.instructions.cbegin()->location_number
-         << ":</p>\n";
-    dump_lvalues_to_svalues_in_html(map,ns,*log);
+    *log << "<h3>Initialising the domain</h3>\n"
+            "<p>Domain value at the entry location:</p>\n"
+         ;
+    dump_lvalues_to_svalues_in_html(
+        domain.at(function.body.instructions.cbegin()),
+        ns,
+        *log
+        );
+    *log << "<p>Domain value at all other locations:</p>\n";
+    dump_lvalues_to_svalues_in_html(
+        domain.at(std::prev(function.body.instructions.cend())),
+        ns,
+        *log
+        );
   }
 }
 
@@ -180,101 +196,10 @@ void  initialise_workset(
 }
 
 
-void  build_summary_from_computed_domain(
-    domain_ptrt const  domain,
-    map_from_lvalues_to_svaluest&  input,
-    map_from_lvalues_to_svaluest&  output,
-    goto_functionst::function_mapt::const_iterator const  fn_iter,
-    namespacet const&  ns,
-    std::ostream* const  log
-    )
-{
-  if (log != nullptr)
-    *log << "<h3>Building summary from the computed domain</h3>\n"
-            "<p>Mapping of input to symbols (computed from the symbolic value "
-            "at location "
-         << fn_iter->second.body.instructions.cbegin()->location_number
-         << "):</p>\n"
-            "<ul>\n"
-         ;
-
-  map_from_lvalues_to_svaluest const&  start_svalue =
-      domain->at(fn_iter->second.body.instructions.cbegin());
-  for (auto  it = start_svalue.cbegin(); it != start_svalue.cend(); ++it)
-    if (!is_pure_local(it->first,ns) &&
-        !is_return_value_auxiliary(it->first,ns))
-    {
-      input.insert(*it);
-
-      if (log != nullptr)
-      {
-        *log << "<li>";
-        dump_lvalue_in_html(it->first,ns,*log);
-        *log << " &rarr; ";
-        dump_svalue_in_html(it->second,*log);
-        *log << "</li>\n";
-      }
-    }
-    else
-      if (log != nullptr)
-      {
-        *log << "<li>!! EXCLUDING !! : ";
-        dump_lvalue_in_html(it->first,ns,*log);
-        *log << " &rarr; ";
-        dump_svalue_in_html(it->second,*log);
-        *log << "</li>\n";
-      }
-
-  if (log != nullptr)
-    *log << "</ul>\n<p>The summary (computed from the symbolic value "
-            "at location "
-         << std::prev(fn_iter->second.body.instructions.cend())->location_number
-         << "):</p>\n<ul>\n"
-         ;
-
-  map_from_lvalues_to_svaluest const&  end_svalue =
-      domain->at(std::prev(fn_iter->second.body.instructions.cend()));
-  for (auto  it = end_svalue.cbegin(); it != end_svalue.cend(); ++it)
-    if (!is_pure_local(it->first,ns))
-    {
-      output.insert(*it);
-
-      if (log != nullptr)
-      {
-        *log << "<li>";
-        dump_lvalue_in_html(it->first,ns,*log);
-        *log << " &rarr; ";
-        dump_svalue_in_html(it->second,*log);
-          *log << "</li>\n";
-      }
-    }
-    else
-      if (log != nullptr)
-      {
-        *log << "<li>!! EXCLUDING !! : ";
-        dump_lvalue_in_html(it->first,ns,*log);
-        *log << " &rarr; ";
-        dump_svalue_in_html(it->second,*log);
-        *log << "</li>\n";
-      }
-
-  if (log != nullptr)
-    *log << "</ul>\n";
-}
-
-void  assign(
-    map_from_lvalues_to_svaluest&  map,
-    lvaluet const&  lvalue,
-    svaluet const&  svalue
-    )
-{
-  auto const  it = map.find(lvalue);
-  if (it == map.end())
-    map.insert({lvalue,svalue});
-  else
-    it->second = svalue;
-}
-
+/**
+ *
+ *
+ */
 void  erase_dead_lvalue(
     lvaluet const&  lvalue,
     namespacet const&  ns,
@@ -294,6 +219,11 @@ void  erase_dead_lvalue(
   }
 }
 
+
+/**
+ *
+ *
+ */
 void  build_symbols_substitution(
     std::unordered_map<svaluet::symbolt,svaluet>&  symbols_substitution,
     map_from_lvalues_to_svaluest const&  a,
@@ -343,6 +273,7 @@ void  build_symbols_substitution(
         lvalues_sett  argument_lvalues;
         detail::collect_lvalues(
               fn_call.arguments().at(param_idx),
+              ns,
               argument_lvalues
               );
         for (auto const&  lvalue : argument_lvalues)
@@ -375,7 +306,10 @@ void  build_symbols_substitution(
       lvaluet const  translated_lvalue = scope_translation(
             lvalue_svalue.first,
             callee_ident,
-            caller_ident
+            caller_ident,
+            fn_call,
+            fn_type,
+            ns
             );
       auto const  it = a.find(translated_lvalue);
       if (it != a.cend())
@@ -412,12 +346,18 @@ void  build_symbols_substitution(
 }
 
 
+/**
+ *
+ *
+ */
 void  build_substituted_summary(
     map_from_lvalues_to_svaluest&  substituted_summary,
     map_from_lvalues_to_svaluest const&  original_summary,
     std::unordered_map<svaluet::symbolt,svaluet> const&  symbols_substitution,
     irep_idt const&  caller_ident,
     irep_idt const&  callee_ident,
+    code_function_callt const&  fn_call,
+    code_typet const&  fn_type,
     namespacet const&  ns,
     std::ostream* const  log
     )
@@ -427,7 +367,10 @@ void  build_substituted_summary(
     lvaluet const  translated_lvalue = scope_translation(
           lvalue_svalue.first,
           callee_ident,
-          caller_ident
+          caller_ident,
+          fn_call,
+          fn_type,
+          ns
           );
     if (!is_empty(translated_lvalue))
     {
@@ -455,6 +398,70 @@ void  build_substituted_summary(
     *log << "<p>Substituted summary:</p>\n";
     dump_lvalues_to_svalues_in_html(substituted_summary,ns,*log);
   }
+}
+
+
+/**
+ *
+ *
+ */
+void  build_summary_from_computed_domain(
+    domain_ptrt const  domain,
+    map_from_lvalues_to_svaluest&  output,
+    goto_functionst::function_mapt::const_iterator const  fn_iter,
+    namespacet const&  ns,
+    std::ostream* const  log
+    )
+{
+  if (log != nullptr)
+    *log << "<h3>Building summary from the computed domain</h3>\n"
+         << "<p>It is computed from the symbolic value "
+            "at location "
+         << std::prev(fn_iter->second.body.instructions.cend())->location_number
+         << ":</p>\n<ul>\n"
+         ;
+
+  map_from_lvalues_to_svaluest const&  end_svalue =
+      domain->at(std::prev(fn_iter->second.body.instructions.cend()));
+  for (auto  it = end_svalue.cbegin(); it != end_svalue.cend(); ++it)
+    if (!is_pure_local(it->first,ns) && !is_parameter(it->first,ns))
+    {
+      output.insert(*it);
+
+      if (log != nullptr)
+      {
+        *log << "<li>";
+        dump_lvalue_in_html(it->first,ns,*log);
+        *log << " &rarr; ";
+        dump_svalue_in_html(it->second,*log);
+          *log << "</li>\n";
+      }
+    }
+    else
+      if (log != nullptr)
+      {
+        *log << "<li>!! EXCLUDING !! : ";
+        dump_lvalue_in_html(it->first,ns,*log);
+        *log << " &rarr; ";
+        dump_svalue_in_html(it->second,*log);
+        *log << "</li>\n";
+      }
+
+  if (log != nullptr)
+    *log << "</ul>\n";
+}
+
+void  assign(
+    map_from_lvalues_to_svaluest&  map,
+    lvaluet const&  lvalue,
+    svaluet const&  svalue
+    )
+{
+  auto const  it = map.find(lvalue);
+  if (it == map.end())
+    map.insert({lvalue,svalue});
+  else
+    it->second = svalue;
 }
 
 
@@ -600,14 +607,14 @@ map_from_lvalues_to_svaluest  transform(
       {
         *log << "<p>\nRecognised ASSIGN instruction. Left-hand-side "
                 "l-value is { ";
-        dump_lvalue_in_html(asgn.lhs(),ns,*log);
+        dump_lvalue_in_html(normalise(asgn.lhs(),ns),ns,*log);
         *log << " }. Right-hand-side l-values are { ";
       }
 
       svaluet  rvalue = detail::make_bottom();
       {
         lvalues_sett  rhs;
-        detail::collect_lvalues(asgn.rhs(),rhs);
+        detail::collect_lvalues(asgn.rhs(),ns,rhs);
         for (auto const&  lvalue : rhs)
         {
           auto const  it = a.find(lvalue);
@@ -625,7 +632,7 @@ map_from_lvalues_to_svaluest  transform(
       if (log != nullptr)
         *log << "}.</p>\n";
 
-      detail::assign(result,asgn.lhs(),rvalue);
+      detail::assign(result,normalise(asgn.lhs(),ns),rvalue);
     }
     break;
   case FUNCTION_CALL:
@@ -642,6 +649,8 @@ map_from_lvalues_to_svaluest  transform(
         summary_ptrt const  summary = database.find<summaryt>(callee_ident);
         if (summary.operator bool())
         {
+          auto const&  fn_type = functions_map.at(callee_ident).type;
+
           map_from_lvalues_to_svaluest  substituted_summary;
           {
             std::unordered_map<svaluet::symbolt,svaluet>  symbols_substitution;
@@ -651,7 +660,7 @@ map_from_lvalues_to_svaluest  transform(
                   summary,
                   caller_ident,
                   fn_call,
-                  functions_map.at(callee_ident).type,
+                  fn_type,
                   ns,
                   log
                   );
@@ -661,6 +670,8 @@ map_from_lvalues_to_svaluest  transform(
                   symbols_substitution,
                   caller_ident,
                   callee_ident,
+                  fn_call,
+                  fn_type,
                   ns,
                   log
                   );
@@ -689,7 +700,7 @@ map_from_lvalues_to_svaluest  transform(
         *log << "<p>\nRecognised DEAD instruction. Removing these l-values { ";
 
       lvalues_sett  lvalues;
-      detail::collect_lvalues(dead.symbol(),lvalues);
+      detail::collect_lvalues(dead.symbol(),ns,lvalues);
       for (auto const&  lvalue : lvalues)
       {
         detail::erase_dead_lvalue(lvalue,ns,result);
@@ -824,7 +835,8 @@ void  summarise_all_functions(
               fn_name,
               instrumented_program,
               summaries_to_compute,
-              log),
+              log
+              ),
           });
   }
 }
@@ -851,7 +863,18 @@ summary_ptrt  summarise_function(
   assert(fn_iter->second.body_available());
 
   domain_ptrt  domain = std::make_shared<domaint>();
-  detail::initialise_domain(fn_iter->second,ns,*domain,log);
+  detail::initialise_domain(
+        function_id,
+        fn_iter->second,
+        functions,
+        ns,
+        database,
+        *domain,
+        log
+        );
+
+  map_from_lvalues_to_svaluest  input =
+      domain->at(fn_iter->second.body.instructions.cbegin());
 
   detail::solver_work_set_t  work_set;
   detail::initialise_workset(fn_iter->second,work_set);
@@ -922,11 +945,10 @@ summary_ptrt  summarise_function(
         }
       }
   }
-  map_from_lvalues_to_svaluest  input;
+
   map_from_lvalues_to_svaluest  output;
   detail::build_summary_from_computed_domain(
         domain,
-        input,
         output,
         fn_iter,
         ns,

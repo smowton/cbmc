@@ -81,6 +81,9 @@ struct  svaluet
   bool  is_bottom() const noexcept { return m_is_bottom; }
   expressiont const&  expression() const noexcept { return m_expression; }
 
+  bool  is_symbol() const noexcept
+  { return !is_top() && !is_bottom() && expression().size() == 1UL; }
+
 private:
   expressiont  m_expression;
   bool  m_is_bottom;

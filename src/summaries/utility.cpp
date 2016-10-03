@@ -11,8 +11,44 @@
 /////////////////////////////////////////////////////////////////////////////
 
 #include <summaries/utility.h>
-#include <util/symbol.h>
 #include <util/std_expr.h>
+#include <util/simplify_expr.h>
+#include <util/symbol.h>
+#include <util/msgstream.h>
+
+
+#include <summaries/summary_dump.h>
+#include <fstream>
+#include <iostream>
+
+namespace sumfn { namespace detail { namespace {
+
+
+void  substitute_symbol(
+    access_path_to_memoryt&  path,
+    std::string const&  symbol_name,
+    access_path_to_memoryt const&  replacement
+    )
+{
+  if (is_identifier(path) && name_of_symbol_access_path(path) == symbol_name)
+    path = replacement;
+  else
+    for (auto&  element : path.operands())
+      substitute_symbol(element,symbol_name,replacement);
+}
+
+
+access_path_to_memoryt  remove_cast_to_void_ptr_if_present(
+        access_path_to_memoryt const&  access_path
+        )
+{
+  if (access_path.id() == ID_typecast)
+    return remove_cast_to_void_ptr_if_present(access_path.op0());
+  return access_path;
+}
+
+
+}}}
 
 namespace sumfn {
 
@@ -97,38 +133,69 @@ bool  is_pure_local(access_path_to_memoryt const&  lvalue,
          ;
 }
 
+bool  is_this(access_path_to_memoryt const&  lvalue, namespacet const&  ns)
+{
+  if (!is_identifier(lvalue))
+    return false;
+  std::string const  name = name_of_symbol_access_path(lvalue);
+  std::string const  keyword = "::this";
+  if (name.size() <= keyword.size())
+    return false;
+  std::size_t const  index = name.rfind(keyword);
+  std::size_t const  matching_index = name.size() - keyword.size();
+  return index == matching_index;
+}
+
+
+access_path_to_memoryt  normalise(
+    access_path_to_memoryt const&  access_path,
+    namespacet const&  ns
+    )
+{
+  return simplify_expr(access_path,ns);
+}
+
 
 access_path_to_memoryt  scope_translation(
     access_path_to_memoryt const&  source_path,
     irep_idt const&  source_scope_id,
-    irep_idt const&  target_scope_id
-    //,    goto_modelt const&  program
+    irep_idt const&  target_scope_id,
+    code_function_callt const&  source_scope_call_expr,
+    code_typet const&  source_scope_type,
+    namespacet const&  ns
     )
 {
-  ////std::string const  key = "((struct Sum01 *)(void *)this)->L";
-  ////auto const  xxit = a.find(lvalue_svalue.first);
-  //std::cout << "*****************************************************\n";
-  //std::cout << "lvalue_svalue.first = ";
-  //dump_lvalue_in_html(lvalue_svalue.first,ns,std::cout);
-  //std::cout << "\n";
-  //sumfn::detail::dump_irept(lvalue_svalue.first,std::cout);
-  //std::cout << "\n";
-  //for (auto  it = a.cbegin(); it != a.cend(); ++it)
-  //{
-  //std::cout << "it->first = ";
-  //dump_lvalue_in_html(it->first,ns,std::cout);
-  //std::cout << "\n";
-  //sumfn::detail::dump_irept(it->first,std::cout);
-  //std::cout << "\n";
-  //std::cout.flush();
-  ////  std::cout << (irep_full_eq()(lvalue_svalue.first,it->first)) << "\n";
-  ////  std::cout << (irep_eq()(lvalue_svalue.first,it->first)) << "\n";
-  ////  std::cout << (lvalue_svalue.first == it->first) << "\n";
-  //}
-  ////std::cout << (lvalue_svalue.first.compare(it->second)) << "\n";
-  ////std::cout << "lvalue1 = " << lvalue_svalue.first << "\n";
-  ////std::cout << "lvalue2 = " << it->second << "\n";
-  //std::cout.flush();
+  (void)target_scope_id;
+
+  std::string const  source_this =
+      msgstream() << as_string(source_scope_id) << "::this";
+
+  if (!source_scope_type.parameters().empty() &&
+          as_string(source_scope_type.parameters().at(0UL).get_identifier())
+          == source_this)
+  {
+    access_path_to_memoryt const&  target_this =
+        detail::remove_cast_to_void_ptr_if_present(
+            source_scope_call_expr.arguments().at(0UL)
+            );
+
+    access_path_to_memoryt  target_path = source_path;
+    detail::substitute_symbol(target_path,source_this,target_this);
+    target_path = normalise(target_path,ns);
+
+//std::cout << "**********************************************************\n";
+//std::cout << "source_path pretty: " << from_expr(ns, "", source_path) << "\n";
+//std::cout << "target_path pretty: " << from_expr(ns, "", target_path) << "\n";
+//std::cout << "target_this pretty: " << from_expr(ns, "", target_this) << "\n";
+//std::cout << "source_path:\n";
+//detail::dump_irept(source_path,std::cout);
+//std::cout << "target_this:\n";
+//detail::dump_irept(target_this,std::cout);
+//std::cout << "target_path:\n";
+//detail::dump_irept(target_path,std::cout);
+
+    return target_path;
+  }
 
   return source_path;
 }
