@@ -32,6 +32,7 @@ class optionst;
   "(verbosity):(version)" \
   "(gcc)(arch):" \
   "(taint):(show-taint)" \
+  "(taint-use-summaries):" \
   "(show-local-may-alias)" \
   "(json):(xml):" \
   "(unreachable-instructions)" \

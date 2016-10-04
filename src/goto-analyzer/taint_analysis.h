@@ -19,7 +19,8 @@ bool taint_analysis(
   const std::string &taint_file_name,
   message_handlert &,
   bool show_full,
-  const std::string &json_file_name);
+  const std::string &json_file_name,
+  const std::string &summary_directory);
 
 
 std::string  taint_analysis_instrument_knowledge(

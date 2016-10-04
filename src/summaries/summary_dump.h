@@ -15,6 +15,7 @@
 #include <summaries/summary.h>
 #include <goto-programs/goto_model.h>
 #include <analyses/call_graph.h>
+#include <util/json.h>
 #include <functional>
 #include <string>
 #include <iosfwd>
@@ -49,7 +50,6 @@ typedef std::function<std::string(object_summaryt,
         callback_dump_derived_summary_in_htmlt;
 
 
-
 /**
  *
  *
@@ -77,7 +77,14 @@ std::string  dump_in_html(
     std::string const&  dump_root_directory
     );
 
+typedef std::function<json_objectt(const object_summaryt&)> callback_summary_to_jsont;
 
+void write_database_as_json(
+  database_of_summariest const&,
+  callback_summary_to_jsont,
+  std::string const& outdir);
+  
+ 
 /**
  *
  *

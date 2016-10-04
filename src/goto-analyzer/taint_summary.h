@@ -210,7 +210,7 @@ struct  summaryt : public sumfn::summaryt
 {
   summaryt(map_from_lvalues_to_svaluest const&  input,
            map_from_lvalues_to_svaluest const&  output,
-           domain_ptrt const  domain);
+           domain_ptrt const domain);
 
   std::string  kind() const;
   std::string  description() const noexcept;

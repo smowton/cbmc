@@ -455,6 +455,22 @@ void custom_bitvector_domaint::transform(
             }
           }
         }
+        else 
+        {
+          const auto& ftype=to_code_type(function.type());
+          for(unsigned i=0, ilim=ftype.parameters().size(); i!=ilim; ++i)
+          {
+            const auto& actual_arg=code_function_call.arguments()[i];
+            const auto& formal_param=ftype.parameters()[i];
+            if(formal_param.type().id()!=ID_pointer)
+              continue;
+            symbol_exprt formal_arg(formal_param.get_identifier(),formal_param.type());
+            vectorst actual_vectors=get_rhs(dereference_exprt(actual_arg));
+            assign_lhs(dereference_exprt(formal_arg),actual_vectors);
+          }
+          if(!cba.should_enter_function(identifier))
+            cba.transform_function_call_stub(from,*this,ns);
+        }
       }
     }
     break;
@@ -910,3 +926,4 @@ void custom_bitvector_analysist::check(
     out << "SUMMARY: " << pass << " pass, " << fail << " fail, "
         << unknown << " unknown\n";
 }
+

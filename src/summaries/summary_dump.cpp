@@ -624,5 +624,45 @@ void  dump_instruction_code_in_html(
   }
 }
 
+void write_database_as_json(
+  database_of_summariest const& computed_summaries,
+  callback_summary_to_jsont summary_dump_callback,
+  std::string const& dump_root_directory)
+{
+  std::unordered_map<std::string, unsigned> unique_names;
+  std::unordered_set<std::string> used_filenames;
+  json_objectt index;
+
+  fileutl::create_directory(dump_root_directory);  
+  
+  for(const auto& row : computed_summaries)
+  {
+    std::string prefix=to_file_name(row.first);
+    std::ostringstream filename;
+
+    do
+    {
+      filename << prefix;
+      unsigned unique_number=++unique_names[row.first];
+      if(unique_number!=1)
+        filename << '_' << unique_number;
+      filename << ".json";
+    } while(!used_filenames.insert(filename.str()).second);
+
+    index[row.first]=json_stringt(filename.str());
+
+    json_objectt as_json=summary_dump_callback(row);
+    {
+      std::fstream ostr(dump_root_directory+"/"+filename.str(), std::ios_base::out);
+      ostr << as_json;
+    }
+    
+  }
+
+  {
+    std::fstream  ostr(dump_root_directory+"/__index.json", std::ios_base::out);
+    ostr << index;
+  }
+}
 
 }

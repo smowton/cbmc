@@ -789,9 +789,7 @@ summaryt::summaryt(
   , m_output(output)
   , m_domain(domain)
 {
-  assert(m_domain.operator bool());
 }
-
 
 std::string  summaryt::kind() const
 {
