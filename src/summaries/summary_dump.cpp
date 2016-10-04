@@ -22,10 +22,8 @@ It provides dump of computed summaries in human readable form.
 #include <iomanip>
 #include <cstdlib>
 
-namespace sumfn { namespace detail { namespace {
 
-
-std::string  dump_function_body_in_html(
+static std::string  dump_function_body_in_html(
     irep_idt const  raw_fn_name,
     goto_programt  const&  fn_body,
     goto_modelt const&  program,
@@ -158,7 +156,7 @@ std::string  dump_function_body_in_html(
 }
 
 
-std::string  dump_callgraph_in_svg(
+static std::string  dump_callgraph_in_svg(
     call_grapht const&  call_graph,
     goto_functionst const&  functions,
     std::string const&  svg_file_pathname
@@ -184,7 +182,7 @@ std::string  dump_callgraph_in_svg(
 }
 
 
-std::string  dump_goto_program_in_html(
+static std::string  dump_goto_program_in_html(
     goto_modelt const&  program,
     call_grapht const&  call_graph,
     std::string const&  dump_root_directory
@@ -199,7 +197,7 @@ std::string  dump_goto_program_in_html(
     if(it->second.body_available())
     {
       std::string const  err_message =
-          detail::dump_function_body_in_html(
+          dump_function_body_in_html(
               it->first,
               it->second.body,
               program,
@@ -265,7 +263,8 @@ std::string  dump_goto_program_in_html(
   return ""; // no error.
 }
 
-std::string  dump_log_in_html(
+
+static std::string  dump_log_in_html(
     std::ostream const&  source,
     std::string const&  dump_root_directory
     )
@@ -287,7 +286,7 @@ std::string  dump_log_in_html(
 }
 
 
-void  replace(
+static void  replace(
     std::string&  str,
     std::string const&  what,
     std::string const&  replacement
@@ -300,11 +299,6 @@ void  replace(
     pos += replacement.length();
   }
 }
-
-
-}}}
-
-namespace sumfn { namespace detail {
 
 
 void  dump_irept(
@@ -334,11 +328,6 @@ void  dump_irept(
 }
 
 
-}}
-
-namespace sumfn {
-
-
 std::string  dump_in_html(
     database_of_summariest const&  computed_summaries,
     callback_dump_derived_summary_in_htmlt const&  summary_dump_callback,
@@ -351,7 +340,7 @@ std::string  dump_in_html(
   fileutl_create_directory(dump_root_directory);
 
   std::string  err_message =
-      detail::dump_goto_program_in_html(
+      dump_goto_program_in_html(
           program,
           call_graph,
           msgstream() << dump_root_directory << "/goto_model"
@@ -375,7 +364,7 @@ std::string  dump_in_html(
 
   if (log != nullptr)
   {
-    err_message = detail::dump_log_in_html(
+    err_message = dump_log_in_html(
         *log,
         msgstream() << dump_root_directory << "/log"
         );
@@ -474,8 +463,8 @@ std::string  to_file_name(std::string  result)
 
 std::string  to_html_text(std::string  result)
 {
-  detail::replace(result, "<", "&lt;");
-  detail::replace(result, ">", "&gt;");
+  replace(result, "<", "&lt;");
+  replace(result, ">", "&gt;");
   return result;
 }
 
@@ -666,6 +655,4 @@ void write_database_as_json(
     std::fstream  ostr(dump_root_directory+"/__index.json", std::ios_base::out);
     ostr << index;
   }
-}
-
 }

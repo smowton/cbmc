@@ -19,11 +19,8 @@ It provides a dump of computed taint summary in HTML format.
 #include <iomanip>
 #include <cassert>
 
-namespace sumfn { namespace taint {
-
-
-void  dump_lvalue_in_html(
-    lvaluet const&  lvalue,
+void  taint_dump_lvalue_in_html(
+    taint_lvaluet const&  lvalue,
     namespacet const&  ns,
     std::ostream&  ostr
     )
@@ -34,8 +31,8 @@ void  dump_lvalue_in_html(
     ostr << to_html_text(from_expr(ns, "", lvalue));
 }
 
-void  dump_svalue_in_html(
-    svaluet const&  svalue,
+void  taint_dump_svalue_in_html(
+    taint_svaluet const&  svalue,
     std::ostream&  ostr
     )
 {
@@ -54,8 +51,8 @@ void  dump_svalue_in_html(
   }
 }
 
-void  dump_lvalues_to_svalues_in_html(
-    map_from_lvalues_to_svaluest const&  lvalues_to_svalues,
+void  taint_dump_lvalues_to_svalues_in_html(
+    taint_map_from_lvalues_to_svaluest const&  lvalues_to_svalues,
     namespacet const&  ns,
     std::ostream&  ostr
     )
@@ -69,10 +66,10 @@ void  dump_lvalues_to_svalues_in_html(
     {
       ostr << "      <tr>\n";
       ostr << "        <td>";
-      dump_lvalue_in_html(elem.first,ns,ostr);
+      taint_dump_lvalue_in_html(elem.first,ns,ostr);
       ostr << "</td>\n";
       ostr << "        <td>";
-      dump_svalue_in_html(elem.second,ostr);
+      taint_dump_svalue_in_html(elem.second,ostr);
       ostr << "</td>\n";
       ostr << "      </tr>\n";
     }
@@ -81,7 +78,7 @@ void  dump_lvalues_to_svalues_in_html(
 }
 
 
-std::string  dump_in_html(
+std::string  taint_dump_in_html(
     object_summaryt const  obj_summary,
     goto_modelt const&  program,
     std::ostream&  ostr
@@ -89,8 +86,8 @@ std::string  dump_in_html(
 {
   namespacet const  ns(program.symbol_table);
   summarised_object_idt const&  function_id = obj_summary.first;
-  summary_ptrt const  summary =
-      std::dynamic_pointer_cast<summaryt const>(obj_summary.second);
+  taint_summary_ptrt const  summary =
+      std::dynamic_pointer_cast<taint_summaryt const>(obj_summary.second);
   if (!summary.operator bool())
     return "ERROR: cannot cast the passed summary to 'taint' summary.";
 
@@ -106,9 +103,11 @@ std::string  dump_in_html(
   {
     ostr << "  <tr>\n";
     ostr << "    <td>";
-    dump_lvalue_in_html(elem.first,ns,ostr);
+    taint_dump_lvalue_in_html(elem.first,ns,ostr);
     ostr << "</td>\n";
-    ostr << "    <td>"; dump_svalue_in_html(elem.second,ostr); ostr <<"</td>\n";
+    ostr << "    <td>";
+    taint_dump_svalue_in_html(elem.second,ostr);
+    ostr <<"</td>\n";
     ostr << "  </tr>\n";
   }
   ostr << "</table>\n";
@@ -123,9 +122,11 @@ std::string  dump_in_html(
   {
     ostr << "  <tr>\n";
     ostr << "    <td>";
-    dump_lvalue_in_html(elem.first,ns,ostr);
+    taint_dump_lvalue_in_html(elem.first,ns,ostr);
     ostr << "</td>\n";
-    ostr << "    <td>"; dump_svalue_in_html(elem.second,ostr); ostr <<"</td>\n";
+    ostr << "    <td>";
+    taint_dump_svalue_in_html(elem.second,ostr);
+    ostr <<"</td>\n";
     ostr << "  </tr>\n";
   }
   ostr << "</table>\n";
@@ -175,7 +176,11 @@ std::string  dump_in_html(
         if (vars_to_values_it != summary->domain()->cend())
         {
           ostr << "  <td>\n";
-          dump_lvalues_to_svalues_in_html(vars_to_values_it->second,ns,ostr);
+          taint_dump_lvalues_to_svalues_in_html(
+                vars_to_values_it->second,
+                ns,
+                ostr
+                );
           ostr << "  </td>\n";
         }
 
@@ -187,6 +192,3 @@ std::string  dump_in_html(
 
   return ""; // no error.
 }
-  
-  
-}}

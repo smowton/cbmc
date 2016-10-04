@@ -29,11 +29,17 @@ This module defines interfaces and functionality for taint summaries.
 #include <string>
 #include <iosfwd>
 
-namespace sumfn { namespace taint { namespace detail {
 
+/*******************************************************************\
 
-struct  instruction_iterator_hashert
+   Class:
+
+ Purpose:
+
+\*******************************************************************/
+class  instruction_iterator_hashert
 {
+public:
   std::size_t  operator()(
       goto_programt::instructiont::const_targett const  it
       ) const
@@ -41,21 +47,6 @@ struct  instruction_iterator_hashert
     return std::hash<goto_programt::instructiont const*>()(&*it);
   }
 };
-
-struct  lvalue_hashert
-{
-  std::size_t  operator()(
-      goto_programt::instructiont::const_targett const  it
-      ) const
-  {
-    return std::hash<goto_programt::instructiont const*>()(&*it);
-  }
-};
-
-
-}}}
-
-namespace sumfn { namespace taint {
 
 
 /*******************************************************************\
@@ -65,24 +56,24 @@ namespace sumfn { namespace taint {
  Purpose:
 
 \*******************************************************************/
-class  svaluet
+class  taint_svaluet
 {
 public:
 
   typedef  std::string  symbolt;
   typedef std::set<symbolt>  expressiont;
 
-  svaluet(
+  taint_svaluet(
       expressiont const&  expression,
       bool  is_bottom,
       bool  is_top
       );
 
-  svaluet(svaluet const&  other);
-  svaluet(svaluet&&  other);
+  taint_svaluet(taint_svaluet const&  other);
+  taint_svaluet(taint_svaluet&&  other);
 
-  svaluet&  operator=(svaluet const&  other);
-  svaluet&  operator=(svaluet&&  other);
+  taint_svaluet&  operator=(taint_svaluet const&  other);
+  taint_svaluet&  operator=(taint_svaluet&&  other);
 
   bool  is_top() const noexcept { return m_is_top; }
   bool  is_bottom() const noexcept { return m_is_bottom; }
@@ -110,7 +101,7 @@ Function:
 
 
 \*******************************************************************/
-bool  operator==(svaluet const&  a, svaluet const&  b);
+bool  operator==(taint_svaluet const&  a, taint_svaluet const&  b);
 
 
 /*******************************************************************\
@@ -125,7 +116,7 @@ Function:
 
 
 \*******************************************************************/
-bool  operator<(svaluet const&  a, svaluet const&  b);
+bool  operator<(taint_svaluet const&  a, taint_svaluet const&  b);
 
 
 /*******************************************************************\
@@ -140,17 +131,17 @@ Function:
 
 
 \*******************************************************************/
-svaluet  join(svaluet const&  a, svaluet const&  b);
+taint_svaluet  join(taint_svaluet const&  a, taint_svaluet const&  b);
 
 
 /*******************************************************************\
 \*******************************************************************/
-typedef access_path_to_memoryt  lvaluet;
+typedef access_path_to_memoryt  taint_lvaluet;
 
-typedef std::unordered_map<lvaluet,svaluet,irep_hash,irep_full_eq>
-        map_from_lvalues_to_svaluest;
-typedef std::unordered_set<lvaluet,irep_hash,irep_full_eq>
-        lvalues_sett;
+typedef std::unordered_map<taint_lvaluet,taint_svaluet,irep_hash,irep_full_eq>
+        taint_map_from_lvalues_to_svaluest;
+typedef std::unordered_set<taint_lvaluet,irep_hash,irep_full_eq>
+        taint_lvalues_sett;
 
 
 /*******************************************************************\
@@ -166,16 +157,16 @@ Function:
 
 \*******************************************************************/
 bool  operator==(
-    map_from_lvalues_to_svaluest const&  a,
-    map_from_lvalues_to_svaluest const&  b);
+    taint_map_from_lvalues_to_svaluest const&  a,
+    taint_map_from_lvalues_to_svaluest const&  b);
 
 bool  operator<(
-    map_from_lvalues_to_svaluest const&  a,
-    map_from_lvalues_to_svaluest const&  b);
+    taint_map_from_lvalues_to_svaluest const&  a,
+    taint_map_from_lvalues_to_svaluest const&  b);
 
 inline bool  operator<=(
-    map_from_lvalues_to_svaluest const&  a,
-    map_from_lvalues_to_svaluest const&  b)
+    taint_map_from_lvalues_to_svaluest const&  a,
+    taint_map_from_lvalues_to_svaluest const&  b)
 {
   return a == b || a < b;
 }
@@ -194,8 +185,8 @@ Function:
 
 
 \*******************************************************************/
-map_from_lvalues_to_svaluest  transform(
-    map_from_lvalues_to_svaluest const&  a,
+taint_map_from_lvalues_to_svaluest  transform(
+    taint_map_from_lvalues_to_svaluest const&  a,
     goto_programt::instructiont const&  I,
     goto_functionst::function_mapt const&  functions_map,
     database_of_summariest const&  database,
@@ -216,9 +207,9 @@ Function:
 
 
 \*******************************************************************/
-map_from_lvalues_to_svaluest  join(
-    map_from_lvalues_to_svaluest const&  a,
-    map_from_lvalues_to_svaluest const&  b
+taint_map_from_lvalues_to_svaluest  join(
+    taint_map_from_lvalues_to_svaluest const&  a,
+    taint_map_from_lvalues_to_svaluest const&  b
     );
 
 
@@ -232,11 +223,11 @@ typedef goto_programt::instructiont::const_targett  instruction_iteratort;
 /*******************************************************************\
 \*******************************************************************/
 typedef std::unordered_map<instruction_iteratort,
-                           map_from_lvalues_to_svaluest,
-                           detail::instruction_iterator_hashert>
-        domaint;
+                           taint_map_from_lvalues_to_svaluest,
+                           instruction_iterator_hashert>
+        taint_symmary_domaint;
 
-typedef std::shared_ptr<domaint>  domain_ptrt;
+typedef std::shared_ptr<taint_symmary_domaint>  taint_summary_domain_ptrt;
 
 
 /*******************************************************************\
@@ -246,32 +237,32 @@ typedef std::shared_ptr<domaint>  domain_ptrt;
  Purpose:
 
 \*******************************************************************/
-class  summaryt : public sumfn::summaryt
+class  taint_summaryt : public summaryt
 {
 public:
 
-  summaryt(map_from_lvalues_to_svaluest const&  input,
-           map_from_lvalues_to_svaluest const&  output,
-           domain_ptrt const domain);
+  taint_summaryt(taint_map_from_lvalues_to_svaluest const&  input,
+                 taint_map_from_lvalues_to_svaluest const&  output,
+                 taint_summary_domain_ptrt const domain);
 
   std::string  kind() const;
   std::string  description() const noexcept;
 
-  map_from_lvalues_to_svaluest const&  input() const noexcept
+  taint_map_from_lvalues_to_svaluest const&  input() const noexcept
   { return m_input; }
-  map_from_lvalues_to_svaluest const&  output() const noexcept
+  taint_map_from_lvalues_to_svaluest const&  output() const noexcept
   { return m_output; }
 
-  domain_ptrt  domain() const noexcept { return m_domain; }
+  taint_summary_domain_ptrt  domain() const noexcept { return m_domain; }
   void  drop_domain() { m_domain.reset(); }
 
 private:
-  map_from_lvalues_to_svaluest  m_input;
-  map_from_lvalues_to_svaluest  m_output;
-  domain_ptrt  m_domain;
+  taint_map_from_lvalues_to_svaluest  m_input;
+  taint_map_from_lvalues_to_svaluest  m_output;
+  taint_summary_domain_ptrt  m_domain;
 };
 
-typedef std::shared_ptr<summaryt const>  summary_ptrt;
+typedef std::shared_ptr<taint_summaryt const>  taint_summary_ptrt;
 
 
 
@@ -307,14 +298,12 @@ Function:
 
 
 \*******************************************************************/
-summary_ptrt  summarise_function(
+taint_summary_ptrt  summarise_function(
     irep_idt const&  function_id,
     goto_modelt const&  instrumented_program,
     database_of_summariest const&  database,
     std::ostream* const  log = nullptr
     );
 
-
-}}
 
 #endif

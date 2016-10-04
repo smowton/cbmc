@@ -21,9 +21,6 @@ It provides a dump of computed taint summary in HTML format.
 #include <util/namespace.h>
 #include <iosfwd>
 
-namespace sumfn { namespace taint {
-
-
 /*******************************************************************\
 
 Function:
@@ -36,8 +33,8 @@ Function:
 
 
 \*******************************************************************/
-void  dump_lvalue_in_html(
-    lvaluet const&  lvalue,
+void  taint_dump_lvalue_in_html(
+    taint_lvaluet const&  lvalue,
     namespacet const&  ns,
     std::ostream&  ostr
     );
@@ -55,8 +52,8 @@ Function:
 
 
 \*******************************************************************/
-void  dump_svalue_in_html(
-    svaluet const&  svalue,
+void  taint_dump_svalue_in_html(
+    taint_svaluet const&  svalue,
     std::ostream&  ostr
     );
 
@@ -73,8 +70,8 @@ Function:
 
 
 \*******************************************************************/
-void  dump_lvalues_to_svalues_in_html(
-    map_from_lvalues_to_svaluest const&  lvalues_to_svalues,
+void  taint_dump_lvalues_to_svalues_in_html(
+    taint_map_from_lvalues_to_svaluest const&  lvalues_to_svalues,
     namespacet const&  ns,
     std::ostream&  ostr
     );
@@ -92,13 +89,11 @@ Function:
 
 
 \*******************************************************************/
-std::string  dump_in_html(
+std::string  taint_dump_in_html(
     object_summaryt const  obj_summary,
     goto_modelt const&  program,
     std::ostream&  ostr
     );
 
-
-}}
 
 #endif

@@ -22,8 +22,6 @@ summaries of any kinds.
 #include <util/std_types.h>
 #include <string>
 
-namespace sumfn {
-
 
 /*******************************************************************\
 \*******************************************************************/
@@ -207,7 +205,5 @@ access_path_to_memoryt  scope_translation(
     namespacet const&  ns
     );
 
-
-}
 
 #endif

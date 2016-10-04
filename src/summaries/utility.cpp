@@ -24,10 +24,8 @@ summaries of any kinds.
 #include <fstream>
 #include <iostream>
 
-namespace sumfn { namespace detail { namespace {
 
-
-void  substitute_symbol(
+static void  substitute_symbol(
     access_path_to_memoryt&  path,
     std::string const&  symbol_name,
     access_path_to_memoryt const&  replacement
@@ -41,7 +39,7 @@ void  substitute_symbol(
 }
 
 
-access_path_to_memoryt  remove_cast_to_void_ptr_if_present(
+static access_path_to_memoryt  remove_cast_to_void_ptr_if_present(
         access_path_to_memoryt const&  access_path
         )
 {
@@ -49,11 +47,6 @@ access_path_to_memoryt  remove_cast_to_void_ptr_if_present(
     return remove_cast_to_void_ptr_if_present(access_path.op0());
   return access_path;
 }
-
-
-}}}
-
-namespace sumfn {
 
 
 access_path_to_memoryt const&  empty_access_path()
@@ -178,12 +171,12 @@ access_path_to_memoryt  scope_translation(
           == source_this)
   {
     access_path_to_memoryt const&  target_this =
-        detail::remove_cast_to_void_ptr_if_present(
+        remove_cast_to_void_ptr_if_present(
             source_scope_call_expr.arguments().at(0UL)
             );
 
     access_path_to_memoryt  target_path = source_path;
-    detail::substitute_symbol(target_path,source_this,target_this);
+    substitute_symbol(target_path,source_this,target_this);
     target_path = normalise(target_path,ns);
 
 //std::cout << "**********************************************************\n";
@@ -201,9 +194,4 @@ access_path_to_memoryt  scope_translation(
   }
 
   return source_path;
-}
-
-
-
-
 }

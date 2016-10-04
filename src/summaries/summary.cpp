@@ -15,8 +15,6 @@ It in particular comprises loop, function, and module summaries.
 
 #include <summaries/summary.h>
 
-namespace sumfn {
-
 
 void  database_of_summariest::insert(
     object_summaryt const&  object_and_summary
@@ -35,6 +33,4 @@ database_of_summariest::databaset::const_iterator
 database_of_summariest::cend() const
 {
   return m_cache.cend();
-}
-
 }

@@ -23,9 +23,6 @@ It in particular comprises loop, function, and module summaries.
 #include <memory>
 #include <tuple>
 
-namespace sumfn {
-
-
 /*******************************************************************\
 
    Class: summaryt
@@ -140,7 +137,5 @@ std::shared_ptr<summary_typet const>  database_of_summariest::find(
 
 typedef std::shared_ptr<database_of_summariest>  database_of_summaries_ptrt;
 
-
-}
 
 #endif

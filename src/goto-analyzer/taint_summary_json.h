@@ -16,11 +16,10 @@
 #include <summaries/summary.h>
 #include "taint_summary.h"
 
-namespace sumfn { namespace taint {
 
- json_objectt summary_to_json(const object_summaryt&);
- object_summaryt summary_from_json(const json_objectt&, const domain_ptrt);
+json_objectt summary_to_json(const object_summaryt&);
+object_summaryt summary_from_json(const json_objectt&,
+                                  const taint_summary_domain_ptrt);
 
-}} // Close namespaces
 
 #endif

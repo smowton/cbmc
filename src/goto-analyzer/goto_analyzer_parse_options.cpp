@@ -291,14 +291,14 @@ int goto_analyzer_parse_optionst::doit()
           );
       call_grapht const  call_graph(goto_model.goto_functions);
       std::stringstream  log;
-      sumfn::database_of_summariest  summaries;
-      sumfn::taint::summarise_all_functions(goto_model,summaries,call_graph,&log);
+      database_of_summariest  summaries;
+      summarise_all_functions(goto_model,summaries,call_graph,&log);
       std::string json_directory=cmdline.get_value("json");
       if(json_directory=="")
       {
-        sumfn::dump_in_html(
+        dump_in_html(
           summaries,
-          &sumfn::taint::dump_in_html,
+          &taint_dump_in_html,
           static_cast<goto_modelt const&>(goto_model),
           call_graph,
           "./dump_taint_summaries",
@@ -307,9 +307,9 @@ int goto_analyzer_parse_optionst::doit()
       }
       else
       {
-        sumfn::write_database_as_json(
+        write_database_as_json(
           summaries,
-          &sumfn::taint::summary_to_json,
+          &summary_to_json,
           json_directory);
       }
     }

@@ -59,20 +59,28 @@ protected:
   void instrument(const namespacet &, goto_functionst &);
   void instrument(const namespacet &, goto_functionst::goto_functiont &);
 
-  void read_summaries(const std::string&, sumfn::database_of_summariest&);
+  void read_summaries(const std::string&, database_of_summariest&);
 };
 
 class bitvector_analysis_with_summariest:public custom_bitvector_analysist
 {
 public:
-  typedef sumfn::database_of_summariest database_of_summariest;
-  bitvector_analysis_with_summariest(const database_of_summariest& _db) : summarydb(_db) {}
+  bitvector_analysis_with_summariest(const database_of_summaries_ptrt _db)
+    : summarydb(_db)
+  {}
 
 protected:
-  const database_of_summariest& summarydb;
-  virtual bool should_enter_function(const irep_idt& id) { return !summarydb.count(id2string(id)); }
-  virtual void transform_function_call_stub(locationt, custom_bitvector_domaint&, const namespacet&);
-  const sumfn::summary_ptrt& get_summary(const irep_idt& identifier);
+  database_of_summaries_ptrt summarydb;
+
+  virtual bool should_enter_function(const irep_idt& id)
+  { return summarydb->count(id2string(id)) == 0UL; }
+
+  virtual void transform_function_call_stub(
+      locationt,
+      custom_bitvector_domaint&, const namespacet&
+      );
+
+  taint_summary_ptrt get_summary(const irep_idt& identifier);
 };
 
 /*******************************************************************\
@@ -261,9 +269,11 @@ void taint_analysist::instrument(
   }
 }
 
-const sumfn::summary_ptrt& bitvector_analysis_with_summariest::get_summary(const irep_idt& identifier)
+taint_summary_ptrt bitvector_analysis_with_summariest::get_summary(
+    const irep_idt& identifier
+    )
 {
-  return summarydb[id2string(identifier)];
+  return summarydb->find<taint_summaryt>(id2string(identifier));
 }
 
 namespace {
@@ -272,7 +282,7 @@ typedef custom_bitvector_domaint::vectorst vectorst;
 typedef custom_bitvector_domaint::bit_vectort bit_vectort;
 
 vectorst substitute_taint(
-  const sumfn::taint::svaluet& in,
+  const taint_svaluet& in,
   const std::map<std::string,vectorst>& subs)
 {
   if(in.is_top())
@@ -309,7 +319,7 @@ void bitvector_analysis_with_summariest::transform_function_call_stub(
     throw "transform_function_call_stub with non-symbol argument";
   
   const irep_idt &identifier=to_symbol_expr(function).get_identifier();
-  const auto& summary=*(sumfn::taint::summaryt*)(&*get_summary(identifier));
+  const auto summary=get_summary(identifier);
 
   // The summary should declare a symbol like "Tn" giving a symbolic taint name for each param.
   // Build a map from such symbolic names to actual taint vectors:
@@ -320,8 +330,8 @@ void bitvector_analysis_with_summariest::transform_function_call_stub(
   {
     symbol_exprt param_symbol(param.get_identifier(),param.type());
     auto param_taints=domain.get_rhs(param_symbol);
-    auto findit=summary.input().find(param_symbol);
-    if(findit==summary.input().end())
+    auto findit=summary->input().find(param_symbol);
+    if(findit==summary->input().end())
       continue;
     auto param_taint_object=findit->second;
     assert(param_taint_object.expression().size()==1);
@@ -330,7 +340,7 @@ void bitvector_analysis_with_summariest::transform_function_call_stub(
 
   // Now the summary maps symbolic taints onto actual expressions. Assign actual
   // taint to each given target.
-  for(const auto& output : summary.output())
+  for(const auto& output : summary->output())
   {
     auto actual_output_taint=substitute_taint(output.second,actual_input_taint);
     if(output.first.id()==ID_symbol &&
@@ -352,7 +362,7 @@ void bitvector_analysis_with_summariest::transform_function_call_stub(
 
 void taint_analysist::read_summaries(
   const std::string& dir,
-  sumfn::database_of_summariest& summarydb)
+  database_of_summariest& summarydb)
 {
   std::string index_filename=dir+"/"+"__index.json";
   if(!fileutl_file_exists(index_filename))
@@ -382,7 +392,8 @@ void taint_analysist::read_summaries(
       throw "Summaries: expected entry json to contain an object";
 
     const auto& entry_obj=static_cast<const json_objectt&>(entry_json);
-    auto deserialised_entry=summary_from_json(entry_obj,sumfn::taint::domain_ptrt());
+    auto deserialised_entry=
+        summary_from_json(entry_obj,taint_summary_domain_ptrt());
     summarydb.insert(deserialised_entry);
   }
 }
@@ -481,9 +492,10 @@ bool taint_analysist::operator()(
 
     status() << "Data-flow analysis" << eom;
 
-    sumfn::database_of_summariest summarydb;
+    database_of_summaries_ptrt summarydb =
+        std::make_shared<database_of_summariest>();
     if(summaries_directory!="")
-      read_summaries(summaries_directory,summarydb);
+      read_summaries(summaries_directory,*summarydb);
     
     bitvector_analysis_with_summariest custom_bitvector_analysis(summarydb);
     custom_bitvector_analysis(goto_functions, ns);

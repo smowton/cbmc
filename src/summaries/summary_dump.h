@@ -23,9 +23,6 @@ It provides dump of computed summaries in human readable form.
 #include <string>
 #include <iosfwd>
 
-namespace sumfn { namespace detail {
-
-
 /*******************************************************************\
 
 Function:
@@ -43,11 +40,6 @@ void  dump_irept(
     std::ostream&  ostr,
     std::string const&  shift = ""
     );
-
-
-}}
-
-namespace sumfn {
 
 
 /*******************************************************************\
@@ -190,7 +182,5 @@ void  dump_instruction_code_in_html(
     std::ostream&  ostr
     );
 
-
-}
 
 #endif
