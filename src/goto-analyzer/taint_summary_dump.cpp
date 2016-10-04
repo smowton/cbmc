@@ -1,12 +1,16 @@
-/////////////////////////////////////////////////////////////////////////////
-//
-// Module: taint_summary
-// Author: Marek Trtik
-//
-// @ Copyright Diffblue, Ltd.
-//
-/////////////////////////////////////////////////////////////////////////////
+/*******************************************************************\
 
+Module: taint_summary_dump
+
+Author: Marek Trtik
+
+Date: September 2016
+
+It provides a dump of computed taint summary in HTML format.
+
+@ Copyright Diffblue, Ltd.
+
+\*******************************************************************/
 
 #include <goto-analyzer/taint_summary_dump.h>
 #include <memory>
@@ -14,11 +18,6 @@
 #include <iostream>
 #include <iomanip>
 #include <cassert>
-
-namespace sumfn { namespace taint { namespace detail { namespace {
-
-
-}}}}
 
 namespace sumfn { namespace taint {
 
@@ -109,7 +108,7 @@ std::string  dump_in_html(
     ostr << "    <td>";
     dump_lvalue_in_html(elem.first,ns,ostr);
     ostr << "</td>\n";
-    ostr << "    <td>"; dump_svalue_in_html(elem.second,ostr); ostr << "</td>\n";
+    ostr << "    <td>"; dump_svalue_in_html(elem.second,ostr); ostr <<"</td>\n";
     ostr << "  </tr>\n";
   }
   ostr << "</table>\n";
@@ -126,7 +125,7 @@ std::string  dump_in_html(
     ostr << "    <td>";
     dump_lvalue_in_html(elem.first,ns,ostr);
     ostr << "</td>\n";
-    ostr << "    <td>"; dump_svalue_in_html(elem.second,ostr); ostr << "</td>\n";
+    ostr << "    <td>"; dump_svalue_in_html(elem.second,ostr); ostr <<"</td>\n";
     ostr << "  </tr>\n";
   }
   ostr << "</table>\n";

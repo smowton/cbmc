@@ -1,13 +1,16 @@
-/////////////////////////////////////////////////////////////////////////////
-//
-// Module: summary_dump
-// Author: Marek Trtik
-//
-// It provides dump of computed summaries in human readable form.
-//
-// @ Copyright Diffblue, Ltd.
-//
-/////////////////////////////////////////////////////////////////////////////
+/*******************************************************************\
+
+Module: summary_dump
+
+Author: Marek Trtik
+
+Date: September 2016
+
+It provides dump of computed summaries in human readable form.
+
+@ Copyright Diffblue, Ltd.
+
+\*******************************************************************/
 
 #include <summaries/summary_dump.h>
 #include <util/file_util.h>
@@ -29,7 +32,7 @@ std::string  dump_function_body_in_html(
     std::string const&  dump_root_directory
     )
 {
-  fileutl::create_directory(dump_root_directory);
+  fileutl_create_directory(dump_root_directory);
 
   std::string const  log_filename =
       msgstream() << dump_root_directory << "/index.html";
@@ -187,7 +190,7 @@ std::string  dump_goto_program_in_html(
     std::string const&  dump_root_directory
     )
 {
-  fileutl::create_directory(dump_root_directory);
+  fileutl_create_directory(dump_root_directory);
 
   namespacet const  ns(program.symbol_table);
   goto_functionst::function_mapt const&  functions =
@@ -267,7 +270,7 @@ std::string  dump_log_in_html(
     std::string const&  dump_root_directory
     )
 {
-  fileutl::create_directory(dump_root_directory);
+  fileutl_create_directory(dump_root_directory);
 
   std::string const  log_filename =
       msgstream() << dump_root_directory << "/index.html";
@@ -345,7 +348,7 @@ std::string  dump_in_html(
     std::ostream* const  log
     )
 {
-  fileutl::create_directory(dump_root_directory);
+  fileutl_create_directory(dump_root_directory);
 
   std::string  err_message =
       detail::dump_goto_program_in_html(
@@ -428,7 +431,7 @@ std::string  dump_in_html(
     std::string const&  dump_root_directory
     )
 {
-  fileutl::create_directory(dump_root_directory);
+  fileutl_create_directory(dump_root_directory);
 
   std::string const  log_filename =
       msgstream() << dump_root_directory << "/index.html";
@@ -633,7 +636,7 @@ void write_database_as_json(
   std::unordered_set<std::string> used_filenames;
   json_objectt index;
 
-  fileutl::create_directory(dump_root_directory);  
+  fileutl_create_directory(dump_root_directory);  
   
   for(const auto& row : computed_summaries)
   {

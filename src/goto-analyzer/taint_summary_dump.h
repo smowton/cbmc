@@ -1,13 +1,16 @@
-/////////////////////////////////////////////////////////////////////////////
-//
-// Module: taint_summary_dump
-// Author: Marek Trtik
-//
-// It provides a dump of computed taint summary in HTML format.
-//
-// @ Copyright Diffblue, Ltd.
-//
-/////////////////////////////////////////////////////////////////////////////
+/*******************************************************************\
+
+Module: taint_summary_dump
+
+Author: Marek Trtik
+
+Date: September 2016
+
+It provides a dump of computed taint summary in HTML format.
+
+@ Copyright Diffblue, Ltd.
+
+\*******************************************************************/
 
 #ifndef CPROVER_TAINT_SUMMARY_DUMP_H
 #define CPROVER_TAINT_SUMMARY_DUMP_H
@@ -21,12 +24,18 @@
 namespace sumfn { namespace taint {
 
 
-/**
- *
- *
- *
- *
- */
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 void  dump_lvalue_in_html(
     lvaluet const&  lvalue,
     namespacet const&  ns,
@@ -34,25 +43,36 @@ void  dump_lvalue_in_html(
     );
 
 
+/*******************************************************************\
 
-/**
- *
- *
- *
- *
- */
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 void  dump_svalue_in_html(
     svaluet const&  svalue,
     std::ostream&  ostr
     );
 
 
-/**
- *
- *
- *
- *
- */
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 void  dump_lvalues_to_svalues_in_html(
     map_from_lvalues_to_svaluest const&  lvalues_to_svalues,
     namespacet const&  ns,
@@ -60,12 +80,18 @@ void  dump_lvalues_to_svalues_in_html(
     );
 
 
-/**
- *
- *
- *
- *
- */
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 std::string  dump_in_html(
     object_summaryt const  obj_summary,
     goto_modelt const&  program,

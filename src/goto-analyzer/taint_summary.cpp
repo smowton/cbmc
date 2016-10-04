@@ -1,12 +1,16 @@
-/////////////////////////////////////////////////////////////////////////////
-//
-// Module: taint_summary
-// Author: Marek Trtik
-//
-// @ Copyright Diffblue, Ltd.
-//
-/////////////////////////////////////////////////////////////////////////////
+/*******************************************************************\
 
+Module: taint_summary
+
+Author: Marek Trtik
+
+Date: September 2016
+
+This module defines interfaces and functionality for taint summaries.
+
+@ Copyright Diffblue, Ltd.
+
+\*******************************************************************/
 
 #include <goto-analyzer/taint_summary.h>
 #include <goto-analyzer/taint_summary_dump.h>
@@ -27,9 +31,18 @@
 namespace sumfn { namespace taint { namespace detail { namespace {
 
 
-/**
- *
- */
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 svaluet  make_symbol()
 {
   static uint64_t  counter = 0UL;
@@ -38,29 +51,55 @@ svaluet  make_symbol()
   return {{symbol_name},false,false};
 }
 
-/**
- *
- */
+
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 svaluet  make_bottom()
 {
   return {svaluet::expressiont{},true,false};
 }
 
-/**
- *
- *
- */
+
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 svaluet  make_top()
 {
   return {svaluet::expressiont{},false,true};
 }
 
 
-/**
- *
- *
- *
- */
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 void  collect_lvalues(
     exprt const&  expr,
     namespacet const&  ns,
@@ -75,12 +114,18 @@ void  collect_lvalues(
 }
 
 
-/**
- *
- *
- *
- *
- */
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 void  initialise_domain(
     irep_idt const&  function_id,
     goto_functionst::goto_functiont const&  function,
@@ -173,17 +218,25 @@ void  initialise_domain(
 }
 
 
-/**
- *
- */
-typedef std::unordered_set<instruction_iterator_t,
-                            detail::instruction_iterator_hasher>
+/*******************************************************************\
+\*******************************************************************/
+typedef std::unordered_set<instruction_iteratort,
+                            detail::instruction_iterator_hashert>
         solver_work_set_t;
 
 
-/**
- *
- */
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 void  initialise_workset(
     goto_functionst::goto_functiont const&  function,
     solver_work_set_t&  work_set
@@ -196,10 +249,18 @@ void  initialise_workset(
 }
 
 
-/**
- *
- *
- */
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 void  erase_dead_lvalue(
     lvaluet const&  lvalue,
     namespacet const&  ns,
@@ -220,10 +281,18 @@ void  erase_dead_lvalue(
 }
 
 
-/**
- *
- *
- */
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 void  build_symbols_substitution(
     std::unordered_map<svaluet::symbolt,svaluet>&  symbols_substitution,
     map_from_lvalues_to_svaluest const&  a,
@@ -346,10 +415,18 @@ void  build_symbols_substitution(
 }
 
 
-/**
- *
- *
- */
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 void  build_substituted_summary(
     map_from_lvalues_to_svaluest&  substituted_summary,
     map_from_lvalues_to_svaluest const&  original_summary,
@@ -401,10 +478,18 @@ void  build_substituted_summary(
 }
 
 
-/**
- *
- *
- */
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 void  build_summary_from_computed_domain(
     domain_ptrt const  domain,
     map_from_lvalues_to_svaluest&  output,
@@ -878,7 +963,7 @@ summary_ptrt  summarise_function(
   detail::initialise_workset(fn_iter->second,work_set);
   while (!work_set.empty())
   {
-    instruction_iterator_t const  src_instr_it = *work_set.cbegin();
+    instruction_iteratort const  src_instr_it = *work_set.cbegin();
     work_set.erase(work_set.cbegin());
 
     map_from_lvalues_to_svaluest const&  src_value = domain->at(src_instr_it);
@@ -890,7 +975,7 @@ summary_ptrt  summarise_function(
         ++succ_it)
       if (*succ_it != fn_iter->second.body.instructions.cend())
       {
-        instruction_iterator_t const  dst_instr_it = *succ_it;
+        instruction_iteratort const  dst_instr_it = *succ_it;
         map_from_lvalues_to_svaluest&  dst_value = domain->at(dst_instr_it);
         map_from_lvalues_to_svaluest const  old_dst_value = dst_value;
 

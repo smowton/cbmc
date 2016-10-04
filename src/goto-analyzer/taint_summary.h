@@ -1,13 +1,16 @@
-/////////////////////////////////////////////////////////////////////////////
-//
-// Module: taint_summary
-// Author: Marek Trtik
-//
-// This module defines interfaces and functionality for taint summaries.
-//
-// @ Copyright Diffblue, Ltd.
-//
-/////////////////////////////////////////////////////////////////////////////
+/*******************************************************************\
+
+Module: taint_summary
+
+Author: Marek Trtik
+
+Date: September 2016
+
+This module defines interfaces and functionality for taint summaries.
+
+@ Copyright Diffblue, Ltd.
+
+\*******************************************************************/
 
 #ifndef CPROVER_TAINT_SUMMARY_H
 #define CPROVER_TAINT_SUMMARY_H
@@ -29,7 +32,7 @@
 namespace sumfn { namespace taint { namespace detail {
 
 
-struct  instruction_iterator_hasher
+struct  instruction_iterator_hashert
 {
   std::size_t  operator()(
       goto_programt::instructiont::const_targett const  it
@@ -39,7 +42,7 @@ struct  instruction_iterator_hasher
   }
 };
 
-struct  lvalue_hasher
+struct  lvalue_hashert
 {
   std::size_t  operator()(
       goto_programt::instructiont::const_targett const  it
@@ -55,13 +58,17 @@ struct  lvalue_hasher
 namespace sumfn { namespace taint {
 
 
-/**
- *
- *
- *
- */
-struct  svaluet
+/*******************************************************************\
+
+   Class:
+
+ Purpose:
+
+\*******************************************************************/
+class  svaluet
 {
+public:
+
   typedef  std::string  symbolt;
   typedef std::set<symbolt>  expressiont;
 
@@ -91,36 +98,53 @@ private:
 };
 
 
-/**
- *
- *
- *
- */
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 bool  operator==(svaluet const&  a, svaluet const&  b);
 
 
-/**
- *
- *
- *
- */
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 bool  operator<(svaluet const&  a, svaluet const&  b);
 
 
-/**
- *
- *
- *
- */
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 svaluet  join(svaluet const&  a, svaluet const&  b);
 
 
-/**
- *
- *
- *
- *
- */
+/*******************************************************************\
+\*******************************************************************/
 typedef access_path_to_memoryt  lvaluet;
 
 typedef std::unordered_map<lvaluet,svaluet,irep_hash,irep_full_eq>
@@ -129,25 +153,25 @@ typedef std::unordered_set<lvaluet,irep_hash,irep_full_eq>
         lvalues_sett;
 
 
-/**
- *
- *
- *
- */
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 bool  operator==(
     map_from_lvalues_to_svaluest const&  a,
     map_from_lvalues_to_svaluest const&  b);
 
-
-/**
- *
- *
- *
- */
 bool  operator<(
     map_from_lvalues_to_svaluest const&  a,
     map_from_lvalues_to_svaluest const&  b);
-
 
 inline bool  operator<=(
     map_from_lvalues_to_svaluest const&  a,
@@ -158,10 +182,18 @@ inline bool  operator<=(
 
 
 
-/**
- *
- *
- */
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 map_from_lvalues_to_svaluest  transform(
     map_from_lvalues_to_svaluest const&  a,
     goto_programt::instructiont const&  I,
@@ -172,42 +204,52 @@ map_from_lvalues_to_svaluest  transform(
     );
 
 
-/**
- *
- *
- */
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 map_from_lvalues_to_svaluest  join(
     map_from_lvalues_to_svaluest const&  a,
     map_from_lvalues_to_svaluest const&  b
     );
 
 
-/**
- *
- */
-typedef goto_programt::instructiont::const_targett  instruction_iterator_t;
+/*******************************************************************\
+\*******************************************************************/
+typedef goto_programt::instructiont::const_targett  instruction_iteratort;
 
 
 
 
-/**
- *
- */
-typedef std::unordered_map<instruction_iterator_t,
+/*******************************************************************\
+\*******************************************************************/
+typedef std::unordered_map<instruction_iteratort,
                            map_from_lvalues_to_svaluest,
-                           detail::instruction_iterator_hasher>
+                           detail::instruction_iterator_hashert>
         domaint;
 
 typedef std::shared_ptr<domaint>  domain_ptrt;
 
 
-/**
- *
- *
- *
- */
-struct  summaryt : public sumfn::summaryt
+/*******************************************************************\
+
+   Class:
+
+ Purpose:
+
+\*******************************************************************/
+class  summaryt : public sumfn::summaryt
 {
+public:
+
   summaryt(map_from_lvalues_to_svaluest const&  input,
            map_from_lvalues_to_svaluest const&  output,
            domain_ptrt const domain);
@@ -229,19 +271,22 @@ private:
   domain_ptrt  m_domain;
 };
 
-
-/**
- *
- *
- */
 typedef std::shared_ptr<summaryt const>  summary_ptrt;
 
 
 
-/**
- *
- *
- */
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 void  summarise_all_functions(
     goto_modelt const&  instrumented_program,
     database_of_summariest&  summaries_to_compute,
@@ -250,10 +295,18 @@ void  summarise_all_functions(
     );
 
 
-/**
- *
- *
- */
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 summary_ptrt  summarise_function(
     irep_idt const&  function_id,
     goto_modelt const&  instrumented_program,

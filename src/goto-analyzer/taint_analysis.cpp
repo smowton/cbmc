@@ -355,7 +355,7 @@ void taint_analysist::read_summaries(
   sumfn::database_of_summariest& summarydb)
 {
   std::string index_filename=dir+"/"+"__index.json";
-  if(!fileutl::file_exists(index_filename))
+  if(!fileutl_file_exists(index_filename))
     throw "Summaries: __index.json not found";
   jsont index;
   {
@@ -369,7 +369,7 @@ void taint_analysist::read_summaries(
   {
     assert(entry.second.is_string() && "Summaries: expected __index value to be a string");
     std::string entry_filename=dir+"/"+entry.second.value;
-    if(!fileutl::file_exists(entry_filename))
+    if(!fileutl_file_exists(entry_filename))
       throw "Summaries: function json not found";
 
     jsont entry_json;

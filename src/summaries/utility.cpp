@@ -1,14 +1,17 @@
-/////////////////////////////////////////////////////////////////////////////
-//
-// Module: utility
-// Author: Marek Trtik
-//
-// This module defines utility functions which can be useful when implementing
-// summaries of any kinds.
-//
-// @ Copyright Diffblue, Ltd.
-//
-/////////////////////////////////////////////////////////////////////////////
+/*******************************************************************\
+
+Module: utility
+
+Author: Marek Trtik
+
+Date: September 2016
+
+This module defines utility functions which can be useful when implementing
+summaries of any kinds.
+
+@ Copyright Diffblue, Ltd.
+
+\*******************************************************************/
 
 #include <summaries/utility.h>
 #include <util/std_expr.h>
