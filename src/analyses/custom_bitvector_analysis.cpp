@@ -339,6 +339,28 @@ std::set<exprt> custom_bitvector_analysist::aliases(
     return std::set<exprt>();
 }
 
+void custom_bitvector_domaint::assign(const exprt& lhs, locationt loc, const vectorst& rhs, const namespacet& ns, custom_bitvector_analysist& cba)
+{
+  // may alias other stuff
+  std::set<exprt> lhs_set=cba.aliases(lhs,loc);
+
+#ifdef DEBUG      
+  std::cout << "Assign aliases for " << from_expr(ns,"",code_assign.lhs()) << "\n";
+  for(const auto& e : lhs_set)
+    std::cout << from_expr(ns,"",e) << "\n";
+#endif
+
+  for(std::set<exprt>::const_iterator
+        l_it=lhs_set.begin(); l_it!=lhs_set.end(); l_it++)
+  {
+    if(lhs_set.size()==1)
+      assign_lhs(*l_it, rhs);
+    else
+      merge_lhs(*l_it, rhs);
+  }
+
+}
+
 /*******************************************************************\
 
 Function: custom_bitvector_domaint::transform
@@ -360,7 +382,7 @@ void custom_bitvector_domaint::transform(
   // upcast of ai
   custom_bitvector_analysist &cba=
     static_cast<custom_bitvector_analysist &>(ai);
-
+  
   const goto_programt::instructiont &instruction=*from;
 
   switch(instruction.type)
@@ -368,26 +390,8 @@ void custom_bitvector_domaint::transform(
   case ASSIGN:
     {
       const code_assignt &code_assign=to_code_assign(instruction.code);
-
-      // may alias other stuff
-      std::set<exprt> lhs_set=cba.aliases(code_assign.lhs(), from);
-
-#ifdef DEBUG      
-      std::cout << "Assign aliases for " << from_expr(ns,"",code_assign.lhs()) << "\n";
-      for(const auto& e : lhs_set)
-        std::cout << from_expr(ns,"",e) << "\n";
-#endif
-
       vectorst rhs_vectors=get_rhs(code_assign.rhs());
-      
-      for(std::set<exprt>::const_iterator
-          l_it=lhs_set.begin(); l_it!=lhs_set.end(); l_it++)
-      {
-        if(lhs_set.size()==1)
-          assign_lhs(*l_it, rhs_vectors);
-        else
-          merge_lhs(*l_it, rhs_vectors);
-      }
+      assign(code_assign.lhs(),from,rhs_vectors,ns,cba);
     }
     break;
 

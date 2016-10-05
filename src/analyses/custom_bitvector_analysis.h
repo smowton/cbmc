@@ -87,6 +87,7 @@ public:
   bitst may_bits, must_bits;
   
   void assign_lhs(const exprt &, const vectorst &);
+  void assign(const exprt&, locationt, const vectorst&, const namespacet&, custom_bitvector_analysist&);
   void merge_lhs(const exprt &, const vectorst &);  
   void assign_lhs(const irep_idt &, const vectorst &);
   vectorst get_rhs(const exprt &) const;

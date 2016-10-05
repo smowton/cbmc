@@ -62,7 +62,7 @@ protected:
   void read_summaries(const std::string&, sumfn::database_of_summariest&);
 };
 
-class bitvector_analysis_with_summariest:public custom_bitvector_analysist
+class bitvector_analysis_with_summariest:public custom_bitvector_analysist, public messaget
 {
 public:
   typedef sumfn::database_of_summariest database_of_summariest;
@@ -301,6 +301,25 @@ vectorst substitute_taint(
 
 }
 
+static std::string taint_expression_to_string(const sumfn::taint::svaluet& in)
+{
+  if(in.is_top()) return "TOP";
+  else if(in.is_bottom()) return "BOTTOM";
+  else
+  {
+    std::ostringstream str;
+    bool first = true;
+    for(const auto& t : in.expression())
+    {
+      if(!first)
+        str << ", ";
+      str << t;
+      first=false;
+    }
+    return str.str();
+  }
+}
+
 void bitvector_analysis_with_summariest::transform_function_call_stub(
   locationt loc, custom_bitvector_domaint& domain, const namespacet& ns)
 {
@@ -318,17 +337,14 @@ void bitvector_analysis_with_summariest::transform_function_call_stub(
   // Build a map from such symbolic names to actual taint vectors:
   
   std::map<std::string,vectorst> actual_input_taint;
-  const auto& ftype=to_code_type(function.type());
-  for(const auto& param : ftype.parameters())
+  for(const auto& input : summary.input())
   {
-    symbol_exprt param_symbol(param.get_identifier(),param.type());
-    auto param_taints=domain.get_rhs(param_symbol);
-    auto findit=summary.input().find(param_symbol);
-    if(findit==summary.input().end())
-      continue;
-    auto param_taint_object=findit->second;
+    auto param_taint_object=input.second;
+    auto param_taints=domain.get_rhs(input.first);
     assert(param_taint_object.expression().size()==1);
-    actual_input_taint[*(param_taint_object.expression().begin())]=param_taints;
+    auto taint_symbol=*(param_taint_object.expression().begin());
+    actual_input_taint[taint_symbol]=param_taints;
+    debug() << "Taint symbol " << taint_symbol << " <- " << from_expr(ns,"",input.first) << eom;
   }
 
   // Now the summary maps symbolic taints onto actual expressions. Assign actual
@@ -336,19 +352,8 @@ void bitvector_analysis_with_summariest::transform_function_call_stub(
   for(const auto& output : summary.output())
   {
     auto actual_output_taint=substitute_taint(output.second,actual_input_taint);
-    if(output.first.id()==ID_symbol &&
-       has_suffix(id2string(to_symbol_expr(output.first).get_identifier()),"#return_value"))
-    {
-      // Overwritten for certain:
-      domain.assign_lhs(output.first,actual_output_taint);
-    }
-    else
-    {
-      // May be tainted:
-      auto existing_taint=domain.get_rhs(output.first);
-      auto merged_taint=custom_bitvector_domaint::merge(existing_taint,actual_output_taint);
-      domain.assign_lhs(output.first,merged_taint);
-    }
+    debug() << "Expression " << from_expr(ns,"",output.first) << " <- " << taint_expression_to_string(output.second) << eom;
+    domain.assign(output.first,loc,actual_output_taint,ns,*this);
   }
   
 }
@@ -489,6 +494,7 @@ bool taint_analysist::operator()(
       read_summaries(summaries_directory,summarydb);
     
     bitvector_analysis_with_summariest custom_bitvector_analysis(summarydb);
+    custom_bitvector_analysis.set_message_handler(get_message_handler());
     custom_bitvector_analysis(goto_functions, ns);
     
     if(show_full)
