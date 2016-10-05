@@ -614,6 +614,8 @@ goto-analyzer/taint_summary.cpp
 goto-analyzer/taint_summary.h
 goto-analyzer/taint_summary_dump.cpp
 goto-analyzer/taint_summary_dump.h
+goto-analyzer/taint_summary_json.cpp
+goto-analyzer/taint_summary_json.h
 goto-analyzer/unreachable_instructions.cpp
 goto-analyzer/unreachable_instructions.h
 goto-cc/xml_binaries/read_goto_object.cpp
@@ -1319,6 +1321,8 @@ summaries/summary.cpp
 summaries/summary.h
 summaries/summary_dump.cpp
 summaries/summary_dump.h
+summaries/utility.cpp
+summaries/utility.h
 symex/path_search.cpp
 symex/path_search.h
 symex/symex_cover.cpp
@@ -1405,6 +1409,8 @@ util/json.cpp
 util/json.h
 util/json_expr.cpp
 util/json_expr.h
+util/json_irep.cpp
+util/json_irep.h
 util/language.cpp
 util/language.h
 util/language_file.cpp

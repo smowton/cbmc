@@ -25,12 +25,16 @@ src/util/irep_ids.inc
 regression/ansi-c/tests.log
 regression/cbmc-java/tests.log
 regression/cbmc/tests.log
+regression/taint/*/*.class
+regression/taint/*/dump_*
 src/big-int/test-bigint
 src/big-int/test-bigint.exe
 
 # files stored by editors
 *~
 libzip/
+zlib/
+minisat-2.2.1/
 
 # flex/bison generated files
 src/ansi-c/ansi_c_lex.yy.cpp
@@ -50,6 +54,7 @@ src/xmllang/xml_lex.yy.cpp
 src/xmllang/xml_y.output
 src/xmllang/xml_y.tab.cpp
 src/xmllang/xml_y.tab.h
+src/cbmc.creator.user
 
 # binaries
 src/cbmc/cbmc

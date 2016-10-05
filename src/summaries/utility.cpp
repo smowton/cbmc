@@ -1,0 +1,197 @@
+/*******************************************************************\
+
+Module: utility
+
+Author: Marek Trtik
+
+Date: September 2016
+
+This module defines utility functions which can be useful when implementing
+summaries of any kinds.
+
+@ Copyright Diffblue, Ltd.
+
+\*******************************************************************/
+
+#include <summaries/utility.h>
+#include <util/std_expr.h>
+#include <util/simplify_expr.h>
+#include <util/symbol.h>
+#include <util/msgstream.h>
+
+
+#include <summaries/summary_dump.h>
+#include <fstream>
+#include <iostream>
+
+
+static void  substitute_symbol(
+    access_path_to_memoryt&  path,
+    std::string const&  symbol_name,
+    access_path_to_memoryt const&  replacement
+    )
+{
+  if (is_identifier(path) && name_of_symbol_access_path(path) == symbol_name)
+    path = replacement;
+  else
+    for (auto&  element : path.operands())
+      substitute_symbol(element,symbol_name,replacement);
+}
+
+
+static access_path_to_memoryt  remove_cast_to_void_ptr_if_present(
+        access_path_to_memoryt const&  access_path
+        )
+{
+  if (access_path.id() == ID_typecast)
+    return remove_cast_to_void_ptr_if_present(access_path.op0());
+  return access_path;
+}
+
+
+access_path_to_memoryt const&  empty_access_path()
+{
+  static access_path_to_memoryt const  null_path(ID_nil);
+  return null_path;
+}
+
+
+bool  is_empty(access_path_to_memoryt const&  path)
+{
+  return path.is_nil();
+}
+
+
+bool  is_identifier(access_path_to_memoryt const&  lvalue)
+{
+  return lvalue.id() == ID_symbol;
+}
+
+
+std::string  name_of_symbol_access_path(access_path_to_memoryt const&  lvalue)
+{
+  return is_identifier(lvalue) ?
+              as_string(to_symbol_expr(lvalue).get_identifier()) :
+              "";
+}
+
+
+bool  is_parameter(access_path_to_memoryt const&  lvalue, namespacet const&  ns)
+{
+  if (is_identifier(lvalue))
+  {
+    symbolt const*  symbol = nullptr;
+    ns.lookup(name_of_symbol_access_path(lvalue),symbol);
+    return symbol != nullptr && symbol->is_parameter;
+  }
+  return false;
+}
+
+bool  is_static(access_path_to_memoryt const&  lvalue, namespacet const&  ns)
+{
+  if (is_identifier(lvalue))
+  {
+    symbolt const*  symbol = nullptr;
+    ns.lookup(name_of_symbol_access_path(lvalue),symbol);
+    return symbol != nullptr && symbol->is_static_lifetime;
+  }
+  else if (lvalue.id() == ID_member)
+  {
+  }
+  return false;
+}
+
+bool  is_return_value_auxiliary(access_path_to_memoryt const&  lvalue,
+                                namespacet const&  ns)
+{
+  if (is_identifier(lvalue))
+  {
+    irep_idt const&  name = name_of_symbol_access_path(lvalue);
+    symbolt const*  symbol = nullptr;
+    ns.lookup(name,symbol);
+    return symbol != nullptr &&
+           symbol->is_static_lifetime &&
+           symbol->is_auxiliary &&
+           symbol->is_file_local &&
+           symbol->is_thread_local &&
+           as_string(name).find("#return_value") != std::string::npos
+           ;
+  }
+  return false;
+}
+
+bool  is_pure_local(access_path_to_memoryt const&  lvalue,
+                    namespacet const&  ns)
+{
+  return lvalue.id() != ID_member &&
+         !is_parameter(lvalue,ns) &&
+         !is_static(lvalue,ns)
+         ;
+}
+
+bool  is_this(access_path_to_memoryt const&  lvalue, namespacet const&  ns)
+{
+  if (!is_identifier(lvalue))
+    return false;
+  std::string const  name = name_of_symbol_access_path(lvalue);
+  std::string const  keyword = "::this";
+  if (name.size() <= keyword.size())
+    return false;
+  std::size_t const  index = name.rfind(keyword);
+  std::size_t const  matching_index = name.size() - keyword.size();
+  return index == matching_index;
+}
+
+
+access_path_to_memoryt  normalise(
+    access_path_to_memoryt const&  access_path,
+    namespacet const&  ns
+    )
+{
+  return simplify_expr(access_path,ns);
+}
+
+
+access_path_to_memoryt  scope_translation(
+    access_path_to_memoryt const&  source_path,
+    irep_idt const&  source_scope_id,
+    irep_idt const&  target_scope_id,
+    code_function_callt const&  source_scope_call_expr,
+    code_typet const&  source_scope_type,
+    namespacet const&  ns
+    )
+{
+  (void)target_scope_id;
+
+  std::string const  source_this =
+      msgstream() << as_string(source_scope_id) << "::this";
+
+  if (!source_scope_type.parameters().empty() &&
+          as_string(source_scope_type.parameters().at(0UL).get_identifier())
+          == source_this)
+  {
+    access_path_to_memoryt const&  target_this =
+        remove_cast_to_void_ptr_if_present(
+            source_scope_call_expr.arguments().at(0UL)
+            );
+
+    access_path_to_memoryt  target_path = source_path;
+    substitute_symbol(target_path,source_this,target_this);
+    target_path = normalise(target_path,ns);
+
+//std::cout << "**********************************************************\n";
+//std::cout << "source_path pretty: " << from_expr(ns, "", source_path) << "\n";
+//std::cout << "target_path pretty: " << from_expr(ns, "", target_path) << "\n";
+//std::cout << "target_this pretty: " << from_expr(ns, "", target_this) << "\n";
+//std::cout << "source_path:\n";
+//detail::dump_irept(source_path,std::cout);
+//std::cout << "target_this:\n";
+//detail::dump_irept(target_this,std::cout);
+//std::cout << "target_path:\n";
+//detail::dump_irept(target_path,std::cout);
+
+    return target_path;
+  }
+
+  return source_path;
+}

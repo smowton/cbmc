@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <memory>
 
-static json_objectt taint_to_json(const sumfn::taint::svaluet& svalue)
+static json_objectt taint_to_json(const taint_svaluet& svalue)
 {
   json_objectt ret;
   ret["is_top"]=jsont::json_boolean(svalue.is_top());
@@ -18,7 +18,8 @@ static json_objectt taint_to_json(const sumfn::taint::svaluet& svalue)
   return ret;
 }
 
-static json_arrayt taint_map_to_json(const sumfn::taint::map_from_lvalues_to_svaluest& map)
+static json_arrayt taint_map_to_json(
+    const taint_map_from_lvalues_to_svaluest& map)
 {
   json_arrayt values;
   for(const auto& elem : map)
@@ -31,12 +32,12 @@ static json_arrayt taint_map_to_json(const sumfn::taint::map_from_lvalues_to_sva
   return values;
 }
 
-json_objectt sumfn::taint::summary_to_json(const object_summaryt& obj)
+json_objectt summary_to_json(const object_summaryt& obj)
 {
   json_objectt root;
   root["name"]=json_stringt(id2string(obj.first));
-  summary_ptrt const summary =
-    std::dynamic_pointer_cast<summaryt const>(obj.second);
+  taint_summary_ptrt const summary =
+    std::dynamic_pointer_cast<taint_summaryt const>(obj.second);
   if (!summary)
     throw "Expected summaryt";
 
@@ -47,7 +48,8 @@ json_objectt sumfn::taint::summary_to_json(const object_summaryt& obj)
 }
 
 template<class maptype, class keytype>
-void assert_has_keys(const maptype& m, const std::vector<keytype>& expected, const char* detail)
+void assert_has_keys(const maptype& m,
+                     const std::vector<keytype>& expected, const char* detail)
 {
   std::vector<keytype> keys;
   for(const auto& keyval : m)
@@ -67,14 +69,14 @@ static bool bool_from_json(const jsont& js)
     throw "JSON object is not a boolean";
 }
 
-static sumfn::taint::svaluet taint_from_json(const jsont& js)
+static taint_svaluet taint_from_json(const jsont& js)
 {
   assert(js.is_object());
   const auto& js_object=static_cast<const json_objectt&>(js);
   assert_has_keys(js.object,
 		  std::vector<std::string>({"is_bottom","is_top","taints"}),
 		  "JSON object is not an svalue");
-  sumfn::taint::svaluet::expressiont taints;
+  taint_svaluet::expressiont taints;
   const jsont& js_taints=js_object["taints"];
   assert(js_taints.is_array());
   for(const auto& js_taint : js_taints.array)
@@ -82,16 +84,16 @@ static sumfn::taint::svaluet taint_from_json(const jsont& js)
     assert(js_taint.is_string());
     taints.insert(js_taint.value);
   }
-  return sumfn::taint::svaluet(taints,
+  return taint_svaluet(taints,
 			       bool_from_json(js_object["is_bottom"]),
 			       bool_from_json(js_object["is_top"]));
 }
 
-static sumfn::taint::map_from_lvalues_to_svaluest taint_map_from_json(const jsont& js)
+static taint_map_from_lvalues_to_svaluest taint_map_from_json(const jsont& js)
 {
   assert(js.is_array());
   const auto& js_array=static_cast<const json_arrayt&>(js);
-  sumfn::taint::map_from_lvalues_to_svaluest ret;
+  taint_map_from_lvalues_to_svaluest ret;
   for(const auto& entry : js_array.array)
   {
     assert(entry.is_object());
@@ -100,23 +102,23 @@ static sumfn::taint::map_from_lvalues_to_svaluest taint_map_from_json(const json
 		    std::vector<std::string>({"expr","taint"}),
 		    "JSON object is not a taint entry");
     irept irep=irep_from_json(entry_obj["expr"]);
-    sumfn::taint::svaluet taint=taint_from_json(entry_obj["taint"]);
+    taint_svaluet taint=taint_from_json(entry_obj["taint"]);
     ret.insert(std::make_pair(static_cast<exprt&>(irep),taint));
   }
   return ret;
 }
 
-sumfn::object_summaryt
-sumfn::taint::summary_from_json(const json_objectt& js, const domain_ptrt domain)
+object_summaryt summary_from_json(const json_objectt& js,
+                                  const taint_summary_domain_ptrt domain)
 {
   object_summaryt ret;
   assert_has_keys(js.object,
 		  std::vector<std::string>({"inputs","name","outputs"}),
 		  "JSON object is not a taint summary");
   ret.first=js["name"].value;
-  map_from_lvalues_to_svaluest inputs=taint_map_from_json(js["inputs"]);
-  map_from_lvalues_to_svaluest outputs=taint_map_from_json(js["outputs"]);
-  ret.second=std::shared_ptr<summaryt>(new summaryt(inputs,outputs,domain));
+  taint_map_from_lvalues_to_svaluest inputs=taint_map_from_json(js["inputs"]);
+  taint_map_from_lvalues_to_svaluest outputs=taint_map_from_json(js["outputs"]);
+  ret.second=std::make_shared<taint_summaryt>(inputs,outputs,domain);
   return ret;
 }
 

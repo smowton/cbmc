@@ -1,19 +1,19 @@
-/////////////////////////////////////////////////////////////////////////////
-//
-// Module: summary
-// Author: Marek Trtik
-//
-// This module defines interfaces and functionality for all kinds of summaries.
-// It in particular comprises loop, function, and module summaries.
-//
-// @ Copyright Diffblue, Ltd.
-//
-/////////////////////////////////////////////////////////////////////////////
+/*******************************************************************\
 
+Module: summary
+
+Author: Marek Trtik
+
+Date: September 2016
+
+This module defines interfaces and functionality for all kinds of summaries.
+It in particular comprises loop, function, and module summaries.
+
+@ Copyright Diffblue, Ltd.
+
+\*******************************************************************/
 
 #include <summaries/summary.h>
-
-namespace sumfn {
 
 
 void  database_of_summariest::insert(
@@ -33,6 +33,4 @@ database_of_summariest::databaset::const_iterator
 database_of_summariest::cend() const
 {
   return m_cache.cend();
-}
-
 }

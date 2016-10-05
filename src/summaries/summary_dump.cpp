@@ -1,13 +1,16 @@
-/////////////////////////////////////////////////////////////////////////////
-//
-// Module: summary_dump
-// Author: Marek Trtik
-//
-// It provides dump of computed summaries in human readable form.
-//
-// @ Copyright Diffblue, Ltd.
-//
-/////////////////////////////////////////////////////////////////////////////
+/*******************************************************************\
+
+Module: summary_dump
+
+Author: Marek Trtik
+
+Date: September 2016
+
+It provides dump of computed summaries in human readable form.
+
+@ Copyright Diffblue, Ltd.
+
+\*******************************************************************/
 
 #include <summaries/summary_dump.h>
 #include <util/file_util.h>
@@ -17,19 +20,17 @@
 #include <sstream>
 #include <iostream>
 #include <iomanip>
+#include <cstdlib>
 
 
-namespace sumfn { namespace detail { namespace {
-
-
-std::string  dump_function_body_in_html(
+static std::string  dump_function_body_in_html(
     irep_idt const  raw_fn_name,
     goto_programt  const&  fn_body,
     goto_modelt const&  program,
     std::string const&  dump_root_directory
     )
 {
-  fileutl::create_directory(dump_root_directory);
+  fileutl_create_directory(dump_root_directory);
 
   std::string const  log_filename =
       msgstream() << dump_root_directory << "/index.html";
@@ -38,7 +39,10 @@ std::string  dump_function_body_in_html(
       return msgstream() << "ERROR: sumfn::dump_function_body_in_html() : "
                             "Cannot open the log file '" << log_filename << "'."
                          ;
-  dump_html_prefix(ostr);
+  dump_html_prefix(
+        ostr,
+        msgstream() << "Code[" << to_html_text(as_string(raw_fn_name)) << "]"
+        );
   ostr << "<h1>Code of function '" << to_html_text(as_string(raw_fn_name))
                                    << "'</h1>\n"
           "<p>\n"
@@ -152,12 +156,39 @@ std::string  dump_function_body_in_html(
 }
 
 
-std::string  dump_goto_program_in_html(
+static std::string  dump_callgraph_in_svg(
+    call_grapht const&  call_graph,
+    goto_functionst const&  functions,
+    std::string const&  svg_file_pathname
+    )
+{
+  std::string const  dot_filename =
+      msgstream() << svg_file_pathname << ".dot";
+  {
+    std::fstream  ostr(dot_filename, std::ios_base::out);
+    if (!ostr.is_open())
+        return msgstream() << "ERROR: sumfn::dump_callgraph_in_svg() : "
+                              "Cannot open file '" << dot_filename << "'."
+                           ;
+    call_graph.output_dot(functions,ostr);
+  }
+
+  std::string const  command =
+      msgstream() << "dot -Tsvg \"" << dot_filename
+                  << "\" -o \"" << svg_file_pathname << "\"";
+  std::system(command.c_str());
+
+  return ""; // No error.
+}
+
+
+static std::string  dump_goto_program_in_html(
     goto_modelt const&  program,
+    call_grapht const&  call_graph,
     std::string const&  dump_root_directory
     )
 {
-  fileutl::create_directory(dump_root_directory);
+  fileutl_create_directory(dump_root_directory);
 
   namespacet const  ns(program.symbol_table);
   goto_functionst::function_mapt const&  functions =
@@ -166,7 +197,7 @@ std::string  dump_goto_program_in_html(
     if(it->second.body_available())
     {
       std::string const  err_message =
-          detail::dump_function_body_in_html(
+          dump_function_body_in_html(
               it->first,
               it->second.body,
               program,
@@ -177,6 +208,22 @@ std::string  dump_goto_program_in_html(
         return err_message;
     }
 
+  std::string const  call_graph_svg_file =
+      msgstream() << dump_root_directory << "/call_graph.svg";
+  dump_callgraph_in_svg(call_graph,program.goto_functions,call_graph_svg_file);
+
+  std::vector<irep_idt>  inverted_topological_order;
+  {
+    std::unordered_set<irep_idt,dstring_hash>  processed;
+    for (auto const&  elem : program.goto_functions.function_map)
+      inverted_partial_topological_order(
+            call_graph,
+            elem.first,
+            processed,
+            inverted_topological_order
+            );
+  }
+
   std::string const  log_filename =
       msgstream() << dump_root_directory << "/index.html";
   std::fstream  ostr(log_filename, std::ios_base::out);
@@ -184,7 +231,7 @@ std::string  dump_goto_program_in_html(
       return msgstream() << "ERROR: sumfn::dump_goto_program_in_html() : "
                             "Cannot open the log file '" << log_filename << "'."
                          ;
-  dump_html_prefix(ostr);
+  dump_html_prefix(ostr,"Program");
   ostr << "<h1>Dump of analysed program</h1>\n"
           "<table>\n"
           "  <tr>\n"
@@ -201,16 +248,28 @@ std::string  dump_goto_program_in_html(
               "  </tr>\n"
               ;
   ostr << "</table>\n";
+
+  ostr << "<h3>Call graph</h3>\n"
+          "<img src=\"./call_graph.svg\" alt=\"call graph SVG file\">\n"
+          "<p>Inverted (partial) topological order of functions (i.e. "
+          "from callees to callers):</p>\n"
+          "<ul>\n"
+       ;
+  for (irep_idt const&  fn_name : inverted_topological_order)
+    ostr << "<li>" << to_html_text(as_string(fn_name)) << "</li>\n";
+  ostr << "</ul>\n";
+
   dump_html_suffix(ostr);
   return ""; // no error.
 }
 
-std::string  dump_log_in_html(
+
+static std::string  dump_log_in_html(
     std::ostream const&  source,
     std::string const&  dump_root_directory
     )
 {
-  fileutl::create_directory(dump_root_directory);
+  fileutl_create_directory(dump_root_directory);
 
   std::string const  log_filename =
       msgstream() << dump_root_directory << "/index.html";
@@ -219,7 +278,7 @@ std::string  dump_log_in_html(
       return msgstream() << "ERROR: sumfn::dump_log_in_html() : "
                             "Cannot open the log file '" << log_filename << "'."
                          ;
-  dump_html_prefix(ostr);
+  dump_html_prefix(ostr,"Log");
   ostr << "<h1>Log of taint summary computation</h1>\n";
   ostr << source.rdbuf();
   dump_html_suffix(ostr);
@@ -227,7 +286,7 @@ std::string  dump_log_in_html(
 }
 
 
-void  replace(
+static void  replace(
     std::string&  str,
     std::string const&  what,
     std::string const&  replacement
@@ -242,24 +301,48 @@ void  replace(
 }
 
 
-}}}
-
-namespace sumfn {
+void  dump_irept(
+    irept const&  irep,
+    std::ostream&  ostr,
+    std::string const&  shift)
+{
+  std::string const  local_shift = msgstream() << shift << "    ";
+  std::string const  sub_shift = msgstream() << local_shift << "    ";
+  ostr << shift << "IREP{\n"
+       << local_shift << "id { " << irep.id() << "}\n"
+       << local_shift << "sub {\n"
+       ;
+  for (auto const&  sub : irep.get_sub())
+    dump_irept(sub,ostr,sub_shift);
+  ostr << local_shift << "}\n"
+       << local_shift << "named_sub {\n"
+       ;
+  for (auto const&  name_irep : irep.get_named_sub())
+  {
+    ostr << sub_shift << name_irep.first << "\n";
+    dump_irept(name_irep.second,ostr,sub_shift);
+  }
+  ostr << local_shift << "}\n"
+       << shift << "}\n"
+       ;
+}
 
 
 std::string  dump_in_html(
     database_of_summariest const&  computed_summaries,
     callback_dump_derived_summary_in_htmlt const&  summary_dump_callback,
     goto_modelt const&  program,
+    call_grapht const&  call_graph,
     std::string const&  dump_root_directory,
     std::ostream* const  log
     )
 {
-  fileutl::create_directory(dump_root_directory);
+  fileutl_create_directory(dump_root_directory);
 
   std::string  err_message =
-      detail::dump_goto_program_in_html(
+      dump_goto_program_in_html(
           program,
+          call_graph,
           msgstream() << dump_root_directory << "/goto_model"
           );
   if (!err_message.empty())
@@ -281,7 +364,7 @@ std::string  dump_in_html(
 
   if (log != nullptr)
   {
-    err_message = detail::dump_log_in_html(
+    err_message = dump_log_in_html(
         *log,
         msgstream() << dump_root_directory << "/log"
         );
@@ -296,7 +379,7 @@ std::string  dump_in_html(
       return msgstream() << "ERROR: sumfn::taint::summarise_all_functions() : "
                             "Cannot open the log file '" << log_filename << "'."
                          ;
-  dump_html_prefix(ostr);
+  dump_html_prefix(ostr,"Database");
   ostr << "<h1>Taint Summaries</h1>\n"
           "<table>\n"
           "  <tr>\n"
@@ -337,7 +420,7 @@ std::string  dump_in_html(
     std::string const&  dump_root_directory
     )
 {
-  fileutl::create_directory(dump_root_directory);
+  fileutl_create_directory(dump_root_directory);
 
   std::string const  log_filename =
       msgstream() << dump_root_directory << "/index.html";
@@ -346,7 +429,10 @@ std::string  dump_in_html(
      return msgstream() << "ERROR: sumfn::taint::summarise_function() : Cannot "
                            "open the log file '" << log_filename << "'."
                         ;
-  dump_html_prefix(ostr);
+  dump_html_prefix(
+        ostr,
+        msgstream() << "Summary[" << to_html_text(summary.first) << "]"
+        );
   ostr << "<h1>Summary of function '"
        << to_html_text(summary.first)
        << "'</h1>\n"
@@ -377,46 +463,52 @@ std::string  to_file_name(std::string  result)
 
 std::string  to_html_text(std::string  result)
 {
-  detail::replace(result, "<", "&lt;");
-  detail::replace(result, ">", "&gt;");
+  replace(result, "<", "&lt;");
+  replace(result, ">", "&gt;");
   return result;
 }
 
 
-void  dump_html_prefix(std::ostream&  ostr)
+void  dump_html_prefix(
+    std::ostream&  ostr,
+    std::string const&  page_name)
 {
-    ostr << "<!DOCTYPE html>\n";
-    ostr << "<html>\n";
-    ostr << "<head>\n";
-    ostr << "<style>\n";
-    ostr << "table, th, td {\n";
-    ostr << "    border: 1px solid black;\n";
-    ostr << "    border-collapse: collapse;\n";
-    ostr << "}\n";
-    ostr << "th, td {\n";
-    ostr << "    padding: 5px;\n";
-    ostr << "}\n";
-    ostr << "h1, h2, h3, h4, p, a, table, ul { font-family: \"Liberation serif\", serif; }\n";
-    ostr << "p, a, table, ul { font-size: 12pt; }\n";
-    ostr << "h4 { font-size: 12pt; }\n";
-    ostr << "h3 { font-size: 14pt; }\n";
-    ostr << "h2 { font-size: 18pt; }\n";
-    ostr << "h1 { font-size: 24pt; }\n";
-    ostr << "tt { font-family: \"Liberation Mono\", monospace; }\n";
-    ostr << "tt { font-size: 10pt; }\n";
-    ostr << "body {\n";
-    ostr << "    background-color: white;\n";
-    ostr << "    color: black;\n";
-    ostr << "}\n";
-    ostr << "</style>\n";
-    ostr << "</head>\n";
-    ostr << "<body>\n";
+  ostr << "<!DOCTYPE html>\n"
+          "<html>\n"
+          "<head>\n"
+          "<title>" << page_name << "</title>\n"
+          "<style>\n"
+          "table, th, td {\n"
+          "    border: 1px solid black;\n"
+          "    border-collapse: collapse;\n"
+          "}\n"
+          "th, td {\n"
+          "    padding: 5px;\n"
+          "}\n"
+          "h1, h2, h3, h4, p, a, table, ul { "
+              "font-family: \"Liberation serif\", serif; }\n"
+          "p, a, table, ul { font-size: 12pt; }\n"
+          "h4 { font-size: 12pt; }\n"
+          "h3 { font-size: 14pt; }\n"
+          "h2 { font-size: 18pt; }\n"
+          "h1 { font-size: 24pt; }\n"
+          "tt { font-family: \"Liberation Mono\", monospace; }\n"
+          "tt { font-size: 10pt; }\n"
+          "body {\n"
+          "    background-color: white;\n"
+          "    color: black;\n"
+          "}\n"
+          "</style>\n"
+          "</head>\n"
+          "<body>\n"
+       ;
 }
 
 void  dump_html_suffix(std::ostream&  ostr)
 {
-    ostr << "</body>\n";
-    ostr << "</html>\n";
+    ostr << "</body>\n"
+            "</html>\n"
+         ;
 }
 
 
@@ -533,7 +625,7 @@ void write_database_as_json(
   std::unordered_set<std::string> used_filenames;
   json_objectt index;
 
-  fileutl::create_directory(dump_root_directory);  
+  fileutl_create_directory(dump_root_directory);  
   
   for(const auto& row : computed_summaries)
   {
@@ -563,6 +655,4 @@ void write_database_as_json(
     std::fstream  ostr(dump_root_directory+"/__index.json", std::ios_base::out);
     ostr << index;
   }
-}
-
 }
