@@ -1,0 +1,5 @@
+[
+{ "id": "get1", "kind": "source", "where": "return_value", "taint": "get1_taint", "function": "TaintSource.get1" },
+{ "id": "get2", "kind": "source", "where": "return_value", "taint": "get2_taint", "function": "TaintSource.get2" }
+]
+
