@@ -610,6 +610,8 @@ goto-analyzer/taint_analysis.cpp
 goto-analyzer/taint_analysis.h
 goto-analyzer/taint_parser.cpp
 goto-analyzer/taint_parser.h
+goto-analyzer/taint_planner.cpp
+goto-analyzer/taint_planner.h
 goto-analyzer/taint_summary.cpp
 goto-analyzer/taint_summary.h
 goto-analyzer/taint_summary_dump.cpp

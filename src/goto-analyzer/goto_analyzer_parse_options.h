@@ -38,7 +38,8 @@ class optionst;
   "(unreachable-instructions)" \
   "(intervals)(show-intervals)" \
   "(non-null)(show-non-null)" \
-  "(summary-only)"
+  "(summary-only)" \
+  "(taint-analysis):"
 
 class goto_analyzer_parse_optionst:
   public parse_options_baset,

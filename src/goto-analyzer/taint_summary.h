@@ -101,6 +101,51 @@ Function:
 
 
 \*******************************************************************/
+taint_svaluet  taint_make_symbol();
+
+
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
+taint_svaluet  taint_make_bottom();
+
+
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
+taint_svaluet  taint_make_top();
+
+
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 bool  operator==(taint_svaluet const&  a, taint_svaluet const&  b);
 
 
@@ -278,7 +323,7 @@ Function:
 
 
 \*******************************************************************/
-void  summarise_all_functions(
+void  taint_summarise_all_functions(
     goto_modelt const&  instrumented_program,
     database_of_summariest&  summaries_to_compute,
     call_grapht const&  call_graph,
@@ -298,7 +343,7 @@ Function:
 
 
 \*******************************************************************/
-taint_summary_ptrt  summarise_function(
+taint_summary_ptrt  taint_summarise_function(
     irep_idt const&  function_id,
     goto_modelt const&  instrumented_program,
     database_of_summariest const&  database,
