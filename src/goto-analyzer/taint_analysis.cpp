@@ -202,6 +202,9 @@ void taint_analysist::instrument(
                 }
                 break;
               }
+
+              if(where!=nil_exprt() && !rule.immediate)
+                where=dereference_exprt(where);
               
               switch(rule.kind)
               {

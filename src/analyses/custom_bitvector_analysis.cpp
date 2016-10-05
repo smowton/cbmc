@@ -223,6 +223,14 @@ custom_bitvector_domaint::vectorst
     vectorst v_false=get_rhs(to_if_expr(rhs).false_case());
     return merge(v_true, v_false);
   }
+  else
+  {
+    // Per default, just merge bits from all arguments:
+    vectorst ret;
+    for(const auto& op : rhs.operands())
+      ret=merge(ret,get_rhs(op));
+    return ret;
+  }
   
   return vectorst();
 }
@@ -462,11 +470,9 @@ void custom_bitvector_domaint::transform(
           {
             const auto& actual_arg=code_function_call.arguments()[i];
             const auto& formal_param=ftype.parameters()[i];
-            if(formal_param.type().id()!=ID_pointer)
-              continue;
             symbol_exprt formal_arg(formal_param.get_identifier(),formal_param.type());
-            vectorst actual_vectors=get_rhs(dereference_exprt(actual_arg));
-            assign_lhs(dereference_exprt(formal_arg),actual_vectors);
+            vectorst actual_vectors=get_rhs(actual_arg);
+            assign_lhs(formal_arg,actual_vectors);
           }
           if(!cba.should_enter_function(identifier))
             cba.transform_function_call_stub(from,*this,ns);
@@ -530,10 +536,8 @@ void custom_bitvector_domaint::transform(
         }
         else
         {
-          dereference_exprt deref(lhs);
-          
           // may alias other stuff
-          std::set<exprt> lhs_set=cba.aliases(deref, from);
+          std::set<exprt> lhs_set=cba.aliases(lhs, from);
           
           for(std::set<exprt>::const_iterator
               l_it=lhs_set.begin(); l_it!=lhs_set.end(); l_it++)

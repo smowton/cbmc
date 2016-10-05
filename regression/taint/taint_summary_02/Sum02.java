@@ -1,35 +1,31 @@
 public final class Sum02 {
 
-  private Object localadd(Object l, Object r, boolean choice) { return choice ? l : r; }
+  private int localadd(int l, int r) { return l + r; }
 
-  public Object foo(int nondet) {
-    Object x = TaintSource.get1();
-    Object y = TaintSource.get2();
+  public int foo(int nondet) {
+    int x = TaintSource.get1();
+    int y = TaintSource.get2();
     if (nondet > 0)
-      x = Adder.add(x, y, nondet == 5);
+      x = Adder.add(x, y);
     else
-      G = localadd(x, y, nondet == -5);
+      G = localadd(x, y);
     L = G;
-    return Adder.add(x, new Object(), nondet == 10);
+    return Adder.add(x, 5);
   }
 
-  //public String  src1() { return "tainted data 1"; }
-  //public String  src2() { return "tainted data 2"; }
-  //public void  sink(final String x) {}
-
-  private Object L;
-  private static Object G;
+  private int L;
+  private static int G;
 }
 
 class TaintSource {
 
-  public static Object get1() { return new Object(); }
-  public static Object get2() { return new Object(); }
+  public static int get1() { return 0; }
+  public static int get2() { return 0; }
 
 }
 
 class Adder {
 
-  public static Object add(Object l, Object r, boolean choice) { return choice ? l : r; }
+  public static int add(int l, int r) { return l + r; }
 
 }

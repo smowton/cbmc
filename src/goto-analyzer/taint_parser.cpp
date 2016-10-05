@@ -32,10 +32,10 @@ bool taint_parser(
   message_handlert &message_handler)
 {
   jsont json;
+  messaget message(message_handler);
 
   if(parse_json(file_name, message_handler, json))
   {
-    messaget message(message_handler);
     message.error() << "taint file is not a valid json file"
                     << messaget::eom;
     return true;
@@ -43,7 +43,6 @@ bool taint_parser(
 
   if(!json.is_array())
   {
-    messaget message(message_handler);
     message.error() << "expecting an array in the taint file, but got "
                     << json << messaget::eom;
     return true;
@@ -56,7 +55,6 @@ bool taint_parser(
   {
     if(!it->is_object())
     {
-      messaget message(message_handler);
       message.error() << "expecting an array of objects in the taint file, but got "
                       << *it << messaget::eom;
       return true;
@@ -68,8 +66,9 @@ bool taint_parser(
     const std::string function=(*it)["function"].value;
     const std::string where=(*it)["where"].value;
     const std::string taint=(*it)["taint"].value;
-    const std::string message=(*it)["message"].value;
+    const std::string taint_message=(*it)["message"].value;
     const std::string id=(*it)["id"].value;
+    const auto& immediate=(*it)["immediate"];
     
     if(kind=="source")
       rule.kind=taint_parse_treet::rulet::SOURCE;
@@ -79,7 +78,6 @@ bool taint_parser(
       rule.kind=taint_parse_treet::rulet::SANITIZER;
     else
     {
-      messaget message(message_handler);
       message.error() << "taint rule must have \"kind\" which is "
                          "\"source\" or \"sink\" or \"sanitizer\""
                       << messaget::eom;
@@ -88,7 +86,6 @@ bool taint_parser(
     
     if(function.empty())
     {
-      messaget message(message_handler);
       message.error() << "taint rule must have \"function\""
                       << messaget::eom;
       return true;
@@ -112,15 +109,24 @@ bool taint_parser(
     }
     else
     {
-      messaget message(message_handler);
       message.error() << "taint rule must have \"where\""
                       << " which is \"return_value\" or \"this\" or \"parameter1\"..."
                       << messaget::eom;
       return true;
     }
+
+    if(immediate.is_null() || immediate.is_false())
+      rule.immediate=false;
+    else if(immediate.is_true())
+      rule.immediate=true;
+    else
+    {
+      message.error() << "\"immediate\" must be a boolean" << messaget::eom;
+      return true;
+    }
     
     rule.taint=taint;
-    rule.message=message;
+    rule.message=taint_message;
     rule.id=id;
     
     dest.rules.push_back(rule);
