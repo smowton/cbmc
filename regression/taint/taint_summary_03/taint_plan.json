@@ -1,0 +1,76 @@
+{
+  "module" : "taint_planner",
+  "description" : "A plan for taint analysis of program 'Sum01.class'",
+  "required" : [ "taint_plan", "summary_plan" ],
+  "analysis_plan" : [
+    {
+      "function" : "java::Sum01.foo:(IILLocal;)I"
+    }
+  ],
+  "summary_plan" : [
+    {
+      "function" : "java::Sum01.bar:(I)I",
+      "aliases" : [],
+      "access_paths" : [
+        "java::Sum01.bar:(I)I::arg1i",
+        "java::Sum01.G",
+        "this->L"
+      ]
+    },
+    {
+      "function" : "java::Local.baz:(I)I",
+      "aliases" : [],
+      "access_paths" : [
+        "java::Local.baz:(I)I::arg1i",
+        "this->LL"
+      ]
+    }
+  ],
+  "summaries_of_sources" : [
+    {
+      "function" : "java::Source.receive1:()I",
+      "aliases" : [],
+      "input" : [
+      ],
+      "summary" : [
+        {
+          "access_path" : "java::Source.receive1:()I#return_value",
+          "symbols" : [ "taint_source_1" ]
+        }
+      ]
+    },
+    {
+      "function" : "java::Source.receive2:()I",
+      "aliases" : [],
+      "input" : [
+      ],
+      "summary" : [
+        {
+          "access_path" : "java::Source.receive2:()I#return_value",
+          "symbols" : [ "taint_source_2" ]
+        }
+      ]
+    }
+  ],
+  "sinks" : [
+    {
+      "function" : "java::Sink.send1:(I)V",
+      "failures" : [
+        {
+          "access_path" : "java::Sink.send1:(I)V::arg1i",
+          "symbols" : [ "taint_source_1" ]
+        }
+      ]
+    },
+    {
+      "function" : "java::Sink.send2:(I)V",
+      "failures" : [
+        {
+          "access_path" : "java::Sink.send2:(I)V::arg1i",
+          "symbols" : [ "taint_source_2" ]
+        }
+      ]
+    }
+  ]
+}
+

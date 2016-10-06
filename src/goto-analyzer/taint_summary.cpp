@@ -41,63 +41,6 @@ Function:
 
 
 \*******************************************************************/
-static taint_svaluet  make_symbol()
-{
-  static uint64_t  counter = 0UL;
-  std::string const  symbol_name =
-      msgstream() << "T" << ++counter;
-  return {{symbol_name},false,false};
-}
-
-
-/*******************************************************************\
-
-Function:
-
-  Inputs: See purpose
-
- Outputs: See purpose
-
- Purpose:
-
-
-\*******************************************************************/
-static taint_svaluet  make_bottom()
-{
-  return {taint_svaluet::expressiont{},true,false};
-}
-
-
-/*******************************************************************\
-
-Function:
-
-  Inputs: See purpose
-
- Outputs: See purpose
-
- Purpose:
-
-
-\*******************************************************************/
-static taint_svaluet  make_top()
-{
-  return {taint_svaluet::expressiont{},false,true};
-}
-
-
-/*******************************************************************\
-
-Function:
-
-  Inputs: See purpose
-
- Outputs: See purpose
-
- Purpose:
-
-
-\*******************************************************************/
 static void  collect_lvalues(
     exprt const&  expr,
     namespacet const&  ns,
@@ -182,8 +125,8 @@ static void  initialise_domain(
         !is_return_value_auxiliary(lvalue,ns) &&
         !is_this(lvalue,ns))
     {
-      entry_map.insert({lvalue, make_symbol() });
-      others_map.insert({lvalue, make_bottom() });
+      entry_map.insert({lvalue, taint_make_symbol() });
+      others_map.insert({lvalue, taint_make_bottom() });
     }
 
   domain.insert({function.body.instructions.cbegin(),entry_map});
@@ -337,7 +280,7 @@ static void  build_symbols_substitution(
 
       assert(param_idx < fn_call.arguments().size());
 
-      taint_svaluet  argument_svalue = make_bottom();
+      taint_svaluet  argument_svalue = taint_make_bottom();
       {
         taint_lvalues_sett  argument_lvalues;
         collect_lvalues(
@@ -456,7 +399,7 @@ static void  build_substituted_summary(
         substituted_summary.insert({translated_lvalue,lvalue_svalue.second});
       else
       {
-        taint_svaluet  substituted_svalue = make_bottom();
+        taint_svaluet  substituted_svalue = taint_make_bottom();
         for (auto const&  symbol : lvalue_svalue.second.expression())
         {
           auto const  it = symbols_substitution.find(symbol);
@@ -537,7 +480,8 @@ static void  build_summary_from_computed_domain(
     *log << "</ul>\n";
 }
 
-void  assign(
+
+static void  assign(
     taint_map_from_lvalues_to_svaluest&  map,
     taint_lvaluet const&  lvalue,
     taint_svaluet const&  svalue
@@ -548,6 +492,27 @@ void  assign(
     map.insert({lvalue,svalue});
   else
     it->second = svalue;
+}
+
+
+taint_svaluet  taint_make_symbol()
+{
+  static uint64_t  counter = 0UL;
+  std::string const  symbol_name =
+      msgstream() << "T" << ++counter;
+  return {{symbol_name},false,false};
+}
+
+
+taint_svaluet  taint_make_bottom()
+{
+  return {taint_svaluet::expressiont{},true,false};
+}
+
+
+taint_svaluet  taint_make_top()
+{
+  return {taint_svaluet::expressiont{},false,true};
 }
 
 
@@ -692,7 +657,7 @@ taint_map_from_lvalues_to_svaluest  transform(
         *log << " }. Right-hand-side l-values are { ";
       }
 
-      taint_svaluet  rvalue = make_bottom();
+      taint_svaluet  rvalue = taint_make_bottom();
       {
         taint_lvalues_sett  rhs;
         collect_lvalues(asgn.rhs(),ns,rhs);
@@ -886,7 +851,7 @@ std::string  taint_summaryt::description() const noexcept
 
 
 
-void  summarise_all_functions(
+void  taint_summarise_all_functions(
     goto_modelt const&  instrumented_program,
     database_of_summariest&  summaries_to_compute,
     call_grapht const&  call_graph,
@@ -912,7 +877,7 @@ void  summarise_all_functions(
     if (fn_it != functions_map.cend() && fn_it->second.body_available())
       summaries_to_compute.insert({
           as_string(fn_name),
-          summarise_function(
+          taint_summarise_function(
               fn_name,
               instrumented_program,
               summaries_to_compute,
@@ -922,7 +887,7 @@ void  summarise_all_functions(
   }
 }
 
-taint_summary_ptrt  summarise_function(
+taint_summary_ptrt  taint_summarise_function(
     irep_idt const&  function_id,
     goto_modelt const&  instrumented_program,
     database_of_summariest const&  database,
@@ -930,7 +895,7 @@ taint_summary_ptrt  summarise_function(
     )
 {
   if (log != nullptr)
-    *log << "<h2>Called sumfn::taint::summarise_function( "
+    *log << "<h2>Called sumfn::taint::taint_summarise_function( "
          << to_html_text(as_string(function_id)) << " )</h2>\n"
          ;
 
