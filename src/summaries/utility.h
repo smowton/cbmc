@@ -166,6 +166,29 @@ Function:
 bool  is_this(access_path_to_memoryt const&  lvalue, namespacet const&  ns);
 
 
+typedef std::unordered_set<access_path_to_memoryt,irep_hash,irep_full_eq>
+        set_of_access_pathst;
+
+
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
+void  collect_access_paths(
+    exprt const&  expr,
+    namespacet const&  ns,
+    set_of_access_pathst&  result
+    );
+
+
 /*******************************************************************\
 
 Function:

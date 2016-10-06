@@ -4,8 +4,8 @@ class Source {
 }
 
 class Sink {
-  public static void send1(int value) {}
-  public static void send2(int value) {}
+  public static void send1(int value) { value = 0; }
+  public static void send2(int value) { value = 0; }
 }
 
 class Local {

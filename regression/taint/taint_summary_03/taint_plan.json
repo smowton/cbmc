@@ -1,7 +1,13 @@
 {
   "module" : "taint_planner",
   "description" : "A plan for taint analysis of program 'Sum01.class'",
-  "required" : [ "taint_plan", "summary_plan" ],
+  "required" : [
+    "taint_plan",
+    "summary_plan",
+    "taint_symbols",
+    "summaries_of_sources",
+    "sinks"
+  ],
   "analysis_plan" : [
     {
       "function" : "java::Sum01.foo:(IILLocal;)I"
@@ -26,6 +32,7 @@
       ]
     }
   ],
+  "taint_symbols" : [ "taint_source_1", "taint_source_2" ],
   "summaries_of_sources" : [
     {
       "function" : "java::Source.receive1:()I",
@@ -57,7 +64,7 @@
       "function" : "java::Sink.send1:(I)V",
       "failures" : [
         {
-          "access_path" : "java::Sink.send1:(I)V::arg1i",
+          "access_path" : "java::Sink.send1:(I)V::arg0i",
           "symbols" : [ "taint_source_1" ]
         }
       ]
@@ -66,7 +73,7 @@
       "function" : "java::Sink.send2:(I)V",
       "failures" : [
         {
-          "access_path" : "java::Sink.send2:(I)V::arg1i",
+          "access_path" : "java::Sink.send2:(I)V::arg0i",
           "symbols" : [ "taint_source_2" ]
         }
       ]

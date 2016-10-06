@@ -143,6 +143,20 @@ bool  is_this(access_path_to_memoryt const&  lvalue, namespacet const&  ns)
 }
 
 
+void  collect_access_paths(
+    exprt const&  expr,
+    namespacet const&  ns,
+    set_of_access_pathst&  result
+    )
+{
+  if (expr.id() == ID_symbol || expr.id() == ID_member)
+    result.insert(normalise(expr,ns));
+  else
+    for (exprt const&  op : expr.operands())
+      collect_access_paths(op,ns,result);
+}
+
+
 access_path_to_memoryt  normalise(
     access_path_to_memoryt const&  access_path,
     namespacet const&  ns

@@ -52,6 +52,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-analyzer/taint_summary_dump.h>
 #include <goto-analyzer/taint_summary_json.h>
 #include <goto-analyzer/taint_planner.h>
+#include <goto-analyzer/taint_planner_dump.h>
 
 #include "goto_analyzer_parse_options.h"
 #include "taint_analysis.h"
@@ -296,14 +297,21 @@ int  do_taint_analysis(
         break;
     }
 
+    taint_dump_taint_planner_in_html(
+          planner,
+          program,
+          namespacet(program.symbol_table),
+          "./dump_taint_planner"
+          );
+
     dump_in_html(
-      *planner.get_top_precision_level()->get_summary_database(),
-      &taint_dump_in_html,
-      program,
-      call_graph,
-      "./dump_top_taint_summaries",
-      &log
-      );
+          *planner.get_top_precision_level()->get_summary_database(),
+          &taint_dump_in_html,
+          program,
+          call_graph,
+          "./dump_top_taint_summaries",
+          &log
+          );
 
   }
   catch (const std::exception& e)
