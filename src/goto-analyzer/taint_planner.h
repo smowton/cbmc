@@ -152,16 +152,25 @@ public:
 
   typedef std::unordered_map<irep_idt,taint_summary_ptrt,dstring_hash>
           sources_mapt;
-  typedef std::unordered_map<irep_idt,taint_svaluet,dstring_hash>
+  typedef std::unordered_map<irep_idt,
+                             taint_map_from_lvalues_to_svaluest,
+                             dstring_hash>
           sinks_mapt;
+  typedef std::vector<taint_svaluet::symbolt>
+          taint_symbolst;
 
-  taint_plannert() {};
+  taint_plannert(goto_modelt const&  program,
+                 jsont const&  plan,
+                 message_handlert& mh);
 
   taint_precision_level_data_ptrt  get_top_precision_level() const
   { return computed_levels.back(); }
 
   const precision_levelst&  get_precision_levels() const noexcept
   { return computed_levels; }
+
+  const taint_symbolst& get_taint_symbols() const noexcept
+  { return taint_symbols; }
 
   const sources_mapt& get_sources() const noexcept { return sources; }
   const sinks_mapt& get_sinks() const noexcept { return sinks; }
@@ -172,8 +181,8 @@ public:
       std::ostream* const  log = nullptr
       );
 
-  void read_plan_from_file(const std::string&);
-
+  static std::string get_unique_entry_point(jsont const& plan);
+  
 private:
 
   std::string  compute_summaries(
@@ -198,6 +207,7 @@ private:
       );
 
   precision_levelst  computed_levels;
+  taint_symbolst taint_symbols;
   sources_mapt sources;
   sinks_mapt sinks;
 };

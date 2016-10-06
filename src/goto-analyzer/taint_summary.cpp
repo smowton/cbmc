@@ -41,32 +41,6 @@ Function:
 
 
 \*******************************************************************/
-static void  collect_lvalues(
-    exprt const&  expr,
-    namespacet const&  ns,
-    taint_lvalues_sett&  result
-    )
-{
-  if (expr.id() == ID_symbol || expr.id() == ID_member)
-    result.insert(normalise(expr,ns));
-  else
-    for (exprt const&  op : expr.operands())
-      collect_lvalues(op,ns,result);
-}
-
-
-/*******************************************************************\
-
-Function:
-
-  Inputs: See purpose
-
- Outputs: See purpose
-
- Purpose:
-
-
-\*******************************************************************/
 static void  initialise_domain(
     irep_idt const&  function_id,
     goto_functionst::goto_functiont const&  function,
@@ -86,7 +60,7 @@ static void  initialise_domain(
       {
         code_assignt const&  asgn = to_code_assign(it->code);
         environment.insert(normalise(asgn.lhs(),ns));
-        collect_lvalues(asgn.rhs(),ns,environment);
+        collect_access_paths(asgn.rhs(),ns,environment);
       }
       else if (it->type == FUNCTION_CALL)
       {
@@ -283,7 +257,7 @@ static void  build_symbols_substitution(
       taint_svaluet  argument_svalue = taint_make_bottom();
       {
         taint_lvalues_sett  argument_lvalues;
-        collect_lvalues(
+        collect_access_paths(
               fn_call.arguments().at(param_idx),
               ns,
               argument_lvalues
@@ -660,7 +634,7 @@ taint_map_from_lvalues_to_svaluest  transform(
       taint_svaluet  rvalue = taint_make_bottom();
       {
         taint_lvalues_sett  rhs;
-        collect_lvalues(asgn.rhs(),ns,rhs);
+        collect_access_paths(asgn.rhs(),ns,rhs);
         for (auto const&  lvalue : rhs)
         {
           auto const  it = a.find(lvalue);
@@ -748,7 +722,7 @@ taint_map_from_lvalues_to_svaluest  transform(
         *log << "<p>\nRecognised DEAD instruction. Removing these l-values { ";
 
       taint_lvalues_sett  lvalues;
-      collect_lvalues(dead.symbol(),ns,lvalues);
+      collect_access_paths(dead.symbol(),ns,lvalues);
       for (auto const&  lvalue : lvalues)
       {
         erase_dead_lvalue(lvalue,ns,result);

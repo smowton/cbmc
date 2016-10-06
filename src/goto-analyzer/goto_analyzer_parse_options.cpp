@@ -44,6 +44,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/unicode.h>
 #include <util/file_util.h>
 #include <util/msgstream.h>
+#include <util/prefix.h>
 
 #include <cbmc/version.h>
 
@@ -52,6 +53,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-analyzer/taint_summary_dump.h>
 #include <goto-analyzer/taint_summary_json.h>
 #include <goto-analyzer/taint_planner.h>
+#include <goto-analyzer/taint_planner_dump.h>
 
 #include "goto_analyzer_parse_options.h"
 #include "taint_analysis.h"
@@ -246,11 +248,13 @@ It performs the whole taint analysis. The planner has already read the initial p
 \*******************************************************************/
 int  do_taint_analysis(
   goto_modelt&  program,
-  taint_plannert& planner,
+  jsont& plan,
   message_handlert&  message_handler)
 {
   try
   {
+    taint_plannert planner(program,plan,message_handler);
+    
     std::stringstream  log;
     const call_grapht call_graph(program.goto_functions);
 
@@ -273,14 +277,21 @@ int  do_taint_analysis(
         break;
     }
 
+    taint_dump_taint_planner_in_html(
+          planner,
+          program,
+          namespacet(program.symbol_table),
+          "./dump_taint_planner"
+          );
+
     dump_in_html(
-      *planner.get_top_precision_level()->get_summary_database(),
-      &taint_dump_in_html,
-      program,
-      call_graph,
-      "./dump_top_taint_summaries",
-      &log
-      );
+          *planner.get_top_precision_level()->get_summary_database(),
+          &taint_dump_in_html,
+          program,
+          call_graph,
+          "./dump_top_taint_summaries",
+          &log
+          );
 
   }
   catch (const std::exception& e)
@@ -336,15 +347,14 @@ int goto_analyzer_parse_optionst::doit()
 
   // Hack for entry point set in a taint-analysis plan (must set 'main' before
   // main frontend parsers are run)
-  taint_plannert taint_analysis_planner;
-  taint_analysis_planner.set_message_handler(get_message_handler());
+  jsont taint_analysis_plan;
   if(cmdline.isset("taint-analysis"))
   {
-    taint_analysis_planner.read_plan_from_file(cmdline.get_value("taint-analysis"));
-    const auto& functions_to_analyse=
-      taint_analysis_planner.get_top_precision_level()->get_plan_for_analysis();
-    assert(functions_to_analyse->get_functions_to_analyse().size()==1);
-    std::string entry_point=id2string(functions_to_analyse->get_functions_to_analyse()[0]);
+    parse_json(cmdline.get_value("taint-analysis"), get_message_handler(), taint_analysis_plan);
+    auto entry_point=taint_plannert::get_unique_entry_point(taint_analysis_plan);
+    const std::string java_prefix="java::";
+    if(has_prefix(entry_point,java_prefix))
+      entry_point=entry_point.substr(java_prefix.size());
     cmdline.set("function",entry_point);
     config.main=entry_point;
   }
@@ -356,7 +366,7 @@ int goto_analyzer_parse_optionst::doit()
     return 6;
 
   if (cmdline.isset("taint-analysis"))
-    return do_taint_analysis(goto_model,taint_analysis_planner,get_message_handler());
+    return do_taint_analysis(goto_model,taint_analysis_plan,get_message_handler());
   else if(cmdline.isset("taint"))
   {
     std::string taint_file=cmdline.get_value("taint");
