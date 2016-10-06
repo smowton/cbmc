@@ -60,8 +60,8 @@ class  taint_svaluet
 {
 public:
 
-  typedef  std::string  symbolt;
-  typedef std::set<symbolt>  expressiont;
+  typedef std::string  taint_symbolt;
+  typedef std::set<taint_symbolt>  expressiont;
 
   taint_svaluet(
       expressiont const&  expression,
