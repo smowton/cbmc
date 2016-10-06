@@ -750,6 +750,7 @@ void java_bytecode_parsert::rbytecode(
     instructiont &instruction=instructions.back();
     instruction.statement=bytecodes[bytecode].mnemonic;
     instruction.address=start_of_instruction;
+    instruction.source_location.set_java_bytecode_offset(std::to_string(start_of_instruction));
     
     switch(bytecodes[bytecode].format)
     {

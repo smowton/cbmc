@@ -734,3 +734,4 @@ low
 high
 bswap
 C_cformat
+java_bytecode_offset
