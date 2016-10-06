@@ -26,6 +26,7 @@ the underlying analyses).
 #include <analyses/call_graph.h>
 #include <util/json.h>
 #include <util/irep.h>
+#include <util/message.h>
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
@@ -143,33 +144,35 @@ typedef std::shared_ptr<taint_precision_level_datat>
  Purpose:
 
 \*******************************************************************/
-class  taint_plannert
+class  taint_plannert : public messaget
 {
 public:
   typedef std::vector<taint_precision_level_data_ptrt>
-          precosion_levelst;
+          precision_levelst;
 
   typedef std::unordered_map<irep_idt,taint_summary_ptrt,dstring_hash>
           sources_mapt;
   typedef std::unordered_map<irep_idt,taint_svaluet,dstring_hash>
           sinks_mapt;
 
-  taint_plannert(goto_modelt const&  program, jsont const&  plan);
+  taint_plannert() {};
 
   taint_precision_level_data_ptrt  get_top_precision_level() const
   { return computed_levels.back(); }
 
-  const precosion_levelst&  get_precision_levels() const noexcept
+  const precision_levelst&  get_precision_levels() const noexcept
   { return computed_levels; }
 
   const sources_mapt& get_sources() const noexcept { return sources; }
   const sinks_mapt& get_sinks() const noexcept { return sinks; }
 
   std::string  solve_top_precision_level(
-      goto_modelt const&  program,
+      goto_modelt&  program,
       call_grapht const&  call_graph,
       std::ostream* const  log = nullptr
       );
+
+  void read_plan_from_file(const std::string&);
 
 private:
 
@@ -184,8 +187,7 @@ private:
   std::string  run_taint_analysis(
       const taint_plan_for_analysis_ptrt plan_for_analysis,
       const database_of_summaries_ptrt summary_database,
-      goto_modelt const&  program,
-      call_grapht const&  call_graph,
+      goto_modelt&  program,
       std::ostream* const  log
       );
 
@@ -195,7 +197,7 @@ private:
       std::ostream* const  log
       );
 
-  precosion_levelst  computed_levels;
+  precision_levelst  computed_levels;
   sources_mapt sources;
   sinks_mapt sinks;
 };

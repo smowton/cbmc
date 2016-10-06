@@ -52,6 +52,13 @@ public:
     const std::string &json_file_name,
     const std::string &summaries_directory);
 
+  bool operator()(
+    const symbol_tablet &,
+    goto_functionst &,
+    bool show_full,
+    const std::string &json_file_name,
+    const database_of_summaries_ptrt&);
+  
 protected:
   taint_parse_treet taint;
   class_hierarchyt class_hierarchy;
@@ -419,6 +426,7 @@ Function: taint_analysist::operator()
 
 \*******************************************************************/
 
+// Entry point with serialised inputs:
 bool taint_analysist::operator()(
   const std::string &taint_file_name,
   const symbol_tablet &symbol_table,
@@ -427,20 +435,36 @@ bool taint_analysist::operator()(
   const std::string &json_file_name,
   const std::string &summaries_directory)
 {
+  status() << "Reading taint file `" << taint_file_name
+           << "'" << eom;
+
+  if(taint_parser(taint_file_name, taint, get_message_handler()))
+  {
+    error() << "Failed to read taint definition file" << eom;
+    return true;
+  }
+
+  database_of_summaries_ptrt summarydb =
+    std::make_shared<database_of_summariest>();
+  if(summaries_directory!="")
+    read_summaries(summaries_directory,*summarydb);
+
+  return (*this)(symbol_table,goto_functions,show_full,json_file_name,summarydb);
+}
+
+// Entry point with inputs already prepared by the taint planner super-pass:
+bool taint_analysist::operator()(
+  const symbol_tablet &symbol_table,
+  goto_functionst &goto_functions,
+  bool show_full,
+  const std::string &json_file_name,
+  const database_of_summaries_ptrt& summarydb)
+{
   try
   {
     json_arrayt json_result;
     bool use_json=!json_file_name.empty();
   
-    status() << "Reading taint file `" << taint_file_name
-             << "'" << eom;
-
-    if(taint_parser(taint_file_name, taint, get_message_handler()))
-    {
-      error() << "Failed to read taint definition file" << eom;
-      return true;
-    }
-
     status() << "Got " << taint.rules.size()
              << " taint definitions" << eom;
 
@@ -500,11 +524,6 @@ bool taint_analysist::operator()(
 
     status() << "Data-flow analysis" << eom;
 
-    database_of_summaries_ptrt summarydb =
-        std::make_shared<database_of_summariest>();
-    if(summaries_directory!="")
-      read_summaries(summaries_directory,*summarydb);
-    
     bitvector_analysis_with_summariest custom_bitvector_analysis(summarydb);
     custom_bitvector_analysis.set_message_handler(get_message_handler());
     custom_bitvector_analysis(goto_functions, ns);
@@ -629,6 +648,31 @@ bool taint_analysis(
   return taint_analysis(
     taint_file_name, goto_model.symbol_table, goto_model.goto_functions,
     show_full, json_file_name, summaries_directory);
+}
+
+/*******************************************************************\
+
+Function: taint_analysis
+
+  Inputs:
+
+ Outputs:
+
+ Purpose: Entry point from taint_planner.cpp
+
+\*******************************************************************/
+
+bool taint_analysis(
+  goto_modelt &goto_model,
+  message_handlert &message_handler,
+  bool show_full,
+  const std::string &json_file_name,
+  const database_of_summaries_ptrt& summarydb)
+{
+  taint_analysist taint_analysis;
+  taint_analysis.set_message_handler(message_handler);
+  return taint_analysis(goto_model.symbol_table, goto_model.goto_functions,
+                        show_full, json_file_name, summarydb);
 }
 
 std::string  taint_analysis_instrument_knowledge(

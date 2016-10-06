@@ -19,7 +19,10 @@ the underlying analyses).
 
 #include <goto-analyzer/taint_planner.h>
 #include <goto-analyzer/taint_summary.h>
+#include <goto-analyzer/taint_analysis.h>
 #include <util/msgstream.h>
+#include <util/file_util.h>
+#include <json/json_parser.h>
 #include <cassert>
 #include <stdexcept>
 
@@ -69,10 +72,130 @@ taint_precision_level_datat::taint_precision_level_datat(
   assert(summary_database.operator bool());
 }
 
-
-taint_plannert::taint_plannert(goto_modelt const&  program, jsont const&  plan)
-  : computed_levels()
+std::string  taint_plannert::solve_top_precision_level(
+    goto_modelt&  program,
+    call_grapht const&  call_graph,
+    std::ostream* const  log
+    )
 {
+  const taint_precision_level_data_ptrt  data = get_top_precision_level();
+  if (data->get_is_computed())
+    return "";  // No error. There is nothing to do (all was computed).
+
+  std::string  error_message = compute_summaries(
+        data->get_plan_for_summaries(),
+        data->get_summary_database(),
+        program,
+        call_graph,
+        log
+        );
+  if (!error_message.empty())
+    return error_message;
+
+  error_message = run_taint_analysis(
+        data->get_plan_for_analysis(),
+        data->get_summary_database(),
+        program,
+        log);
+  if (!error_message.empty())
+    return error_message;
+
+  error_message = build_next_precision_level(
+        program,
+        call_graph,
+        log
+        );
+  if (!error_message.empty())
+    return error_message;
+
+  data->set_is_computed();
+  return ""; // No error.
+}
+
+
+std::string  taint_plannert::compute_summaries(
+    const taint_plan_for_summaries_ptrt plan_for_summaries,
+    const database_of_summaries_ptrt summary_database,
+    goto_modelt const&  program,
+    call_grapht const&  call_graph,
+    std::ostream* const  log
+    )
+{
+  std::vector<irep_idt>  inverted_topological_order;
+  {
+    std::unordered_set<irep_idt,dstring_hash>  processed;
+    for (const auto&  elem : plan_for_summaries->get_functions_to_analyse())
+      inverted_partial_topological_order(
+            call_graph,
+            elem,
+            processed,
+            inverted_topological_order
+            );
+  }
+  for (const auto&  fn_name : inverted_topological_order)
+  {
+    goto_functionst::function_mapt  const  functions_map =
+        program.goto_functions.function_map;
+    auto const  fn_it = functions_map.find(fn_name);
+    if (fn_it != functions_map.cend() && fn_it->second.body_available())
+      summary_database->insert({
+          as_string(fn_name),
+          taint_summarise_function(
+              // TODO: pass to this function a set of access paths
+              //       representing potential sources of tainted data.
+              //       The function should then consider all other objects
+              //       In the scope as non-tainted.
+              fn_name,
+              program,
+              *summary_database,
+              log
+              ),
+          });
+  }
+  return ""; // No error.
+}
+
+
+std::string  taint_plannert::run_taint_analysis(
+    const taint_plan_for_analysis_ptrt plan_for_analysis,
+    const database_of_summaries_ptrt summary_database,
+    goto_modelt&  program,
+    std::ostream* const  log
+    )
+{
+  // Plan ignored here, as it is currently used to set the entry point
+  // in goto_analyzer_parse_options.cpp.
+  taint_analysis(program, get_message_handler(), true, "", summary_database);
+  return ""; // No error.
+}
+
+
+std::string  taint_plannert::build_next_precision_level(
+    goto_modelt const&  program,
+    call_grapht const&  call_graph,
+    std::ostream* const  log
+    )
+{
+  // TODO: here goes a code preparing new plans for both analyses
+  //       (taint summary and taint analysis).
+  return ""; // No error.
+}
+
+void taint_plannert::read_plan_from_file(const std::string& plan_file)
+{
+  if (!fileutl_file_exists(plan_file) || fileutl_is_directory(plan_file))
+  {
+    error() << "Cannot find the plan JSON file: " << plan_file;
+    throw;
+  }
+
+  jsont  plan;
+  if (parse_json(plan_file, get_message_handler(), plan))
+  {
+    error() << "Parsing of the JSON file '" << plan_file << "' has failed.";
+    throw;
+  }
+
   taint_plan_for_analysis_ptrt  plan_for_analysis;
   {
     const jsont& analysis_plan = plan["analysis_plan"];
@@ -256,115 +379,5 @@ taint_plannert::taint_plannert(goto_modelt const&  program, jsont const&  plan)
             summary_database
             )
         );
-}
-
-std::string  taint_plannert::solve_top_precision_level(
-    goto_modelt const&  program,
-    call_grapht const&  call_graph,
-    std::ostream* const  log
-    )
-{
-  const taint_precision_level_data_ptrt  data = get_top_precision_level();
-  if (data->get_is_computed())
-    return "";  // No error. There is nothing to do (all was computed).
-
-  std::string  error_message = compute_summaries(
-        data->get_plan_for_summaries(),
-        data->get_summary_database(),
-        program,
-        call_graph,
-        log
-        );
-  if (!error_message.empty())
-    return error_message;
-
-  error_message = run_taint_analysis(
-        data->get_plan_for_analysis(),
-        data->get_summary_database(),
-        program,
-        call_graph,
-        log
-        );
-  if (!error_message.empty())
-    return error_message;
-
-  error_message = build_next_precision_level(
-        program,
-        call_graph,
-        log
-        );
-  if (!error_message.empty())
-    return error_message;
-
-  data->set_is_computed();
-  return ""; // No error.
-}
-
-
-std::string  taint_plannert::compute_summaries(
-    const taint_plan_for_summaries_ptrt plan_for_summaries,
-    const database_of_summaries_ptrt summary_database,
-    goto_modelt const&  program,
-    call_grapht const&  call_graph,
-    std::ostream* const  log
-    )
-{
-  std::vector<irep_idt>  inverted_topological_order;
-  {
-    std::unordered_set<irep_idt,dstring_hash>  processed;
-    for (const auto&  elem : plan_for_summaries->get_functions_to_analyse())
-      inverted_partial_topological_order(
-            call_graph,
-            elem,
-            processed,
-            inverted_topological_order
-            );
-  }
-  for (const auto&  fn_name : inverted_topological_order)
-  {
-    goto_functionst::function_mapt  const  functions_map =
-        program.goto_functions.function_map;
-    auto const  fn_it = functions_map.find(fn_name);
-    if (fn_it != functions_map.cend() && fn_it->second.body_available())
-      summary_database->insert({
-          as_string(fn_name),
-          taint_summarise_function(
-              // TODO: pass to this function a set of access paths
-              //       representing potential sources of tainted data.
-              //       The function should then consider all other objects
-              //       In the scope as non-tainted.
-              fn_name,
-              program,
-              *summary_database,
-              log
-              ),
-          });
-  }
-  return ""; // No error.
-}
-
-
-std::string  taint_plannert::run_taint_analysis(
-    const taint_plan_for_analysis_ptrt plan_for_analysis,
-    const database_of_summaries_ptrt summary_database,
-    goto_modelt const&  program,
-    call_grapht const&  call_graph,
-    std::ostream* const  log
-    )
-{
-  // TODO: here should be inserted code which initialises and executed
-  //       the taint analysis (implemented in files taint_analysis.h/cpp).
-  return ""; // No error.
-}
-
-
-std::string  taint_plannert::build_next_precision_level(
-    goto_modelt const&  program,
-    call_grapht const&  call_graph,
-    std::ostream* const  log
-    )
-{
-  // TODO: here goes a code preparing new plans for both analyses
-  //       (taint summary and taint analysis).
-  return ""; // No error.
+  
 }

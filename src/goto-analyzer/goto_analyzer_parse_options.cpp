@@ -241,49 +241,26 @@ Function: do_taint_analysis
 
  Purpose:
 
-It performs the whole taint analysis. Namely it reads a plan JSON
-file, creates the palnner, and runs it of the program.
+It performs the whole taint analysis. The planner has already read the initial plan.
 
 \*******************************************************************/
 int  do_taint_analysis(
-    const goto_modelt&  program,
-    const cmdlinet&  cmdline,
-    message_handlert&  message_handler
-    )
+  goto_modelt&  program,
+  taint_plannert& planner,
+  message_handlert&  message_handler)
 {
   try
   {
-    const std::string plan_file=cmdline.get_value("taint-analysis");
-    if (!fileutl_file_exists(plan_file) || fileutl_is_directory(plan_file))
-    {
-      message_handler.print(message_clientt::M_ERROR,
-            msgstream() << "ERROR: Cannot find the plan JSON file : "
-                        << plan_file
-            );
-      return 0;
-    }
-
-    jsont  plan;
-    if (parse_json(plan_file, message_handler, plan))
-    {
-      message_handler.print(message_clientt::M_ERROR,
-            msgstream() << "ERROR: Parsing of the JSON file '"
-                        << plan_file << "' has failed."
-            );
-      return 0;
-    }
-
     std::stringstream  log;
     const call_grapht call_graph(program.goto_functions);
 
-    taint_plannert planner(program,plan);
     while (true)
     {
       auto const  old_num_precision_levels =
           planner.get_precision_levels().size();
 
       const std::string error_message =
-          planner.solve_top_precision_level(program,call_graph,&log);
+        planner.solve_top_precision_level(program,call_graph,&log);
       if (!error_message.empty())
       {
         message_handler.print(message_clientt::M_ERROR,
@@ -336,7 +313,7 @@ int goto_analyzer_parse_optionst::doit()
     std::cout << CBMC_VERSION << std::endl;
     return 0;
   }
-  
+
   //
   // command line options
   //
@@ -357,6 +334,21 @@ int goto_analyzer_parse_optionst::doit()
   
   goto_model.set_message_handler(get_message_handler());
 
+  // Hack for entry point set in a taint-analysis plan (must set 'main' before
+  // main frontend parsers are run)
+  taint_plannert taint_analysis_planner;
+  taint_analysis_planner.set_message_handler(get_message_handler());
+  if(cmdline.isset("taint-analysis"))
+  {
+    taint_analysis_planner.read_plan_from_file(cmdline.get_value("taint-analysis"));
+    const auto& functions_to_analyse=
+      taint_analysis_planner.get_top_precision_level()->get_plan_for_analysis();
+    assert(functions_to_analyse->get_functions_to_analyse().size()==1);
+    std::string entry_point=id2string(functions_to_analyse->get_functions_to_analyse()[0]);
+    cmdline.set("function",entry_point);
+    config.main=entry_point;
+  }
+
   if(goto_model(cmdline.args))
     return 6;
     
@@ -364,7 +356,7 @@ int goto_analyzer_parse_optionst::doit()
     return 6;
 
   if (cmdline.isset("taint-analysis"))
-    return do_taint_analysis(goto_model,cmdline,get_message_handler());
+    return do_taint_analysis(goto_model,taint_analysis_planner,get_message_handler());
   else if(cmdline.isset("taint"))
   {
     std::string taint_file=cmdline.get_value("taint");

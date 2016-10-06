@@ -22,7 +22,13 @@ bool taint_analysis(
   const std::string &json_file_name,
   const std::string &summary_directory);
 
-
+bool taint_analysis(
+  goto_modelt &goto_model,
+  message_handlert &message_handler,
+  bool show_full,
+  const std::string &json_file_name,
+  const database_of_summaries_ptrt& summarydb);
+  
 std::string  taint_analysis_instrument_knowledge(
   goto_modelt&  model,
   std::string const&  taint_file_name,
