@@ -67,6 +67,11 @@ public:
   {
     return get(ID_comment);
   }
+
+  inline const irep_idt &get_java_bytecode_offset() const
+  {
+    return get(ID_java_bytecode_offset);
+  }
   
   inline void set_file(const irep_idt &file)
   {
@@ -118,6 +123,11 @@ public:
     set(ID_comment, comment);
   }
   
+  inline void set_java_bytecode_offset(const irep_idt &offset)
+  {
+    set(ID_java_bytecode_offset, offset);
+  }
+
   inline void set_hide()
   {
     set(ID_hide, true);
