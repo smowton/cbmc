@@ -149,12 +149,11 @@ bool interpretert::extract_member_at(
   else if(source_type.id()==ID_array)
   {
     const auto& at=to_array_type(source_type);
-    if(at.size().id()!=ID_constant)
+    std::vector<mp_integer> array_size_vec;
+    evaluate(at.size(),array_size_vec);
+    if(array_size_vec.size()!=1)
       return false;
-    const auto& array_size_expr=to_constant_expr(at.size());
-    mp_integer array_size;
-    if(to_integer(array_size_expr,array_size))
-      return false;
+    mp_integer array_size=array_size_vec[0];
     mp_integer elem_size=pointer_offset_size(at.subtype(),ns);
     if(elem_size==-1)
       return false;
@@ -848,16 +847,40 @@ void interpretert::evaluate(
       evaluate(expr.op1(),idx);
       if(idx.size()==1)
       {
+        mp_integer read_from_index=idx[0];
         if(expr.op0().id()==ID_array)
         {
           const auto& ops=expr.op0().operands();
-          assert(idx[0].is_long());
-          if(idx[0] >= 0 && idx[0] < ops.size())
+          assert(read_from_index.is_long());
+          if(read_from_index >= 0 && read_from_index < ops.size())
           {
-            evaluate(ops[idx[0].to_long()],dest);
+            evaluate(ops[read_from_index.to_long()],dest);
             if(dest.size()!=0)
               return;
           }
+        }
+        else if(expr.op0().id()=="array-list")
+        {
+          // This sort of construct comes from boolbv_get, but doesn't seem
+          // to have an exprt yet. Its operands are a list of key-value pairs.
+          const auto& ops=expr.op0().operands();
+          assert(ops.size() % 2 == 0);
+          for(size_t listidx=0, listlim=ops.size(); listidx!=listlim; listidx+=2)
+          {
+            std::vector<mp_integer> elem_idx;
+            evaluate(ops[listidx],elem_idx);
+            assert(elem_idx.size()==1);
+            if(elem_idx[0]==read_from_index)
+            {
+              evaluate(ops[listidx+1],dest);
+              if(dest.size()!=0)
+                return;
+              else
+                break;
+            }
+          }
+          // If we fall out the end of this loop then the constant array-list
+          // didn't define an element matching the index we're looking for.
         }
       }
       evaluate_address(expr); // Evaluate again to print error message.
