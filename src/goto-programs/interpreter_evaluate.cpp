@@ -847,13 +847,14 @@ void interpretert::evaluate(
       evaluate(expr.op1(),idx);
       if(idx.size()==1)
       {
+        mp_integer read_from_index=idx[0];
         if(expr.op0().id()==ID_array)
         {
           const auto& ops=expr.op0().operands();
-          assert(idx[0].is_long());
-          if(idx[0] >= 0 && idx[0] < ops.size())
+          assert(read_from_index.is_long());
+          if(read_from_index >= 0 && read_from_index < ops.size())
           {
-            evaluate(ops[idx[0].to_long()],dest);
+            evaluate(ops[read_from_index.to_long()],dest);
             if(dest.size()!=0)
               return;
           }
@@ -869,7 +870,7 @@ void interpretert::evaluate(
             std::vector<mp_integer> elem_idx;
             evaluate(ops[listidx],elem_idx);
             assert(elem_idx.size()==1);
-            if(elem_idx[0]==idx[0])
+            if(elem_idx[0]==read_from_index)
             {
               evaluate(ops[listidx+1],dest);
               if(dest.size()!=0)
