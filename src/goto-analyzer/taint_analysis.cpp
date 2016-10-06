@@ -88,6 +88,11 @@ protected:
       );
 
   taint_summary_ptrt get_summary(const irep_idt& identifier);
+
+  typedef custom_bitvector_domaint::bit_vectort bit_vectort;  
+  typedef custom_bitvector_domaint::vectorst vectorst;
+  vectorst substitute_taint(const taint_svaluet& in,
+                            const std::map<std::string,vectorst>& subs);
 };
 
 /*******************************************************************\
@@ -286,12 +291,7 @@ taint_summary_ptrt bitvector_analysis_with_summariest::get_summary(
   return summarydb->find<taint_summaryt>(id2string(identifier));
 }
 
-namespace {
-
-typedef custom_bitvector_domaint::vectorst vectorst;
-typedef custom_bitvector_domaint::bit_vectort bit_vectort;
-
-vectorst substitute_taint(
+custom_bitvector_domaint::vectorst bitvector_analysis_with_summariest::substitute_taint(
   const taint_svaluet& in,
   const std::map<std::string,vectorst>& subs)
 {
@@ -310,12 +310,24 @@ vectorst substitute_taint(
   vectorst ret;
   for(const auto& taint : in.expression())
   {
-    const auto& vec=subs.at(taint);
+    auto findit=subs.find(taint);
+    vectorst vec;
+    if(findit==subs.end())
+    {
+      // This function introduces new taint -- it's a source.
+      string_constantt taint_expr(taint);
+      unsigned bit_nr=
+        get_bit_nr(taint_expr);
+      vec.may_bits|=(1ll<<bit_nr);
+    }
+    else
+    {
+      // This taint symbol matches some input taint.
+      vec=findit->second;
+    }
     ret=custom_bitvector_domaint::merge(vec,ret);
   }
   return ret;  
-}
-
 }
 
 static std::string taint_expression_to_string(const taint_svaluet& in)
