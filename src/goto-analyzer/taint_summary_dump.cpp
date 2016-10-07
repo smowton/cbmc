@@ -13,8 +13,10 @@ It provides a dump of computed taint summary in HTML format.
 \*******************************************************************/
 
 #include <goto-analyzer/taint_summary_dump.h>
+#include <util/msgstream.h>
 #include <memory>
-#include <set>
+#include <map>
+#include <sstream>
 #include <iostream>
 #include <iomanip>
 #include <cassert>
@@ -61,15 +63,20 @@ void  taint_dump_lvalues_to_svalues_in_html(
     ostr << "BOTTOM";
   else
   {
-    ostr << "    <table>\n";
+    std::map<std::string,taint_lvaluet> order;
     for (auto const&  elem : lvalues_to_svalues)
     {
+      std::stringstream sstr;
+      taint_dump_lvalue_in_html(elem.first,ns,sstr);
+      order.insert({sstr.str(),elem.first});
+    }
+    ostr << "    <table>\n";
+    for (auto const&  elem : order)
+    {
       ostr << "      <tr>\n";
+      ostr << "        <td>" << elem.first << "</td>\n";
       ostr << "        <td>";
-      taint_dump_lvalue_in_html(elem.first,ns,ostr);
-      ostr << "</td>\n";
-      ostr << "        <td>";
-      taint_dump_svalue_in_html(elem.second,ostr);
+      taint_dump_svalue_in_html(lvalues_to_svalues.at(elem.second),ostr);
       ostr << "</td>\n";
       ostr << "      </tr>\n";
     }
@@ -99,16 +106,23 @@ std::string  taint_dump_in_html(
           "    <th>Symbol</th>\n"
           "  </tr>\n"
        ;
-  for (auto const&  elem : summary->input())
   {
-    ostr << "  <tr>\n";
-    ostr << "    <td>";
-    taint_dump_lvalue_in_html(elem.first,ns,ostr);
-    ostr << "</td>\n";
-    ostr << "    <td>";
-    taint_dump_svalue_in_html(elem.second,ostr);
-    ostr <<"</td>\n";
-    ostr << "  </tr>\n";
+    std::map<std::string,taint_lvaluet> order;
+    for (auto const&  elem : summary->input())
+    {
+      std::stringstream sstr;
+      taint_dump_lvalue_in_html(elem.first,ns,sstr);
+      order.insert({sstr.str(),elem.first});
+    }
+    for (auto const&  elem : order)
+    {
+      ostr << "  <tr>\n";
+      ostr << "        <td>" << elem.first << "</td>\n";
+      ostr << "    <td>";
+      taint_dump_svalue_in_html(summary->input().at(elem.second),ostr);
+      ostr <<"</td>\n";
+      ostr << "  </tr>\n";
+    }
   }
   ostr << "</table>\n";
   ostr << "<p>The summary:</p>\n"
@@ -118,16 +132,23 @@ std::string  taint_dump_in_html(
           "    <th>Expression</th>\n"
           "  </tr>\n"
        ;
-  for (auto const&  elem : summary->output())
   {
-    ostr << "  <tr>\n";
-    ostr << "    <td>";
-    taint_dump_lvalue_in_html(elem.first,ns,ostr);
-    ostr << "</td>\n";
-    ostr << "    <td>";
-    taint_dump_svalue_in_html(elem.second,ostr);
-    ostr <<"</td>\n";
-    ostr << "  </tr>\n";
+    std::map<std::string,taint_lvaluet> order;
+    for (auto const&  elem : summary->output())
+    {
+      std::stringstream sstr;
+      taint_dump_lvalue_in_html(elem.first,ns,sstr);
+      order.insert({sstr.str(),elem.first});
+    }
+    for (auto const&  elem : order)
+    {
+      ostr << "  <tr>\n";
+      ostr << "        <td>" << elem.first << "</td>\n";
+      ostr << "    <td>";
+      taint_dump_svalue_in_html(summary->output().at(elem.second),ostr);
+      ostr <<"</td>\n";
+      ostr << "  </tr>\n";
+    }
   }
   ostr << "</table>\n";
 

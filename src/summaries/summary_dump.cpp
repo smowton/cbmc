@@ -20,6 +20,7 @@ It provides dump of computed summaries in human readable form.
 #include <sstream>
 #include <iostream>
 #include <iomanip>
+#include <set>
 #include <cstdlib>
 
 
@@ -239,11 +240,14 @@ static std::string  dump_goto_program_in_html(
           "    <th>Code</th>\n"
           "  </tr>\n"
           ;
+  std::set<std::string>  ordered;
   for(auto  it = functions.cbegin(); it != functions.cend(); it++)
     if(it->second.body_available())
+      ordered.insert(as_string(it->first));
+  for (auto const& fn_name : ordered)
       ostr << "  <tr>\n"
-              "    <td>" << to_html_text(as_string(it->first)) << "</td>\n"
-              "    <td><a href=\"./" << to_file_name(as_string(it->first))
+              "    <td>" << to_html_text(fn_name) << "</td>\n"
+              "    <td><a href=\"./" << to_file_name(fn_name)
                                      << "/index.html\">here</a></td>\n"
               "  </tr>\n"
               ;
@@ -387,12 +391,15 @@ std::string  dump_in_html(
           "    <th>Summary</th>\n"
           "  </tr>\n"
           ;
+  std::set<summarised_object_idt> ordered_objects;
   for (auto  it = computed_summaries.cbegin();
        it != computed_summaries.cend();
        ++it)
+    ordered_objects.insert(it->first);
+  for (summarised_object_idt const&  id: ordered_objects)
     ostr << "  <tr>\n"
-            "    <td>" << to_html_text(it->first) << "</td>\n"
-            "    <td><a href=\"./" << to_file_name(it->first)
+            "    <td>" << to_html_text(id) << "</td>\n"
+            "    <td><a href=\"./" << to_file_name(id)
          << "/index.html\">here</a></td>\n"
             "  </tr>\n"
             ;
