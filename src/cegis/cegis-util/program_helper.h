@@ -44,9 +44,23 @@ const goto_programt &get_entry_body(const goto_functionst &gf);
  *
  * @return
  */
-class goto_programt &get_body(
-    class goto_functionst &gf,
+goto_programt &get_body(
+    goto_functionst &gf,
     const std::string &func_name);
+
+/**
+ * @brief
+ *
+ * @details
+ *
+ * @param gf
+ * @param pos
+ *
+ * @return
+ */
+goto_programt &get_body(
+    goto_functionst &gf,
+    goto_programt::const_targett pos);
 
 /**
  * @brief
@@ -73,8 +87,19 @@ const goto_programt &get_body(
  * @return
  */
 bool is_nondet(
-    const goto_programt::targett &target,
-    const goto_programt::targett &end);
+    goto_programt::const_targett target,
+    goto_programt::const_targett end);
+
+/**
+ * @brief
+ *
+ * @details
+ *
+ * @param name
+ *
+ * @return
+ */
+bool is_return_value_name(const std::string &name);
 
 /**
  * @brief
