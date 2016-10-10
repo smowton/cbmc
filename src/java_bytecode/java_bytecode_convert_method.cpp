@@ -1167,6 +1167,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
 
       cast_if_necessary(condition);
       code_branch.cond()=condition;
+      code_branch.cond().add_source_location()=i_it->source_location;
       code_branch.then_case()=code_gotot(label(number));
       code_branch.then_case().add_source_location()=i_it->source_location;
       code_branch.add_source_location()=i_it->source_location;
@@ -1190,9 +1191,12 @@ codet java_bytecode_convert_methodt::convert_instructions(
       code_ifthenelset code_branch;
       code_branch.cond()=binary_relation_exprt(op[0], id, gen_zero(op[0].type()));
       code_branch.cond().add_source_location()=i_it->source_location;
+      code_branch.cond().add_source_location().set_function(method_id);
       code_branch.then_case()=code_gotot(label(number));
       code_branch.then_case().add_source_location()=i_it->source_location;
+      code_branch.then_case().add_source_location().set_function(method_id);
       code_branch.add_source_location()=i_it->source_location;
+      code_branch.add_source_location().set_function(method_id);
 
       c=code_branch;
     }
