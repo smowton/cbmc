@@ -99,7 +99,10 @@ json_objectt json(const source_locationt &location)
 
   if(!location.get_function().empty())
     result["function"]=json_stringt(id2string(location.get_function()));
-  
+
+  if(!location.get_java_bytecode_offset().empty())
+    result["bytecode_offset"]=json_stringt(id2string(location.get_java_bytecode_offset()));
+
   return result;
 }
 
