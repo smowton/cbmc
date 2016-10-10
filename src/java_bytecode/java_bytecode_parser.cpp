@@ -935,7 +935,8 @@ void java_bytecode_parsert::rbytecode(
       address+=2;
       break;
 
-    default:;
+    default:
+      assert(false && "unknown instruction");
     }
   }
   
