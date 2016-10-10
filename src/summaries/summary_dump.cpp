@@ -13,6 +13,7 @@ It provides dump of computed summaries in human readable form.
 \*******************************************************************/
 
 #include <summaries/summary_dump.h>
+#include <summaries/utility.h>
 #include <util/file_util.h>
 #include <util/msgstream.h>
 #include <algorithm>
@@ -24,14 +25,155 @@ It provides dump of computed summaries in human readable form.
 #include <cstdlib>
 
 
-static std::string  dump_function_body_in_html(
+static std::string  dump_access_paths_of_goto_program_in_html(
+    goto_programt const&  program,
     irep_idt const  raw_fn_name,
-    goto_programt  const&  fn_body,
-    goto_modelt const&  program,
+    namespacet const&  ns,
     std::string const&  dump_root_directory
     )
 {
   fileutl_create_directory(dump_root_directory);
+
+  typedef std::pair<std::string, std::pair<std::string,std::string> >
+          value_type;
+  std::set<value_type>  result;
+  {
+    for (auto  it = program.instructions.cbegin();
+         it != program.instructions.cend();
+         ++it)
+    {
+      switch(it->type)
+      {
+      case ASSIGN:
+        {
+          code_assignt const&  asgn = to_code_assign(it->code);
+          {
+            std::string const  first = from_expr(ns, it->function, asgn.lhs());
+            std::stringstream  second;
+            dump_irept(asgn.lhs(),second);
+            value_type const value{
+                to_html_text(first),
+                { to_file_name(first), to_html_text(second.str()) }
+                };
+            if (result.count(value) == 0UL)
+              result.insert(value);
+          }
+          {
+            set_of_access_pathst  access_paths;
+            collect_access_paths(asgn.rhs(),ns,access_paths,false);
+            for (auto const&  path : access_paths)
+            {
+              std::string const  first = from_expr(ns, it->function, path);
+              std::stringstream  second;
+              dump_irept(path,second);
+              value_type const value{
+                  to_html_text(first),
+                  { to_file_name(first), to_html_text(second.str()) }
+                  };
+              if (result.count(value) == 0UL)
+                result.insert(value);
+            }
+          }
+        }
+        break;
+      case FUNCTION_CALL:
+        {
+          code_function_callt const&  fn_call = to_code_function_call(it->code);
+          if (fn_call.function().id() == ID_symbol)
+            for (const auto&  arg : fn_call.arguments())
+            {
+              std::string const  first = from_expr(ns, it->function, arg);
+              std::stringstream  second;
+              dump_irept(arg,second);
+              value_type const value{
+                  to_html_text(first),
+                  { to_file_name(first), to_html_text(second.str()) }
+                  };
+              if (result.count(value) == 0UL)
+                result.insert(value);
+            }
+        }
+        break;
+      default:
+        break;
+      }
+    }
+  }
+
+  std::string const  log_filename =
+      msgstream() << dump_root_directory << "/index.html";
+  std::fstream  ostr(log_filename, std::ios_base::out);
+  if (!ostr.is_open())
+      return msgstream() << "ERROR: sumfn::dump_access_paths_of_goto_program_"
+                            "in_html() : Cannot open the log file '"
+                         << log_filename << "'."
+                         ;
+  dump_html_prefix(ostr,"Access paths");
+  ostr << "<h1>Dump of access paths in the function "
+       << to_html_text(as_string(raw_fn_name))
+       << "</h1>\n"
+          "<table>\n"
+          "  <tr>\n"
+          "    <th>Access path</th>\n"
+          "    <th>irept</th>\n"
+          "  </tr>\n"
+          ;
+  for(value_type const& hname_fname_irep : result)
+  {
+    {
+      std::string const  log_filename =
+          msgstream() << dump_root_directory << "/"
+                      << hname_fname_irep.second.first
+                      << ".html";
+      std::fstream  ostr(log_filename, std::ios_base::out);
+      if (!ostr.is_open())
+          return msgstream() << "ERROR: sumfn::dump_access_paths_of_goto_"
+                                "program_in_html() : Cannot open the log file '"
+                             << log_filename << "'."
+                             ;
+      dump_html_prefix(ostr,"IREPT");
+      ostr << "<h1>Dump of IREPT of access path "
+           << to_html_text(as_string(hname_fname_irep.first))
+           << "</h1>\n"
+              "<pre>\n"
+           << hname_fname_irep.second.second
+           << "</pre>\n"
+           ;
+      dump_html_suffix(ostr);
+    }
+    ostr << "  <tr>\n"
+            "    <td>" << hname_fname_irep.first << "</td>\n"
+            "    <td><a href=\"./" << hname_fname_irep.second.first
+                                   << ".html\">here</a></td>\n"
+            "  </tr>\n"
+            ;
+  }
+  ostr << "  </table>\n";
+  dump_html_suffix(ostr);
+  return ""; // no error.
+
+}
+
+
+static std::string  dump_function_body_in_html(
+    irep_idt const  raw_fn_name,
+    goto_programt  const&  fn_body,
+    goto_modelt const&  program,
+    namespacet const  ns,
+    std::string const&  dump_root_directory
+    )
+{
+  fileutl_create_directory(dump_root_directory);
+
+  std::string const  err_message =
+      dump_access_paths_of_goto_program_in_html(
+          fn_body,
+          raw_fn_name,
+          ns,
+          msgstream() << dump_root_directory << "/IREPT"
+          );
+  if (!err_message.empty())
+    return err_message;
 
   std::string const  log_filename =
       msgstream() << dump_root_directory << "/index.html";
@@ -137,6 +279,10 @@ static std::string  dump_function_body_in_html(
   }
   ostr << "</table>\n";
 
+  ostr << "<p>Dump of IREPTs of symbols used in the function body is "
+          "<a href=\"./IREPT/index.html\">here</a></p>\n"
+       ;
+
   ostr << "<h2>Plain text code listing</h3>\n";
   ostr << "<pre>\n";
   {
@@ -197,11 +343,12 @@ static std::string  dump_goto_program_in_html(
   for(auto  it = functions.cbegin(); it != functions.cend(); it++)
     if(it->second.body_available())
     {
-      std::string const  err_message =
+      std::string err_message =
           dump_function_body_in_html(
               it->first,
               it->second.body,
               program,
+              ns,
               msgstream() << dump_root_directory << "/"
                           << to_file_name(as_string(it->first))
               );
@@ -313,7 +460,7 @@ void  dump_irept(
   std::string const  local_shift = msgstream() << shift << "    ";
   std::string const  sub_shift = msgstream() << local_shift << "    ";
   ostr << shift << "IREP{\n"
-       << local_shift << "id { " << irep.id() << "}\n"
+       << local_shift << "id { " << irep.id() << " }\n"
        << local_shift << "sub {\n"
        ;
   for (auto const&  sub : irep.get_sub())
@@ -323,7 +470,7 @@ void  dump_irept(
        ;
   for (auto const&  name_irep : irep.get_named_sub())
   {
-    ostr << sub_shift << name_irep.first << "\n";
+    ostr << sub_shift << name_irep.first << " :\n";
     dump_irept(name_irep.second,ostr,sub_shift);
   }
   ostr << local_shift << "}\n"
@@ -461,6 +608,7 @@ std::string  dump_in_html(
 
 std::string  to_file_name(std::string  result)
 {
+  std::replace( result.begin(),result.end(), '#', '_');
   std::replace( result.begin(),result.end(), ':', '.');
   std::replace( result.begin(),result.end(), '/', '.');
   std::replace( result.begin(),result.end(), '<', '[');

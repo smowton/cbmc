@@ -185,7 +185,8 @@ Function:
 void  collect_access_paths(
     exprt const&  expr,
     namespacet const&  ns,
-    set_of_access_pathst&  result
+    set_of_access_pathst&  result,
+    bool const  perform_normalisation = true
     );
 
 

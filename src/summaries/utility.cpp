@@ -146,11 +146,14 @@ bool  is_this(access_path_to_memoryt const&  lvalue, namespacet const&  ns)
 void  collect_access_paths(
     exprt const&  expr,
     namespacet const&  ns,
-    set_of_access_pathst&  result
+    set_of_access_pathst&  result,
+    bool const  perform_normalisation
     )
 {
   if (expr.id() == ID_symbol || expr.id() == ID_member)
-    result.insert(normalise(expr,ns));
+    result.insert(
+          perform_normalisation ? normalise(expr,ns) : expr
+          );
   else
     for (exprt const&  op : expr.operands())
       collect_access_paths(op,ns,result);
