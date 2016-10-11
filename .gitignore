@@ -26,7 +26,9 @@ regression/ansi-c/tests.log
 regression/cbmc-java/tests.log
 regression/cbmc/tests.log
 regression/taint/*/*.class
-regression/taint/*/dump_*
+regression/taint/*/dump*
+regression/taint/*/class/*.class
+regression/taint/*/class/dump*
 src/big-int/test-bigint
 src/big-int/test-bigint.exe
 
