@@ -616,6 +616,10 @@ goto-analyzer/taint_planner.cpp
 goto-analyzer/taint_planner.h
 goto-analyzer/taint_planner_dump.cpp
 goto-analyzer/taint_planner_dump.h
+goto-analyzer/pointsto_temp_analyser.h
+goto-analyzer/pointsto_temp_analyser.cpp
+goto-analyzer/pointsto_temp_summary_dump.h
+goto-analyzer/pointsto_temp_summary_dump.cpp
 goto-analyzer/taint_summary.cpp
 goto-analyzer/taint_summary.h
 goto-analyzer/taint_summary_dump.cpp

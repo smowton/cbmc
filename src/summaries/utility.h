@@ -16,11 +16,31 @@ summaries of any kinds.
 #ifndef CPROVER_SUMMARIES_UTILITY_H
 #define CPROVER_SUMMARIES_UTILITY_H
 
+#include <goto-programs/goto_functions.h>
 #include <util/expr.h>
 #include <util/namespace.h>
 #include <util/std_code.h>
 #include <util/std_types.h>
 #include <string>
+
+
+/*******************************************************************\
+
+   Class:
+
+ Purpose:
+
+\*******************************************************************/
+class  instruction_iterator_hashert
+{
+public:
+  std::size_t  operator()(
+      goto_programt::instructiont::const_targett const  it
+      ) const
+  {
+    return std::hash<goto_programt::instructiont const*>()(&*it);
+  }
+};
 
 
 /*******************************************************************\

@@ -37,25 +37,6 @@ This module defines interfaces and functionality for taint summaries.
  Purpose:
 
 \*******************************************************************/
-class  instruction_iterator_hashert
-{
-public:
-  std::size_t  operator()(
-      goto_programt::instructiont::const_targett const  it
-      ) const
-  {
-    return std::hash<goto_programt::instructiont const*>()(&*it);
-  }
-};
-
-
-/*******************************************************************\
-
-   Class:
-
- Purpose:
-
-\*******************************************************************/
 class  taint_svaluet
 {
 public:
@@ -290,7 +271,7 @@ public:
                  taint_map_from_lvalues_to_svaluest const&  output,
                  taint_summary_domain_ptrt const domain);
 
-  std::string  kind() const;
+  std::string  kind() const noexcept;
   std::string  description() const noexcept;
 
   taint_map_from_lvalues_to_svaluest const&  input() const noexcept

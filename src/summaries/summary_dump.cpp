@@ -430,7 +430,7 @@ static std::string  dump_log_in_html(
                             "Cannot open the log file '" << log_filename << "'."
                          ;
   dump_html_prefix(ostr,"Log");
-  ostr << "<h1>Log of taint summary computation</h1>\n";
+  ostr << "<h1>Log from the summary computation</h1>\n";
   ostr << source.rdbuf();
   dump_html_suffix(ostr);
   return ""; // no error.

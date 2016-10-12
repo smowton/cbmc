@@ -21,9 +21,9 @@ Date: Octomber 2016
 #include <util/irep.h>
 #include <util/msgstream.h>
 #include <unordered_set>
+#include <unordered_map>
 #include <sstream>
 #include <string>
-#include <tuple>
 #include <tuple>
 
 
@@ -182,47 +182,9 @@ public:
 };
 
 
-class pointsto_map_from_pointers_to_targetst
-{
-public:
+typedef std::unordered_map<pointsto_expressiont,pointsto_expressiont,
+                           irep_hash,irep_full_eq>
+        pointsto_rulest;
 
-  pointsto_map_from_pointers_to_targetst(
-      const pointsto_expressiont&  set_of_pointers_,
-      const pointsto_expressiont&  set_of_targets_
-      );
-
-  const pointsto_expressiont&  get_set_of_pointers() const noexcept
-  { return set_of_pointers; }
-
-  const pointsto_expressiont&  get_set_of_targets() const noexcept
-  { return set_of_targets; }
-
-private:
-  pointsto_expressiont  set_of_pointers;
-  pointsto_expressiont  set_of_targets;
-};
-
-
-class pointsto_summaryt
-{
-public:
-
-  pointsto_summaryt(
-      const pointsto_map_from_pointers_to_targetst&  mapping_of_symbols_,
-      const std::vector<pointsto_map_from_pointers_to_targetst>&  rules_
-      );
-
-  const pointsto_map_from_pointers_to_targetst&
-  get_mapping_of_symbols() const noexcept
-  { return mapping_of_symbols; }
-
-  const std::vector<pointsto_map_from_pointers_to_targetst>&
-  get_rules() const noexcept
-  { return rules; }
-
-private:
-  pointsto_map_from_pointers_to_targetst  mapping_of_symbols;
-  std::vector<pointsto_map_from_pointers_to_targetst>  rules;
-};
 
 #endif

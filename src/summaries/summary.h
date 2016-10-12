@@ -50,7 +50,7 @@ public:
    summaries. For example, it can be a unique name of an analysis which has
    computed them.
   \*******************************************************************/
-  virtual std::string  kind() const = 0;
+  virtual std::string  kind() const noexcept = 0;
 
   /*******************************************************************\
    A textual human-readable description of the summaries.

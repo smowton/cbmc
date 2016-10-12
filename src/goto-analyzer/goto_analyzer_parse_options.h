@@ -39,7 +39,8 @@ class optionst;
   "(intervals)(show-intervals)" \
   "(non-null)(show-non-null)" \
   "(summary-only)" \
-  "(taint-analysis):"
+  "(taint-analysis):" \
+  "(run-pointsto-temp-analyser)"
 
 class goto_analyzer_parse_optionst:
   public parse_options_baset,

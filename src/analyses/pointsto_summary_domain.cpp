@@ -240,29 +240,3 @@ const pointsto_expressiont& pointsto_union_sets_of_targetst::get_right()const
 {
   return pointsto_as<pointsto_expressiont>(get_sub().back());
 }
-
-
-pointsto_map_from_pointers_to_targetst::pointsto_map_from_pointers_to_targetst(
-    const pointsto_expressiont&  set_of_pointers_,
-    const pointsto_expressiont&  set_of_targets_
-    )
-  : set_of_pointers(set_of_pointers_)
-  , set_of_targets(set_of_targets_)
-{}
-
-
-pointsto_summaryt::pointsto_summaryt(
-    const pointsto_map_from_pointers_to_targetst&  mapping_of_symbols_,
-    const std::vector<pointsto_map_from_pointers_to_targetst>&  rules_
-    )
-  : mapping_of_symbols(mapping_of_symbols_)
-  , rules(rules_)
-{}
-
-
-
-
-
-
-
-

@@ -813,9 +813,9 @@ taint_summaryt::taint_summaryt(
 {
 }
 
-std::string  taint_summaryt::kind() const
+std::string  taint_summaryt::kind() const noexcept
 {
-  return "sumfn::taint::summarise_function";
+  return "cbmc://src/goto-analyzer/taint_summary";
 }
 
 std::string  taint_summaryt::description() const noexcept
