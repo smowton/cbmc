@@ -107,12 +107,7 @@ static void  initialise_domain(
   for (auto  it = std::next(function.body.instructions.cbegin());
        it != function.body.instructions.cend();
        ++it)
-  {
     domain.insert({it,others_map});
-
-    if (log != nullptr)
-      *log << it->location_number << ", ";
-  }
 
   if (log != nullptr)
   {
@@ -137,7 +132,7 @@ static void  initialise_domain(
 /*******************************************************************\
 \*******************************************************************/
 typedef std::unordered_set<instruction_iteratort,
-                            instruction_iterator_hashert>
+                           instruction_iterator_hashert>
         solver_work_set_t;
 
 
@@ -946,7 +941,7 @@ taint_summary_ptrt  taint_summarise_function(
                 ns,
                 log
                 );
-        dst_value = join(transformed,dst_value);
+        dst_value = join(transformed,old_dst_value);
 
         if (log != nullptr)
         {

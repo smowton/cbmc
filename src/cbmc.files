@@ -63,6 +63,8 @@ analyses/natural_loops.cpp
 analyses/natural_loops.h
 analyses/pointsto_summary_domain.cpp
 analyses/pointsto_summary_domain.h
+analyses/pointsto_summary_domain_dump.cpp
+analyses/pointsto_summary_domain_dump.h
 analyses/reaching_definitions.cpp
 analyses/reaching_definitions.h
 analyses/replace_symbol_ext.cpp

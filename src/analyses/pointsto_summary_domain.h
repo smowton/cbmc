@@ -57,6 +57,14 @@ inline const T&  pointsto_as(const irept& irep)
   return static_cast<const T&>(irep);
 }
 
+template<typename T>
+inline const T*  pointsto_as(const irept* irep)
+{
+  if (pointsto_is_of<T>(*irep))
+    return static_cast<const T*>(irep);
+  return nullptr;
+}
+
 
 class pointsto_expressiont : public irept
 {
@@ -117,23 +125,32 @@ class pointsto_set_of_concrete_targetst
     : public pointsto_expressiont
 {
 public:
-  typedef std::tuple<irep_idt,unsigned int,irep_idt>  concrete_targett;
-  typedef std::vector<concrete_targett>  concrete_targetst;
+  typedef std::pair<irep_idt,unsigned int>  location_idt;
+  typedef std::pair<irep_idt,location_idt>  concrete_targett;
+  typedef std::set<concrete_targett>  concrete_targetst;
 
   static dstring keyword();
 
   pointsto_set_of_concrete_targetst(
+      const irep_idt&  target_name,
       const irep_idt&  function_name,
-      const unsigned int  location_number,
-      const irep_idt&  target_name
+      const unsigned int  location_number
       );
   pointsto_set_of_concrete_targetst(const concrete_targetst&  targets);
 
   std::size_t  get_num_targets() const;
+  const irep_idt&  get_target_name(const std::size_t target_index) const;
   const irep_idt&  get_function_name(const std::size_t target_index) const;
   unsigned int  get_location_number(const std::size_t target_index) const;
-  const irep_idt&  get_target_name(const std::size_t target_index) const;
 };
+
+
+pointsto_set_of_concrete_targetst::concrete_targett
+pointsto_from_access_path_to_concrete_target(
+    const irep_idt&  function_name,
+    const unsigned int  location_number,
+    access_path_to_memoryt const&  access_path
+    );
 
 
 class pointsto_address_dereferencet

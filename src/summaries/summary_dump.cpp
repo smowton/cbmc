@@ -580,8 +580,8 @@ std::string  dump_in_html(
       msgstream() << dump_root_directory << "/index.html";
   std::fstream  ostr(log_filename, std::ios_base::out);
   if (!ostr.is_open())
-     return msgstream() << "ERROR: sumfn::taint::taint_summarise_function() : Cannot "
-                           "open the log file '" << log_filename << "'."
+     return msgstream() << "ERROR: sumfn::taint::taint_summarise_function() : "
+                           "Cannot open the log file '" << log_filename << "'."
                         ;
   dump_html_prefix(
         ostr,

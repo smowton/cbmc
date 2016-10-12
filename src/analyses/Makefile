@@ -7,7 +7,8 @@ SRC = natural_loops.cpp is_threaded.cpp dirty.cpp interval_analysis.cpp \
       constant_propagator.cpp replace_symbol_ext.cpp \
       flow_insensitive_analysis.cpp \
       custom_bitvector_analysis.cpp escape_analysis.cpp global_may_alias.cpp \
-      pointsto_summary_domain.cpp
+      pointsto_summary_domain.cpp \
+      pointsto_summary_domain_dump.cpp
 
 
 INCLUDES= -I ..

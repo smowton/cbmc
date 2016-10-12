@@ -1,4 +1,5 @@
 #include <goto-analyzer/pointsto_temp_analyser.h>
+#include <analyses/pointsto_summary_domain_dump.h>
 #include <goto-programs/goto_functions.h>
 
 pointsto_temp_summaryt::pointsto_temp_summaryt(
@@ -25,6 +26,182 @@ std::string  pointsto_temp_summaryt::description() const noexcept
 }
 
 
+static void  initialise_domain(
+    irep_idt const&  function_id,
+    goto_functionst::goto_functiont const&  function,
+    goto_functionst::function_mapt const&  functions_map,
+    namespacet const&  ns,
+    database_of_summariest const&  database,
+    pointsto_temp_domaint&  domain,
+    std::ostream* const  log
+    )
+{
+  pointsto_rulest  entry_map;
+  for (std::size_t  i = 0UL; i != function.type.parameters().size(); ++i)
+  {
+    std::string target_name;
+    {
+      target_name =
+          as_string(function.type.parameters().at(i).get_identifier());
+      const std::string prefix = as_string(function_id) + "::";
+      if (target_name.find_first_of(prefix) == 0UL)
+        target_name = target_name.substr(prefix.size());
+    }
+
+    const irept& raw_type =  function.type.parameters().at(i).find(ID_type);
+    if (raw_type != get_nil_irep())
+    {
+      const typet&  target_type = static_cast<const typet&>(raw_type);
+      if (target_type.id() != ID_pointer)
+          continue;
+    }
+
+    entry_map.insert({
+          pointsto_set_of_concrete_targetst(
+              target_name,
+              function_id,
+              0U
+              ),
+          pointsto_symbolic_set_of_targetst()
+          });
+  }
+
+  domain.insert({function.body.instructions.cbegin(),entry_map});
+  for (auto  it = std::next(function.body.instructions.cbegin());
+       it != function.body.instructions.cend();
+       ++it)
+    domain.insert({it,pointsto_rulest{}});
+
+  if (log != nullptr)
+  {
+    *log << "<h3>Initialising the domain</h3>\n"
+            "<p>Domain value at the entry location:</p>\n"
+         ;
+    pointsto_dump_rules_in_html(
+        domain.at(function.body.instructions.cbegin()),
+        *log
+        );
+    *log << "<p>Domain value at all other locations:</p>\n";
+    pointsto_dump_rules_in_html(
+        domain.at(std::prev(function.body.instructions.cend())),
+        *log
+        );
+  }
+}
+
+
+typedef std::unordered_set<instruction_iteratort,
+                           instruction_iterator_hashert>
+        solver_work_set_t;
+
+static void  initialise_workset(
+    goto_functionst::goto_functiont const&  function,
+    solver_work_set_t&  work_set
+    )
+{
+  for (auto  it = function.body.instructions.cbegin();
+       it != function.body.instructions.cend();
+       ++it)
+    work_set.insert(it);
+}
+
+
+static bool  pointsto_temp_equal(
+    const pointsto_rulest&  left,
+    const pointsto_rulest&  right
+    )
+{
+  return true;
+}
+
+
+static bool  pointsto_temp_less_than(
+    const pointsto_rulest&  left,
+    const pointsto_rulest&  right
+    )
+{
+  return true;
+}
+
+
+static pointsto_rulest  pointsto_temp_join(
+    const pointsto_rulest&  left,
+    const pointsto_rulest&  right
+    )
+{
+  return left;
+}
+
+
+static pointsto_rulest  pointsto_temp_transform(
+    const pointsto_rulest&  a,
+    goto_programt::instructiont const&  I,
+    const irep_idt&  caller_ident,
+    const goto_functionst::function_mapt&  functions_map,
+    const database_of_summariest&  database,
+    const namespacet&  ns,
+    std::ostream* const  log
+    )
+{
+  return a;
+}
+
+
+static void  pointsto_temp_build_summary_from_computed_domain(
+    pointsto_temp_domain_ptrt const  domain,
+    pointsto_rulest&  output,
+    goto_functionst::function_mapt::const_iterator const  fn_iter,
+    namespacet const&  ns,
+    std::ostream* const  log
+    )
+{
+  const pointsto_rulest&  end_svalue =
+      domain->at(std::prev(fn_iter->second.body.instructions.cend()));
+
+  if (log != nullptr)
+  {
+    *log << "<h3>Building points-to summary from the computed domain</h3>\n"
+         << "<p>It is computed from the symbolic value "
+            "at location "
+         << std::prev(fn_iter->second.body.instructions.cend())->location_number
+         << ":</p>\n"
+         ;
+    pointsto_dump_rules_in_html(end_svalue,*log);
+    if (!end_svalue.empty())
+      *log << "<p>Processing individual rules:</p>\n";
+    *log << "<ul>\n";
+  }
+
+
+  for (auto  it = end_svalue.cbegin(); it != end_svalue.cend(); ++it)
+//    if (!is_pure_local(it->first,ns) && !is_parameter(it->first,ns))
+    {
+      output.insert(*it);
+
+      if (log != nullptr)
+      {
+        *log << "<li>TAKING: ";
+        pointsto_dump_expression_in_html(it->first,*log);
+        *log << " &rarr; ";
+        pointsto_dump_expression_in_html(it->second,*log);
+        *log << "</li>\n";
+      }
+    }
+//    else
+//      if (log != nullptr)
+//      {
+//        *log << "<li>EXCLUDING: ";
+//        taint_dump_lvalue_in_html(it->first,ns,*log);
+//        *log << " &rarr; ";
+//        taint_dump_svalue_in_html(it->second,*log);
+//        *log << "</li>\n";
+//      }
+
+  if (log != nullptr)
+    *log << "</ul>\n";
+}
+
+
 void  pointsto_temp_summarise_all_functions(
     goto_modelt const&  program,
     database_of_summariest&  summaries_to_compute,
@@ -32,6 +209,33 @@ void  pointsto_temp_summarise_all_functions(
     std::ostream* const  log
     )
 {
+  std::vector<irep_idt>  inverted_topological_order;
+  {
+    std::unordered_set<irep_idt,dstring_hash>  processed;
+    for (auto const&  elem : program.goto_functions.function_map)
+      inverted_partial_topological_order(
+            call_graph,
+            elem.first,
+            processed,
+            inverted_topological_order
+            );
+  }
+  for (auto const&  fn_name : inverted_topological_order)
+  {
+    goto_functionst::function_mapt  const  functions_map =
+        program.goto_functions.function_map;
+    auto const  fn_it = functions_map.find(fn_name);
+    if (fn_it != functions_map.cend() && fn_it->second.body_available())
+      summaries_to_compute.insert({
+          as_string(fn_name),
+          pointsto_temp_summarise_function(
+              fn_name,
+              program,
+              summaries_to_compute,
+              log
+              ),
+          });
+  }
 }
 
 
@@ -42,6 +246,112 @@ pointsto_temp_summary_ptrt  pointsto_temp_summarise_function(
     std::ostream* const  log
     )
 {
-  // TODO!
-  return pointsto_temp_summary_ptrt();
+  if (log != nullptr)
+    *log << "<h2>Called sumfn::taint::taint_summarise_function( "
+         << to_html_text(as_string(function_id)) << " )</h2>\n"
+         ;
+
+  goto_functionst::function_mapt const&  functions =
+      instrumented_program.goto_functions.function_map;
+  auto const  fn_iter = functions.find(function_id);
+
+  namespacet const  ns(instrumented_program.symbol_table);
+
+  assert(fn_iter != functions.cend());
+  assert(fn_iter->second.body_available());
+
+  pointsto_temp_domain_ptrt  domain = std::make_shared<pointsto_temp_domaint>();
+  initialise_domain(
+        function_id,
+        fn_iter->second,
+        functions,
+        ns,
+        database,
+        *domain,
+        log
+        );
+  pointsto_rulest const  input =
+      domain->at(fn_iter->second.body.instructions.cbegin());
+
+  solver_work_set_t  work_set;
+  initialise_workset(fn_iter->second,work_set);
+  while (!work_set.empty())
+  {
+    instruction_iteratort const  src_instr_it = *work_set.cbegin();
+    work_set.erase(work_set.cbegin());
+
+    pointsto_rulest const&  src_value =
+        domain->at(src_instr_it);
+
+    goto_programt::const_targetst successors;
+    fn_iter->second.body.get_successors(src_instr_it, successors);
+    for(auto  succ_it = successors.begin();
+        succ_it != successors.end();
+        ++succ_it)
+      if (*succ_it != fn_iter->second.body.instructions.cend())
+      {
+        instruction_iteratort const  dst_instr_it = *succ_it;
+        pointsto_rulest&  dst_value = domain->at(dst_instr_it);
+        pointsto_rulest const  old_dst_value = dst_value;
+
+        if (log != nullptr)
+        {
+          *log << "<h3>Processing transition: "
+               << src_instr_it->location_number << " ---[ "
+               ;
+          dump_instruction_code_in_html(
+              *src_instr_it,
+              instrumented_program,
+              *log
+              );
+          *log << " ]---> " << dst_instr_it->location_number << "</h3>\n"
+               ;
+          *log << "<p>Source value:</p>\n";
+          pointsto_dump_rules_in_html(src_value,*log);
+          *log << "<p>Old destination value:</p>\n";
+          pointsto_dump_rules_in_html(old_dst_value,*log);
+        }
+
+        pointsto_rulest const  transformed =
+            pointsto_temp_transform(
+                src_value,
+                *src_instr_it,
+                function_id,
+                functions,
+                database,
+                ns,
+                log
+                );
+        dst_value = pointsto_temp_join(transformed,old_dst_value);
+
+        if (log != nullptr)
+        {
+          *log << "<p>Transformed value:</p>\n";
+          pointsto_dump_rules_in_html(transformed,*log);
+          *log << "<p>Resulting destination value:</p>\n";
+          pointsto_dump_rules_in_html(dst_value,*log);
+        }
+
+        if ( !(pointsto_temp_equal(dst_value,old_dst_value) ||
+               pointsto_temp_less_than(dst_value,old_dst_value)) )
+        {
+          work_set.insert(dst_instr_it);
+
+          if (log != nullptr)
+            *log << "<p>Inserting instruction at location "
+                 << dst_instr_it->location_number << " into 'work_set'.</p>\n"
+                 ;
+        }
+      }
+  }
+
+  pointsto_rulest  output;
+  pointsto_temp_build_summary_from_computed_domain(
+        domain,
+        output,
+        fn_iter,
+        ns,
+        log
+        );
+  return std::make_shared<pointsto_temp_summaryt>(input,output,domain);
 }

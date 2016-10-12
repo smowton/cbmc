@@ -1,4 +1,4 @@
-<project name="LL" basedir="." default="compile">
+<project name="MyClass" basedir="." default="compile">
 
   <property name="root.dir"      value="./"/>
   <property name="src.dir"       value="${root.dir}"/>

@@ -111,12 +111,12 @@ dstring  pointsto_set_of_concrete_targetst::keyword()
 }
 
 pointsto_set_of_concrete_targetst::pointsto_set_of_concrete_targetst(
+    const irep_idt&  target_name,
     const irep_idt&  function_name,
-    const unsigned int  location_number,
-    const irep_idt&  target_name
+    const unsigned int  location_number
     )
   : pointsto_set_of_concrete_targetst({
-          concrete_targett(function_name,location_number,target_name)
+          {target_name,{function_name,location_number}}
           })
 {}
 
@@ -128,12 +128,11 @@ pointsto_set_of_concrete_targetst::pointsto_set_of_concrete_targetst(
   for (const auto&  target : targets)
   {
     irept  concrete("concrete");
-    concrete.get_sub().push_back(irept(std::get<0>(target)));
+    concrete.get_sub().push_back(irept(target.first));
+    concrete.get_sub().push_back(irept(target.second.first));
     concrete.get_sub().push_back(irept(
-            msgstream() << std::get<1>(target) << msgstream::end()
+            msgstream() << target.second.second << msgstream::end()
             ));
-    concrete.get_sub().push_back(irept(std::get<2>(target)));
-
     get_sub().push_back(concrete);
   }
 }
@@ -143,11 +142,18 @@ std::size_t  pointsto_set_of_concrete_targetst::get_num_targets() const
   return get_sub().size();
 }
 
+const irep_idt&  pointsto_set_of_concrete_targetst::get_target_name(
+    const std::size_t target_index
+    ) const
+{
+  return get_sub().at(target_index).get_sub().front().id();
+}
+
 const irep_idt&  pointsto_set_of_concrete_targetst::get_function_name(
     const std::size_t target_index
     ) const
 {
-  return get_sub().at(target_index).get_sub().at(0).id();
+  return get_sub().at(target_index).get_sub().at(1).id();
 }
 
 unsigned int  pointsto_set_of_concrete_targetst::get_location_number(
@@ -155,19 +161,19 @@ unsigned int  pointsto_set_of_concrete_targetst::get_location_number(
     ) const
 {
   std::stringstream sstr(
-        as_string(get_sub().at(target_index).get_sub().at(1).id())
+        as_string(get_sub().at(target_index).get_sub().back().id())
         );
   unsigned int  result;
   sstr >> result;
   return result;
 }
 
-const irep_idt&  pointsto_set_of_concrete_targetst::get_target_name(
-    const std::size_t target_index
-    ) const
+
+pointsto_set_of_concrete_targetst::concrete_targett
+pointsto_from_access_path_to_concrete_target()
 {
-  return get_sub().at(target_index).get_sub().at(2).id();
 }
+
 
 
 dstring pointsto_address_dereferencet::keyword()
