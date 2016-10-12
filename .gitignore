@@ -29,6 +29,10 @@ regression/taint/*/*.class
 regression/taint/*/dump*
 regression/taint/*/class/*.class
 regression/taint/*/class/dump*
+regression/pointsto/*/*.class
+regression/pointsto/*/dump*
+regression/pointsto/*/class/*.class
+regression/pointsto/*/class/dump*
 src/big-int/test-bigint
 src/big-int/test-bigint.exe
 

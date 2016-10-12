@@ -1,0 +1,12 @@
+<project name="LL" basedir="." default="compile">
+
+  <property name="root.dir"      value="./"/>
+  <property name="src.dir"       value="${root.dir}"/>
+  <property name="classes.dir"   value="${root.dir}"/>
+        
+  <target name="compile">
+    <mkdir dir="${classes.dir}"/>
+    <javac srcdir="${src.dir}" destdir="${classes.dir}" includeantruntime="false" />
+  </target>
+
+</project>
