@@ -125,32 +125,18 @@ class pointsto_set_of_concrete_targetst
     : public pointsto_expressiont
 {
 public:
-  typedef std::pair<irep_idt,unsigned int>  location_idt;
-  typedef std::pair<irep_idt,location_idt>  concrete_targett;
-  typedef std::set<concrete_targett>  concrete_targetst;
-
   static dstring keyword();
 
   pointsto_set_of_concrete_targetst(
-      const irep_idt&  target_name,
-      const irep_idt&  function_name,
-      const unsigned int  location_number
+      const irep_idt&  target_name
       );
-  pointsto_set_of_concrete_targetst(const concrete_targetst&  targets);
+  pointsto_set_of_concrete_targetst(
+      const std::unordered_set<irep_idt,dstring_hash>&  targets
+      );
 
   std::size_t  get_num_targets() const;
   const irep_idt&  get_target_name(const std::size_t target_index) const;
-  const irep_idt&  get_function_name(const std::size_t target_index) const;
-  unsigned int  get_location_number(const std::size_t target_index) const;
 };
-
-
-pointsto_set_of_concrete_targetst::concrete_targett
-pointsto_from_access_path_to_concrete_target(
-    const irep_idt&  function_name,
-    const unsigned int  location_number,
-    access_path_to_memoryt const&  access_path
-    );
 
 
 class pointsto_address_dereferencet
@@ -199,9 +185,46 @@ public:
 };
 
 
+class pointsto_if_empty_then_elset
+    : public pointsto_expressiont
+{
+public:
+  static dstring keyword();
+
+  pointsto_if_empty_then_elset(
+      const pointsto_expressiont&  conditional_targets,
+      const pointsto_expressiont&  true_branch_targets,
+      const pointsto_expressiont&  false_branch_targets
+      );
+
+  const pointsto_expressiont&  get_conditional_targets() const;
+  const pointsto_expressiont&  get_true_branch_targets() const;
+  const pointsto_expressiont&  get_false_branch_targets() const;
+};
+
+
 typedef std::unordered_map<pointsto_expressiont,pointsto_expressiont,
                            irep_hash,irep_full_eq>
         pointsto_rulest;
+
+
+pointsto_expressiont  pointsto_expression_empty_set_of_targets();
+
+
+pointsto_expressiont  pointsto_expression_normalise(
+    const pointsto_expressiont&  a
+    );
+
+
+pointsto_expressiont  pointsto_evaluate_expression(
+    const pointsto_rulest&  domain_value,
+    const pointsto_expressiont&  expression
+    );
+
+pointsto_expressiont  pointsto_evaluate_access_path(
+    const pointsto_rulest&  domain_value,
+    const access_path_to_memoryt&  access_path
+    );
 
 
 #endif

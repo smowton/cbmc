@@ -39,15 +39,8 @@ static void  initialise_domain(
   pointsto_rulest  entry_map;
   for (std::size_t  i = 0UL; i != function.type.parameters().size(); ++i)
   {
-    std::string target_name;
-    {
-      target_name =
-          as_string(function.type.parameters().at(i).get_identifier());
-      const std::string prefix = as_string(function_id) + "::";
-      if (target_name.find_first_of(prefix) == 0UL)
-        target_name = target_name.substr(prefix.size());
-    }
-
+    const irep_idt& target_name =
+        function.type.parameters().at(i).get_identifier();
     const irept& raw_type =  function.type.parameters().at(i).find(ID_type);
     if (raw_type != get_nil_irep())
     {
@@ -57,11 +50,7 @@ static void  initialise_domain(
     }
 
     entry_map.insert({
-          pointsto_set_of_concrete_targetst(
-              target_name,
-              function_id,
-              0U
-              ),
+          pointsto_set_of_concrete_targetst(target_name),
           pointsto_symbolic_set_of_targetst()
           });
   }
@@ -107,29 +96,76 @@ static void  initialise_workset(
 
 
 static bool  pointsto_temp_equal(
-    const pointsto_rulest&  left,
-    const pointsto_rulest&  right
+    const pointsto_rulest&  a,
+    const pointsto_rulest&  b
     )
 {
-  return true;
+  return a == b;
 }
 
 
 static bool  pointsto_temp_less_than(
-    const pointsto_rulest&  left,
-    const pointsto_rulest&  right
+    const pointsto_rulest&  a,
+    const pointsto_rulest&  b
     )
 {
+  if (b.size() <= a.size())
+    return false;
+  for (const auto&  elem : a)
+  {
+    auto const  it = b.find(elem.first);
+    if (it == b.cend() || !(elem.second == it->second))
+      return false;
+  }
   return true;
 }
 
 
 static pointsto_rulest  pointsto_temp_join(
-    const pointsto_rulest&  left,
-    const pointsto_rulest&  right
+    const pointsto_rulest&  a,
+    const pointsto_rulest&  b
     )
 {
-  return left;
+  pointsto_rulest  result = a;
+  for (const auto&  elem : b)
+  {
+    auto it = result.find(elem.first);
+    if (it == b.end())
+      result.insert(elem);
+    else if (elem.second != it->second)
+        it->second =
+            pointsto_expression_normalise(
+                  pointsto_union_sets_of_targetst(elem.second,it->second)
+                  );
+  }
+  return result;
+}
+
+
+static pointsto_rulest  pointsto_temp_assign(
+    const pointsto_rulest&  a,
+    const access_path_to_memoryt&  lhs,
+    const access_path_to_memoryt&  rhs,
+    const namespacet&  ns
+    )
+{
+  pointsto_expressiont const  left = pointsto_evaluate_access_path(a,lhs);
+  pointsto_expressiont const  right = pointsto_evaluate_access_path(a,rhs);
+  pointsto_rulest  result;
+  for (const auto&  elem : a)
+    result =
+        pointsto_temp_join(
+            result,
+            {{  pointsto_expression_normalise(
+                    pointsto_subtract_sets_of_targetst(
+                        elem.first,
+                        left
+                        )
+                    ),
+                elem.second }}
+            );
+  result = pointsto_temp_join(result,{{left,right}});
+  return result;
 }
 
 
@@ -143,7 +179,90 @@ static pointsto_rulest  pointsto_temp_transform(
     std::ostream* const  log
     )
 {
-  return a;
+  pointsto_rulest  result = a;
+  switch(I.type)
+  {
+  case ASSIGN:
+    {
+      code_assignt const&  asgn = to_code_assign(I.code);
+      if (is_pointer(asgn.lhs(),ns))
+      {
+        if (log != nullptr)
+        {
+          *log << "<p>\nRecognised ASSIGN instruction to a pointer '";
+          dump_access_path_in_html(asgn.lhs(),ns,*log);
+          *log << "'.</p>\n";
+        }
+
+        result = pointsto_temp_assign(
+                      a,
+                      asgn.lhs(),
+                      asgn.rhs(),
+                      ns
+                      );
+      }
+      else
+      {
+        if (log != nullptr)
+          *log << "<p>\nRecognised ASSIGN instruction NOT writing to a pointer."
+                  " So, we use identity as a transformation function.</p>\n";
+      }
+    }
+    break;
+  case FUNCTION_CALL:
+    if (log != nullptr)
+      *log << "<p>!!! WARNING !!! : Unsupported instruction FUNCTION_CALL "
+              "reached. So, we use identity as a transformation function.</p>\n"
+           ;
+    break;
+  case DEAD:
+    if (log != nullptr)
+      *log << "<p>!!! WARNING !!! : Unsupported instruction DEAD reached. "
+              "So, we use identity as a transformation function.</p>\n";
+    break;
+  case NO_INSTRUCTION_TYPE:
+    if (log != nullptr)
+      *log << "<p>Recognised NO_INSTRUCTION_TYPE instruction. "
+              "The transformation function is identity.</p>\n";
+    break;
+  case SKIP:
+    if (log != nullptr)
+      *log << "<p>Recognised SKIP instruction. "
+              "The transformation function is identity.</p>\n";
+    break;
+  case END_FUNCTION:
+    if (log != nullptr)
+      *log << "<p>Recognised END_FUNCTION instruction. "
+              "The transformation function is identity.</p>\n";
+    break;
+  case GOTO:
+    if (log != nullptr)
+      *log << "<p>Recognised GOTO instruction. "
+              "The transformation function is identity.</p>\n";
+    break;
+  case RETURN:
+  case OTHER:
+  case DECL:
+  case ASSUME:
+  case ASSERT:
+  case LOCATION:
+  case THROW:
+  case CATCH:
+  case ATOMIC_BEGIN:
+  case ATOMIC_END:
+  case START_THREAD:
+  case END_THREAD:
+    if (log != nullptr)
+      *log << "<p>!!! WARNING !!! : Unsupported instruction reached. "
+              "So, we use identity as a transformation function.</p>\n";
+    break;
+    break;
+  default:
+    throw std::runtime_error("ERROR: In 'pointsto_temp_transform' - "
+                             "Unknown instruction!");
+    break;
+  }
+  return result;
 }
 
 

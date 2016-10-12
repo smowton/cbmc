@@ -27,10 +27,7 @@ void  taint_dump_lvalue_in_html(
     std::ostream&  ostr
     )
 {
-  if (is_identifier(lvalue))
-    ostr << to_html_text(name_of_symbol_access_path(lvalue));
-  else
-    ostr << to_html_text(from_expr(ns, "", lvalue));
+  dump_access_path_in_html(lvalue,ns,ostr);
 }
 
 void  taint_dump_svalue_in_html(

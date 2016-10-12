@@ -624,6 +624,19 @@ std::string  to_html_text(std::string  result)
 }
 
 
+void  dump_access_path_in_html(
+    access_path_to_memoryt const&  access_path,
+    namespacet const&  ns,
+    std::ostream&  ostr
+    )
+{
+  if (is_identifier(access_path))
+    ostr << to_html_text(name_of_symbol_access_path(access_path));
+  else
+    ostr << to_html_text(from_expr(ns, "", access_path));
+}
+
+
 void  dump_html_prefix(
     std::ostream&  ostr,
     std::string const&  page_name)

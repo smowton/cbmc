@@ -18,7 +18,9 @@ std::string  pointsto_dump_expression_in_html(
         pointsto_as<pointsto_set_of_concrete_targetst>(&expression))
     return pointsto_dump_set_of_concrete_targets_in_html(*ptr,ostr);
 
-  return "ERROR: expression of no concrete type.";
+  ostr << "UNKNOWN";
+
+  return ""; // No error
 }
 
 std::string  pointsto_dump_symbolic_set_of_targets_in_html(
@@ -39,12 +41,7 @@ std::string  pointsto_dump_set_of_concrete_targets_in_html(
   ostr << '{';
   for (std::size_t  i = 0UL; i < targets.get_num_targets(); ++i)
   {
-    ostr << targets.get_function_name(i)
-         << '@'
-         << targets.get_location_number(i)
-         << "::"
-         << targets.get_target_name(i)
-         ;
+    ostr << targets.get_target_name(i);
     if (i+1UL < targets.get_num_targets())
       ostr << ',';
   }

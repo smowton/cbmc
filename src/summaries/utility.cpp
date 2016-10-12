@@ -68,6 +68,12 @@ bool  is_identifier(access_path_to_memoryt const&  lvalue)
 }
 
 
+bool  is_member(access_path_to_memoryt const&  lvalue)
+{
+  return lvalue.id() == ID_member;
+}
+
+
 std::string  name_of_symbol_access_path(access_path_to_memoryt const&  lvalue)
 {
   return is_identifier(lvalue) ?
@@ -127,6 +133,12 @@ bool  is_pure_local(access_path_to_memoryt const&  lvalue,
          !is_parameter(lvalue,ns) &&
          !is_static(lvalue,ns)
          ;
+}
+
+bool  is_pointer(access_path_to_memoryt const&  lvalue,
+                 namespacet const&  ns)
+{
+  return lvalue.type().id() == ID_pointer;
 }
 
 bool  is_this(access_path_to_memoryt const&  lvalue, namespacet const&  ns)

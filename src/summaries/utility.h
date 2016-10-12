@@ -105,6 +105,21 @@ Function:
 
 
 \*******************************************************************/
+bool  is_member(access_path_to_memoryt const&  lvalue);
+
+
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 std::string  name_of_symbol_access_path(access_path_to_memoryt const&  lvalue);
 
 
@@ -169,6 +184,22 @@ Function:
 \*******************************************************************/
 bool  is_pure_local(access_path_to_memoryt const&  lvalue,
                     namespacet const&  ns);
+
+
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
+bool  is_pointer(access_path_to_memoryt const&  lvalue,
+                 namespacet const&  ns);
 
 
 /*******************************************************************\
