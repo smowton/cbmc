@@ -732,3 +732,11 @@ verilog_array
 low
 high
 bswap
+pointsto_access_paths_definition_symbolic
+pointsto_access_paths_definition_concrete
+pointsto_access_paths_definition_offsets
+pointsto_access_paths_shift
+pointsto_access_paths_dereference
+pointsto_access_paths_subtract
+pointsto_access_paths_union
+pointsto_access_paths_conditional
