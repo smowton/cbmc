@@ -13,6 +13,12 @@ public final class MyClass {
     victim.next = new MyClass();
   }
 
+  public static void swap_tails(MyClass x, MyClass y) {
+    MyClass  temp = x.next;
+    x.next = y.next;
+    y.next = temp;
+  }
+
   private int value;
   private MyClass next;
 }

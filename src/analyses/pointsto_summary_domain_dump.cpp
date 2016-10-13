@@ -12,6 +12,7 @@ static bool enclose_in_brackets(const pointsto_expressiont&  expression)
         pointsto_is_of<pointsto_symbolic_set_of_targetst>(expression)
         || pointsto_is_of<pointsto_set_of_concrete_targetst>(expression)
         || pointsto_is_of<pointsto_address_dereferencet>(expression)
+        || pointsto_is_of<pointsto_set_of_address_shifted_targetst>(expression)
         );
 }
 
@@ -88,7 +89,7 @@ std::string  pointsto_dump_address_shifted_targets_in_html(
     std::ostream&  ostr
     )
 {
-  ostr << '{';
+  ostr << "<b>{</b>";
   std::string const  error_message =
       pointsto_dump_address_shift_in_html(
           targets.get_address_shift(),
@@ -96,7 +97,7 @@ std::string  pointsto_dump_address_shifted_targets_in_html(
           );
   if (!error_message.empty())
     return error_message;
-  ostr << '}';
+  ostr << "<b>}</b>";
   return ""; // No error.
 }
 

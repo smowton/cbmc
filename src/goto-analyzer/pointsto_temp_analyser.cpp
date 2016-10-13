@@ -150,13 +150,15 @@ static pointsto_rulest  pointsto_temp_assign(
     const pointsto_rulest&  a,
     const access_path_to_memoryt&  lhs,
     const access_path_to_memoryt&  rhs,
+    const irep_idt&  fn_name,
+    const unsigned int  location_id,
     const namespacet&  ns
     )
 {
   pointsto_expressiont const  left =
-      pointsto_evaluate_access_path(a,lhs,true,ns);
+      pointsto_evaluate_access_path(a,lhs,true,fn_name,location_id,ns);
   pointsto_expressiont const  right =
-      pointsto_evaluate_access_path(a,rhs,false,ns);
+      pointsto_evaluate_access_path(a,rhs,false,fn_name,location_id,ns);
   pointsto_rulest  result;
   for (const auto&  elem : a)
     result =
@@ -204,6 +206,8 @@ static pointsto_rulest  pointsto_temp_transform(
                       a,
                       asgn.lhs(),
                       asgn.rhs(),
+                      caller_ident,
+                      I.location_number,
                       ns
                       );
       }
@@ -297,30 +301,36 @@ static void  pointsto_temp_build_summary_from_computed_domain(
     *log << "<ul>\n";
   }
 
-
   for (auto  it = end_svalue.cbegin(); it != end_svalue.cend(); ++it)
-//    if (!is_pure_local(it->first,ns) && !is_parameter(it->first,ns))
+  {
+    pointsto_expressiont const  pruned_pointers =
+        pointsto_temp_prune_pure_locals(it->first,ns);
+    if (!pointsto_is_empty_set_of_targets(pruned_pointers))
     {
-      output.insert(*it);
+      pointsto_expressiont const  pruned_targets =
+          pointsto_temp_prune_pure_locals(it->second,ns);
+
+      output.insert({pruned_pointers,pruned_targets});
 
       if (log != nullptr)
       {
         *log << "<li>TAKING: ";
+        pointsto_dump_expression_in_html(pruned_pointers,*log);
+        *log << " &rarr; ";
+        pointsto_dump_expression_in_html(pruned_targets,*log);
+        *log << "</li>\n";
+      }
+    }
+    else
+      if (log != nullptr)
+      {
+        *log << "<li>EXCLUDING: ";
         pointsto_dump_expression_in_html(it->first,*log);
         *log << " &rarr; ";
         pointsto_dump_expression_in_html(it->second,*log);
         *log << "</li>\n";
       }
-    }
-//    else
-//      if (log != nullptr)
-//      {
-//        *log << "<li>EXCLUDING: ";
-//        taint_dump_lvalue_in_html(it->first,ns,*log);
-//        *log << " &rarr; ";
-//        taint_dump_svalue_in_html(it->second,*log);
-//        *log << "</li>\n";
-//      }
+  }
 
   if (log != nullptr)
     *log << "</ul>\n";

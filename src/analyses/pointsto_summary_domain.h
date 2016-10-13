@@ -278,7 +278,15 @@ pointsto_expressiont  pointsto_evaluate_access_path(
     const pointsto_rulest&  domain_value,
     const access_path_to_memoryt&  access_path,
     const bool  as_lvalue,
+    const irep_idt&  fn_name,
+    const unsigned int  location_id,
     const namespacet&  ns
+    );
+
+
+pointsto_expressiont  pointsto_temp_prune_pure_locals(
+    const pointsto_expressiont&  a,
+    namespacet const&  ns
     );
 
 

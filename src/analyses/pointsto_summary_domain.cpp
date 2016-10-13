@@ -13,6 +13,7 @@ Date: Octomber 2016
 
 #include <analyses/pointsto_summary_domain.h>
 #include <summaries/summary_dump.h>
+#include <util/msgstream.h>
 #include <algorithm>
 #include <iterator>
 #include <iostream>
@@ -438,6 +439,29 @@ pointsto_expressiont  pointsto_expression_normalise(
     }
     return a;
   }
+  if (const pointsto_set_of_address_shifted_targetst* const shifted =
+        pointsto_as<pointsto_set_of_address_shifted_targetst>(&a))
+  {
+    const pointsto_address_shiftt&  shift = shifted->get_address_shift();
+    if (const pointsto_union_sets_of_targetst* const punion =
+          pointsto_as<pointsto_union_sets_of_targetst>(&shift.get_targets()))
+    {
+      pointsto_union_sets_of_targetst::operants_sett  operands;
+      for (std::size_t  i = 0UL; i < punion->get_num_operands(); ++i)
+        operands.insert(
+            pointsto_expression_normalise(
+                pointsto_set_of_address_shifted_targetst(
+                    pointsto_address_shiftt(
+                        punion->get_operand(i),
+                        shift.get_offsets()
+                        )
+                    )
+                )
+            );
+      return pointsto_union_sets_of_targetst(operands);
+    }
+    return a;
+  }
   if (const pointsto_if_empty_then_elset* const ite =
         pointsto_as<pointsto_if_empty_then_elset>(&a))
   {
@@ -484,6 +508,8 @@ pointsto_expressiont  pointsto_evaluate_access_path(
     const pointsto_rulest&  domain_value,
     const access_path_to_memoryt&  access_path,
     const bool  as_lvalue,
+    const irep_idt&  fn_name,
+    const unsigned int  location_id,
     const namespacet&  ns
     )
 {
@@ -492,6 +518,8 @@ pointsto_expressiont  pointsto_evaluate_access_path(
               domain_value,
               get_typecast_target(access_path,ns),
               as_lvalue,
+              fn_name,
+              location_id,
               ns
               );
 
@@ -509,12 +537,16 @@ pointsto_expressiont  pointsto_evaluate_access_path(
               domain_value,
               get_dereferenced_operand(access_path),
               false,
+              fn_name,
+              location_id,
               ns
               );
   if (is_side_effect_malloc(access_path))
   {
     return pointsto_set_of_concrete_targetst(
-              get_malloc_of_side_effect(access_path).id()
+              msgstream() << fn_name << '@' << location_id << "::"
+                          << get_malloc_of_side_effect(access_path).id()
+                          << msgstream::end()
               );
   }
   if (is_member(access_path))
@@ -525,6 +557,8 @@ pointsto_expressiont  pointsto_evaluate_access_path(
             domain_value,
             get_member_accessor(access_path),
             false,
+            fn_name,
+            location_id,
             ns
             );
     if (pointsto_is_empty_set_of_targets(accessor))
@@ -550,4 +584,92 @@ pointsto_expressiont  pointsto_evaluate_access_path(
   std::cout.flush();
 
   return pointsto_expression_empty_set_of_targets();
+}
+
+
+pointsto_expressiont  pointsto_temp_prune_pure_locals(
+    const pointsto_expressiont&  a,
+    namespacet const&  ns
+    )
+{
+  if (const pointsto_set_of_concrete_targetst* const targets =
+        pointsto_as<pointsto_set_of_concrete_targetst>(&a))
+  {
+    pointsto_set_of_concrete_targetst::target_namest  names;
+    for (std::size_t  i = 0UL; i < targets->get_num_targets(); ++i)
+    {
+      if (as_string(targets->get_target_name(i)).find("::malloc")
+          != std::string::npos)
+        names.insert(targets->get_target_name(i));
+      else
+      {
+        const symbolt* symbol = nullptr;
+        ns.lookup(targets->get_target_name(i),symbol);
+        if (symbol != nullptr && symbol->is_static_lifetime)
+          names.insert(targets->get_target_name(i));
+      }
+    }
+    return pointsto_set_of_concrete_targetst(names);
+  }
+  if (const pointsto_set_of_address_shifted_targetst* const targets =
+        pointsto_as<pointsto_set_of_address_shifted_targetst>(&a))
+  {
+    const pointsto_expressiont  shifts =
+        pointsto_temp_prune_pure_locals(
+            targets->get_address_shift().get_targets(),
+            ns
+            );
+    if (pointsto_is_empty_set_of_targets(shifts))
+      return pointsto_expression_empty_set_of_targets();
+    return pointsto_set_of_address_shifted_targetst(
+                pointsto_address_shiftt(
+                    shifts,
+                    targets->get_address_shift().get_offsets()
+                    )
+                );
+  }
+  if (const pointsto_subtract_sets_of_targetst* const subtract =
+        pointsto_as<pointsto_subtract_sets_of_targetst>(&a))
+  {
+    const pointsto_expressiont  left =
+        pointsto_temp_prune_pure_locals(subtract->get_left(),ns);
+    if (pointsto_is_empty_set_of_targets(left))
+      return pointsto_expression_empty_set_of_targets();
+    const pointsto_expressiont  right =
+        pointsto_temp_prune_pure_locals(subtract->get_right(),ns);
+    if (pointsto_is_empty_set_of_targets(right))
+      return left;
+    return pointsto_subtract_sets_of_targetst(left,right);
+  }
+  if (const pointsto_union_sets_of_targetst* const punion =
+        pointsto_as<pointsto_union_sets_of_targetst>(&a))
+  {
+    pointsto_union_sets_of_targetst::operants_sett  operands;
+    for (std::size_t  i = 0UL; i < punion->get_num_operands(); ++i)
+    {
+      const pointsto_expressiont  pruned =
+          pointsto_temp_prune_pure_locals(punion->get_operand(i),ns);
+      if (!pointsto_is_empty_set_of_targets(pruned))
+        operands.insert(pruned);
+    }
+    if (operands.empty())
+      return pointsto_expression_empty_set_of_targets();
+    if (operands.size() == 1UL)
+      return *operands.cbegin();
+    return pointsto_union_sets_of_targetst(operands);
+  }
+  if (const pointsto_if_empty_then_elset* const ite =
+        pointsto_as<pointsto_if_empty_then_elset>(&a))
+  {
+    const pointsto_expressiont  cond =
+        pointsto_temp_prune_pure_locals(ite->get_conditional_targets(),ns);
+    const pointsto_expressiont  true_expr =
+        pointsto_temp_prune_pure_locals(ite->get_true_branch_targets(),ns);
+    const pointsto_expressiont  false_expr =
+        pointsto_temp_prune_pure_locals(ite->get_false_branch_targets(),ns);
+    if (pointsto_is_empty_set_of_targets(cond))
+      return true_expr;
+    return pointsto_if_empty_then_elset(cond,true_expr,false_expr);
+  }
+  return a;
 }
