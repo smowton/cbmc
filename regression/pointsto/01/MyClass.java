@@ -5,14 +5,14 @@ public final class MyClass {
     final MyClass local2 = local.next;
     local2.next = new MyClass();
   }
-/*
+
   public static void change_nth(MyClass param) {
     MyClass victim = param;
     while (victim.value != 0)
       victim = victim.next;
     victim.next = new MyClass();
   }
-*/
+
   private int value;
   private MyClass next;
 }

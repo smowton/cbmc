@@ -267,20 +267,31 @@ pointsto_union_sets_of_targetst::pointsto_union_sets_of_targetst(
     const pointsto_expressiont&  left,
     const pointsto_expressiont&  right
     )
+  : pointsto_union_sets_of_targetst(operants_sett{left,right})
+{}
+
+pointsto_union_sets_of_targetst::pointsto_union_sets_of_targetst(
+    const operants_sett&  operands
+    )
   : pointsto_expressiont(keyword())
 {
-  get_sub().push_back(left);
-  get_sub().push_back(right);
+  for (const auto&  operand : operands)
+    if (!pointsto_is_empty_set_of_targets(operand))
+      get_sub().push_back(operand);
+  while (get_sub().size() < 2UL)
+    get_sub().push_back(pointsto_expression_empty_set_of_targets());
 }
 
-const pointsto_expressiont& pointsto_union_sets_of_targetst::get_left() const
+std::size_t  pointsto_union_sets_of_targetst::get_num_operands() const
 {
-  return pointsto_as<pointsto_expressiont>(get_sub().front());
+  return get_sub().size();
 }
 
-const pointsto_expressiont& pointsto_union_sets_of_targetst::get_right()const
+const pointsto_expressiont&  pointsto_union_sets_of_targetst::get_operand(
+    const std::size_t operand_index
+    ) const
 {
-  return pointsto_as<pointsto_expressiont>(get_sub().back());
+  return pointsto_as<pointsto_expressiont>(get_sub().at(operand_index));
 }
 
 
@@ -361,24 +372,23 @@ pointsto_expressiont  pointsto_expression_normalise(
   if (const pointsto_union_sets_of_targetst* const punion =
         pointsto_as<pointsto_union_sets_of_targetst>(&a))
   {
-    if (punion->get_left() == punion->get_right())
-      return punion->get_left();
-    if (pointsto_is_empty_set_of_targets(punion->get_left()))
-      return punion->get_right();
-    if (pointsto_is_empty_set_of_targets(punion->get_right()))
-      return punion->get_left();
-
-    if (const pointsto_union_sets_of_targetst* const right =
-          pointsto_as<pointsto_union_sets_of_targetst>(&punion->get_right()))
-    {
-      if (punion->get_left() == right->get_left())
-        return pointsto_union_sets_of_targetst(
-                  punion->get_left(),
-                  right->get_right()
-                  );
-
-    }
-    return a;
+    pointsto_union_sets_of_targetst::operants_sett  operands;
+    for (std::size_t  i = 0UL; i < punion->get_num_operands(); ++i)
+      if (!pointsto_is_empty_set_of_targets(punion->get_operand(i)))
+      {
+        if (const pointsto_union_sets_of_targetst* const inner =
+              pointsto_as<pointsto_union_sets_of_targetst>(
+                  &punion->get_operand(i)))
+          for (std::size_t  j = 0UL; j < inner->get_num_operands(); ++j)
+            operands.insert(inner->get_operand(j));
+        else
+          operands.insert(punion->get_operand(i));
+      }
+    if (operands.empty())
+      return pointsto_expression_empty_set_of_targets();
+    if (operands.size() == 1UL)
+      return *operands.cbegin();
+    return pointsto_union_sets_of_targetst(operands);
   }
   if (const pointsto_address_dereferencet* const deref =
         pointsto_as<pointsto_address_dereferencet>(&a))
@@ -386,24 +396,21 @@ pointsto_expressiont  pointsto_expression_normalise(
     const pointsto_address_shiftt&  shift = deref->get_address_shift();
     if (const pointsto_union_sets_of_targetst* const punion =
           pointsto_as<pointsto_union_sets_of_targetst>(&shift.get_targets()))
-      return pointsto_union_sets_of_targetst(
-                pointsto_expression_normalise(
-                    pointsto_address_dereferencet(
-                        pointsto_address_shiftt(
-                            punion->get_left(),
-                            shift.get_offsets()
-                            )
-                        )
-                    ),
-                pointsto_expression_normalise(
-                    pointsto_address_dereferencet(
-                        pointsto_address_shiftt(
-                            punion->get_right(),
-                            shift.get_offsets()
-                            )
+    {
+      pointsto_union_sets_of_targetst::operants_sett  operands;
+      for (std::size_t  i = 0UL; i < punion->get_num_operands(); ++i)
+        operands.insert(
+            pointsto_expression_normalise(
+                pointsto_address_dereferencet(
+                    pointsto_address_shiftt(
+                        punion->get_operand(i),
+                        shift.get_offsets()
                         )
                     )
-                );
+                )
+            );
+      return pointsto_union_sets_of_targetst(operands);
+    }
     if (const pointsto_address_dereferencet* const inner =
           pointsto_as<pointsto_address_dereferencet>(&shift.get_targets()))
     {

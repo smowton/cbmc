@@ -197,29 +197,22 @@ std::string  pointsto_dump_union_sets_of_targets_in_html(
     std::ostream&  ostr
     )
 {
-  if (enclose_in_brackets(expression.get_left()))
-    ostr << '(';
-  std::string  error_message =
-      pointsto_dump_expression_in_html(
-        expression.get_left(),
-        ostr
-        );
-  if (!error_message.empty())
-    return error_message;
-  if (enclose_in_brackets(expression.get_left()))
-    ostr << ')';
-  ostr << " <b>&#x2210;</b> ";
-  if (enclose_in_brackets(expression.get_right()))
-    ostr << '(';
-  error_message =
-      pointsto_dump_expression_in_html(
-        expression.get_right(),
-        ostr
-        );
-  if (!error_message.empty())
-    return error_message;
-  if (enclose_in_brackets(expression.get_right()))
-    ostr << ')';
+  for (std::size_t  i = 0UL; i < expression.get_num_operands(); ++i)
+  {
+    if (enclose_in_brackets(expression.get_operand(i)))
+      ostr << '(';
+    std::string  error_message =
+        pointsto_dump_expression_in_html(
+          expression.get_operand(i),
+          ostr
+          );
+    if (!error_message.empty())
+      return error_message;
+    if (enclose_in_brackets(expression.get_operand(i)))
+      ostr << ')';
+    if (i+1UL < expression.get_num_operands())
+      ostr << " <b>&#x2210;</b> ";
+  }
   return ""; // No error.
 }
 

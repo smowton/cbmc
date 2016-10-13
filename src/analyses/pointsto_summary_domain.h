@@ -204,6 +204,9 @@ class pointsto_union_sets_of_targetst
     : public pointsto_expressiont
 {
 public:
+  typedef std::unordered_set<pointsto_expressiont,irep_hash,irep_full_eq>
+          operants_sett;
+
   static dstring keyword();
 
   pointsto_union_sets_of_targetst(
@@ -211,8 +214,14 @@ public:
       const pointsto_expressiont&  right
       );
 
-  const pointsto_expressiont&  get_left() const;
-  const pointsto_expressiont&  get_right() const;
+  pointsto_union_sets_of_targetst(
+      const operants_sett&  operands
+      );
+
+  std::size_t  get_num_operands() const;
+  const pointsto_expressiont&  get_operand(
+      const std::size_t operand_index
+      ) const;
 };
 
 
