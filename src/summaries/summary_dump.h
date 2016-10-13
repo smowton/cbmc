@@ -16,6 +16,7 @@ It provides dump of computed summaries in human readable form.
 #define CPROVER_SUMMARIES_SUMMARY_DUMP_H
 
 #include <summaries/summary.h>
+#include <summaries/utility.h>
 #include <goto-programs/goto_model.h>
 #include <analyses/call_graph.h>
 #include <util/json.h>
@@ -129,6 +130,25 @@ Function:
 
 \*******************************************************************/
 std::string  to_html_text(std::string  result);
+
+
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
+void  dump_access_path_in_html(
+    access_path_to_memoryt const&  access_path,
+    namespacet const&  ns,
+    std::ostream&  ostr
+    );
 
 
 /*******************************************************************\

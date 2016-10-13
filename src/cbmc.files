@@ -61,6 +61,10 @@ analyses/locals.cpp
 analyses/locals.h
 analyses/natural_loops.cpp
 analyses/natural_loops.h
+analyses/pointsto_summary_domain.cpp
+analyses/pointsto_summary_domain.h
+analyses/pointsto_summary_domain_dump.cpp
+analyses/pointsto_summary_domain_dump.h
 analyses/reaching_definitions.cpp
 analyses/reaching_definitions.h
 analyses/replace_symbol_ext.cpp
@@ -614,6 +618,10 @@ goto-analyzer/taint_planner.cpp
 goto-analyzer/taint_planner.h
 goto-analyzer/taint_planner_dump.cpp
 goto-analyzer/taint_planner_dump.h
+goto-analyzer/pointsto_temp_analyser.h
+goto-analyzer/pointsto_temp_analyser.cpp
+goto-analyzer/pointsto_temp_summary_dump.h
+goto-analyzer/pointsto_temp_summary_dump.cpp
 goto-analyzer/taint_summary.cpp
 goto-analyzer/taint_summary.h
 goto-analyzer/taint_summary_dump.cpp

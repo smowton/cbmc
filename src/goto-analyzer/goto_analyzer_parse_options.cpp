@@ -49,6 +49,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <cbmc/version.h>
 
 #include <summaries/summary.h>
+#include <goto-analyzer/pointsto_temp_analyser.h>
+#include <goto-analyzer/pointsto_temp_summary_dump.h>
 #include <goto-analyzer/taint_summary.h>
 #include <goto-analyzer/taint_summary_dump.h>
 #include <goto-analyzer/taint_summary_json.h>
@@ -75,8 +77,7 @@ Function: goto_analyzer_parse_optionst::goto_analyzer_parse_optionst
 goto_analyzer_parse_optionst::goto_analyzer_parse_optionst(int argc, const char **argv):
   parse_options_baset(GOTO_ANALYSER_OPTIONS, argc, argv),
   language_uit(cmdline, ui_message_handler),
-  ui_message_handler(language_uit::get_ui_cmdline(cmdline),
-                     "GOTO-ANALYZER " CBMC_VERSION)
+  ui_message_handler(cmdline, "GOTO-ANALYZER " CBMC_VERSION)
 {
 }
   
@@ -233,6 +234,45 @@ void goto_analyzer_parse_optionst::get_command_line_options(optionst &options)
   #endif
 }
 
+
+int  run_pointsto_temp_analyser(
+  goto_modelt&  program,
+  message_handlert&  message_handler)
+{
+  try
+  {
+    std::stringstream  log;
+    const call_grapht call_graph(program.goto_functions);
+    database_of_summariest  summaries;
+
+    pointsto_temp_summarise_all_functions(
+          program,
+          summaries,
+          call_graph,
+          &log
+          );
+
+    dump_in_html(
+          summaries,
+          &pointsto_temp_summary_dump_in_html,
+          program,
+          call_graph,
+          "./dump_pointsto_temp_summaries",
+          &log
+          );
+  }
+  catch (const std::exception& e)
+  {
+    message_handler.print(message_clientt::M_ERROR,
+          msgstream() << "EXCEPTION: " << e.what()
+          );
+    return 0;
+  }
+
+  return 1;
+}
+
+
 /*******************************************************************\
 
 Function: do_taint_analysis
@@ -365,7 +405,9 @@ int goto_analyzer_parse_optionst::doit()
   if(process_goto_program(options))
     return 6;
 
-  if (cmdline.isset("taint-analysis"))
+  if (cmdline.isset("run-pointsto-temp-analyser"))
+    return run_pointsto_temp_analyser(goto_model,get_message_handler());
+  else if (cmdline.isset("taint-analysis"))
     return do_taint_analysis(goto_model,taint_analysis_plan,get_message_handler());
   else if(cmdline.isset("taint"))
   {

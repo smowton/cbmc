@@ -22,7 +22,7 @@ public:
   language_filest language_files;
   symbol_tablet symbol_table;
   
-  explicit language_uit(
+  language_uit(
     const cmdlinet &__cmdline,
     ui_message_handlert &ui_message_handler);
   virtual ~language_uit();
@@ -40,8 +40,6 @@ public:
   virtual void show_symbol_table(bool brief=false);
   virtual void show_symbol_table_plain(std::ostream &out, bool brief);
   virtual void show_symbol_table_xml_ui(bool brief);
-
-  static ui_message_handlert::uit get_ui_cmdline(const cmdlinet &cmdline);
 
   typedef ui_message_handlert::uit uit;
   

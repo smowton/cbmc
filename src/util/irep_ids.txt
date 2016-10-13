@@ -391,7 +391,6 @@ C_volatile #volatile
 C_restricted #restricted
 C_identifier #identifier
 C_implicit #implicit
-C_qualifier #qualifier
 C_ptr32 #ptr32
 C_ptr64 #ptr64
 C_atomic #atomic
@@ -733,3 +732,12 @@ verilog_array
 low
 high
 bswap
+pointsto_access_paths_definition_symbolic
+pointsto_access_paths_definition_concrete
+pointsto_access_paths_definition_shifted
+pointsto_access_paths_definition_offsets
+pointsto_access_paths_shift
+pointsto_access_paths_dereference
+pointsto_access_paths_subtract
+pointsto_access_paths_union
+pointsto_access_paths_conditional

@@ -62,9 +62,77 @@ bool  is_empty(access_path_to_memoryt const&  path)
 }
 
 
+bool  is_typecast(access_path_to_memoryt const&  lvalue)
+{
+  return lvalue.id() == ID_typecast;
+}
+
+const access_path_to_memoryt&  get_typecast_target(
+    access_path_to_memoryt const&  lvalue,
+    namespacet const&  ns
+    )
+{
+  assert(is_typecast(lvalue));
+  return static_cast<const exprt&>(lvalue.get_sub().front());
+}
+
+
 bool  is_identifier(access_path_to_memoryt const&  lvalue)
 {
   return lvalue.id() == ID_symbol;
+}
+
+
+bool  is_dereference(access_path_to_memoryt const&  lvalue)
+{
+  return lvalue.id() == ID_dereference;
+}
+
+const access_path_to_memoryt&  get_dereferenced_operand(
+    access_path_to_memoryt const&  lvalue
+    )
+{
+  assert(is_dereference(lvalue));
+  return static_cast<const exprt&>(lvalue.get_sub().front());
+}
+
+
+bool  is_member(access_path_to_memoryt const&  lvalue)
+{
+  return lvalue.id() == ID_member;
+}
+
+const access_path_to_memoryt&  get_member_accessor(
+    access_path_to_memoryt const&  lvalue
+    )
+{
+  assert(is_member(lvalue));
+  return static_cast<const exprt&>(lvalue.get_sub().front());
+}
+
+const irep_idt&  get_member_name(access_path_to_memoryt const&  lvalue)
+{
+  assert(is_member(lvalue));
+  return lvalue.get_named_sub().at(ID_component_name).id();
+}
+
+
+bool  is_side_effect_malloc(access_path_to_memoryt const&  lvalue)
+{
+  if (lvalue.id() != ID_side_effect)
+    return false;
+  auto const  it = lvalue.get_named_sub().find(ID_statement);
+  if (it == lvalue.get_named_sub().cend() || it->second.id() != "malloc")
+    return false;
+  return true;
+}
+
+const access_path_to_memoryt& get_malloc_of_side_effect(
+    access_path_to_memoryt const&  lvalue
+    )
+{
+  assert(is_side_effect_malloc(lvalue));
+  return static_cast<const exprt&>(lvalue.get_named_sub().at(ID_statement));
 }
 
 
@@ -129,6 +197,12 @@ bool  is_pure_local(access_path_to_memoryt const&  lvalue,
          ;
 }
 
+bool  is_pointer(access_path_to_memoryt const&  lvalue,
+                 namespacet const&  ns)
+{
+  return lvalue.type().id() == ID_pointer;
+}
+
 bool  is_this(access_path_to_memoryt const&  lvalue, namespacet const&  ns)
 {
   if (!is_identifier(lvalue))
@@ -146,11 +220,14 @@ bool  is_this(access_path_to_memoryt const&  lvalue, namespacet const&  ns)
 void  collect_access_paths(
     exprt const&  expr,
     namespacet const&  ns,
-    set_of_access_pathst&  result
+    set_of_access_pathst&  result,
+    bool const  perform_normalisation
     )
 {
   if (expr.id() == ID_symbol || expr.id() == ID_member)
-    result.insert(normalise(expr,ns));
+    result.insert(
+          perform_normalisation ? normalise(expr,ns) : expr
+          );
   else
     for (exprt const&  op : expr.operands())
       collect_access_paths(op,ns,result);

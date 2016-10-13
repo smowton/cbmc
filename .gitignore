@@ -26,15 +26,24 @@ regression/ansi-c/tests.log
 regression/cbmc-java/tests.log
 regression/cbmc/tests.log
 regression/taint/*/*.class
-regression/taint/*/dump_*
+regression/taint/*/dump*
+regression/taint/*/class/*.class
+regression/taint/*/class/dump*
+regression/pointsto/*/*.class
+regression/pointsto/*/dump*
+regression/pointsto/*/class/*.class
+regression/pointsto/*/class/dump*
 src/big-int/test-bigint
 src/big-int/test-bigint.exe
 
 # files stored by editors
 *~
+
+# libs downloaded by make [name]-download
 libzip/
 zlib/
-minisat-2.2.1/
+minisat*/
+glucose-syrup/
 
 # flex/bison generated files
 src/ansi-c/ansi_c_lex.yy.cpp

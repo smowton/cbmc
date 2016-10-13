@@ -4,7 +4,9 @@ SRC = goto_analyzer_main.cpp goto_analyzer_parse_options.cpp \
       taint_summary.cpp \
       taint_summary_dump.cpp taint_summary_json.cpp \
       taint_planner.cpp \
-      taint_planner_dump.cpp
+      taint_planner_dump.cpp \
+      pointsto_temp_analyser.cpp \
+      pointsto_temp_summary_dump.cpp
 
 OBJ += ../ansi-c/ansi-c$(LIBEXT) \
       ../cpp/cpp$(LIBEXT) \

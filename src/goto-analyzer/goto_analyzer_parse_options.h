@@ -6,8 +6,8 @@ Author: Daniel Kroening, kroening@kroening.com
 
 \*******************************************************************/
 
-#ifndef CPROVER_CBMC_PARSEOPTIONS_H
-#define CPROVER_CBMC_PARSEOPTIONS_H
+#ifndef CPROVER_GOTO_ANALYZER_PARSEOPTIONS_H
+#define CPROVER_GOTO_ANALYZER_PARSEOPTIONS_H
 
 #include <util/ui_message.h>
 #include <util/parse_options.h>
@@ -39,7 +39,8 @@ class optionst;
   "(intervals)(show-intervals)" \
   "(non-null)(show-non-null)" \
   "(summary-only)" \
-  "(taint-analysis):"
+  "(taint-analysis):" \
+  "(run-pointsto-temp-analyser)"
 
 class goto_analyzer_parse_optionst:
   public parse_options_baset,

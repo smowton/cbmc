@@ -6,33 +6,20 @@
 
 #include <cegis/instrument/literals.h>
 #include <cegis/instrument/instrument_var_ops.h>
+#include <cegis/cegis-util/string_helper.h>
 #include <cegis/cegis-util/program_helper.h>
 
 goto_programt &get_entry_body(goto_functionst &gf)
 {
-  const irep_idt id(goto_functionst::entry_point());
-  goto_functionst::function_mapt &function_map=gf.function_map;
-  const goto_functionst::function_mapt::iterator it=function_map.find(id);
-  assert(function_map.end() != it && "Danger program function missing.");
-  goto_function_templatet<goto_programt> &f=it->second;
-  assert(f.body_available() && "Danger program function body missing.");
-  return f.body;
+  return get_body(gf, id2string(goto_functionst::entry_point()));
 }
 
 const goto_programt &get_entry_body(const goto_functionst &gf)
 {
-  const irep_idt id(goto_functionst::entry_point());
-  const goto_functionst::function_mapt &function_map=gf.function_map;
-  const goto_functionst::function_mapt::const_iterator it=function_map.find(id);
-  assert(function_map.end() != it && "Danger program function missing.");
-  const goto_function_templatet<goto_programt> &f=it->second;
-  assert(f.body_available() && "Danger program function body missing.");
-  return f.body;
+  return get_body(gf, id2string(goto_functionst::entry_point()));
 }
 
-class goto_programt &get_body(
-    class goto_functionst &gf,
-    const std::string &func_name)
+goto_programt &get_body(goto_functionst &gf, const std::string &func_name)
 {
   const irep_idt id(func_name);
   goto_functionst::function_mapt &function_map=gf.function_map;
@@ -43,8 +30,12 @@ class goto_programt &get_body(
   return f.body;
 }
 
-const goto_programt &get_body(
-    const goto_functionst &gf,
+goto_programt &get_body(goto_functionst &gf, const goto_programt::const_targett pos)
+{
+  return get_body(gf, id2string(pos->function));
+}
+
+const goto_programt &get_body(const goto_functionst &gf,
     const std::string &func_name)
 {
   const irep_idt id(func_name);
@@ -92,15 +83,15 @@ bool contains(const exprt &rhs, const irep_idt &id)
 }
 }
 
-bool is_nondet(const goto_programt::targett &target,
-    const goto_programt::targett &end)
+bool is_nondet(goto_programt::const_targett target,
+    goto_programt::const_targett end)
 {
   const goto_programt::instructiont &instr=*target;
   switch (instr.type)
   {
   case goto_program_instruction_typet::DECL:
   {
-    goto_programt::targett next=std::next(target);
+    goto_programt::const_targett next=std::next(target);
     if (next == end) return true;
     if (goto_program_instruction_typet::FUNCTION_CALL == next->type)
     {
@@ -127,6 +118,11 @@ bool is_nondet(const goto_programt::targett &target,
   default:
     return false;
   }
+}
+
+bool is_return_value_name(const std::string &name)
+{
+  return contains(name, "return_value___") || contains(name, RETURN_VALUE_SUFFIX);
 }
 
 const typet &get_affected_type(const goto_programt::instructiont &instr)

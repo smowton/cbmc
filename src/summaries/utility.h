@@ -16,11 +16,31 @@ summaries of any kinds.
 #ifndef CPROVER_SUMMARIES_UTILITY_H
 #define CPROVER_SUMMARIES_UTILITY_H
 
+#include <goto-programs/goto_functions.h>
 #include <util/expr.h>
 #include <util/namespace.h>
 #include <util/std_code.h>
 #include <util/std_types.h>
 #include <string>
+
+
+/*******************************************************************\
+
+   Class:
+
+ Purpose:
+
+\*******************************************************************/
+class  instruction_iterator_hashert
+{
+public:
+  std::size_t  operator()(
+      goto_programt::instructiont::const_targett const  it
+      ) const
+  {
+    return std::hash<goto_programt::instructiont const*>()(&*it);
+  }
+};
 
 
 /*******************************************************************\
@@ -70,7 +90,85 @@ Function:
 
 
 \*******************************************************************/
+bool  is_typecast(access_path_to_memoryt const&  lvalue);
+
+const access_path_to_memoryt&  get_typecast_target(
+    const access_path_to_memoryt&  lvalue,
+    namespacet const&  ns
+    );
+
+
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 bool  is_identifier(access_path_to_memoryt const&  lvalue);
+
+
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
+bool  is_dereference(access_path_to_memoryt const&  lvalue);
+
+const access_path_to_memoryt&  get_dereferenced_operand(
+    access_path_to_memoryt const&  lvalue
+    );
+
+
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
+bool  is_member(access_path_to_memoryt const&  lvalue);
+
+const access_path_to_memoryt&  get_member_accessor(
+    access_path_to_memoryt const&  lvalue
+    );
+const irep_idt&  get_member_name(access_path_to_memoryt const&  lvalue);
+
+
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
+bool  is_side_effect_malloc(access_path_to_memoryt const&  lvalue);
+
+const access_path_to_memoryt& get_malloc_of_side_effect(
+    access_path_to_memoryt const&  lvalue
+    );
 
 
 /*******************************************************************\
@@ -163,6 +261,22 @@ Function:
 
 
 \*******************************************************************/
+bool  is_pointer(access_path_to_memoryt const&  lvalue,
+                 namespacet const&  ns);
+
+
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 bool  is_this(access_path_to_memoryt const&  lvalue, namespacet const&  ns);
 
 
@@ -185,7 +299,8 @@ Function:
 void  collect_access_paths(
     exprt const&  expr,
     namespacet const&  ns,
-    set_of_access_pathst&  result
+    set_of_access_pathst&  result,
+    bool const  perform_normalisation = true
     );
 
 
