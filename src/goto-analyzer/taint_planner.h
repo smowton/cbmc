@@ -156,7 +156,7 @@ public:
                              taint_map_from_lvalues_to_svaluest,
                              dstring_hash>
           sinks_mapt;
-  typedef std::vector<taint_svaluet::symbolt>
+  typedef std::vector<taint_svaluet::taint_symbolt>
           taint_symbolst;
 
   taint_plannert(goto_modelt const&  program,
