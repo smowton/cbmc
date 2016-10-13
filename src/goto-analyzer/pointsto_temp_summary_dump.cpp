@@ -29,7 +29,7 @@ std::string  pointsto_temp_summary_dump_in_html(
        ;
   pointsto_dump_rules_in_html(summary->get_input(),ostr);
 
-  ostr << "<p>The summary:</p>\n";
+  ostr << "<p>The summary (TODO: prune out local variables!!!):</p>\n";
   pointsto_dump_rules_in_html(summary->get_output(),ostr);
 
   if (summary->get_domain().operator bool())

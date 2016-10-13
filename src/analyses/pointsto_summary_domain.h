@@ -77,7 +77,7 @@ public:
 class pointsto_set_of_offsetst : public irept
 {
 public:
-  typedef std::unordered_set<irep_idt,dstring_hash>  offset_namest;
+  typedef std::set<irep_idt>  offset_namest;
 
   static dstring keyword();
 
@@ -86,8 +86,11 @@ public:
       bool const is_exact
       );
 
-  void  get_offset_names(offset_namest&  output_names) const;
+  std::size_t  get_num_offsets() const;
+  const irep_idt&  get_offset_name(const std::size_t offset_index) const;
+
   bool  is_exact() const;
+  bool  contains(const irep_idt&  offset_name) const;
 };
 
 
@@ -104,6 +107,15 @@ public:
 
   const pointsto_expressiont&  get_targets() const;
   const pointsto_set_of_offsetst&  get_offsets() const;
+};
+
+
+class pointsto_null_targett
+    : public pointsto_expressiont
+{
+public:
+  static dstring keyword();
+  pointsto_null_targett();
 };
 
 
@@ -125,17 +137,36 @@ class pointsto_set_of_concrete_targetst
     : public pointsto_expressiont
 {
 public:
+  typedef std::set<irep_idt> target_namest;
+
   static dstring keyword();
 
   pointsto_set_of_concrete_targetst(
       const irep_idt&  target_name
       );
   pointsto_set_of_concrete_targetst(
-      const std::unordered_set<irep_idt,dstring_hash>&  targets
+      const target_namest&  targets
       );
 
+  bool empty() const { return get_num_targets() == 0UL; }
   std::size_t  get_num_targets() const;
   const irep_idt&  get_target_name(const std::size_t target_index) const;
+
+  bool  contains(const irep_idt&  target_name) const;
+};
+
+
+class pointsto_set_of_address_shifted_targetst
+    : public pointsto_expressiont
+{
+public:
+  static dstring keyword();
+
+  pointsto_set_of_address_shifted_targetst(
+      const pointsto_address_shiftt& shift
+      );
+
+  const pointsto_address_shiftt&  get_address_shift() const;
 };
 
 
@@ -209,6 +240,7 @@ typedef std::unordered_map<pointsto_expressiont,pointsto_expressiont,
 
 
 pointsto_expressiont  pointsto_expression_empty_set_of_targets();
+bool  pointsto_is_empty_set_of_targets(const pointsto_expressiont& a);
 
 
 pointsto_expressiont  pointsto_expression_normalise(
@@ -223,7 +255,9 @@ pointsto_expressiont  pointsto_evaluate_expression(
 
 pointsto_expressiont  pointsto_evaluate_access_path(
     const pointsto_rulest&  domain_value,
-    const access_path_to_memoryt&  access_path
+    const access_path_to_memoryt&  access_path,
+    const bool  as_lvalue,
+    const namespacet&  ns
     );
 
 

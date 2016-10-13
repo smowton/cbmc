@@ -90,6 +90,26 @@ Function:
 
 
 \*******************************************************************/
+bool  is_typecast(access_path_to_memoryt const&  lvalue);
+
+const access_path_to_memoryt&  get_typecast_target(
+    const access_path_to_memoryt&  lvalue,
+    namespacet const&  ns
+    );
+
+
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 bool  is_identifier(access_path_to_memoryt const&  lvalue);
 
 
@@ -105,7 +125,50 @@ Function:
 
 
 \*******************************************************************/
+bool  is_dereference(access_path_to_memoryt const&  lvalue);
+
+const access_path_to_memoryt&  get_dereferenced_operand(
+    access_path_to_memoryt const&  lvalue
+    );
+
+
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 bool  is_member(access_path_to_memoryt const&  lvalue);
+
+const access_path_to_memoryt&  get_member_accessor(
+    access_path_to_memoryt const&  lvalue
+    );
+const irep_idt&  get_member_name(access_path_to_memoryt const&  lvalue);
+
+
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
+bool  is_side_effect_malloc(access_path_to_memoryt const&  lvalue);
+
+const access_path_to_memoryt& get_malloc_of_side_effect(
+    access_path_to_memoryt const&  lvalue
+    );
 
 
 /*******************************************************************\

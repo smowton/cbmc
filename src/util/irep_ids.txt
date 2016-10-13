@@ -734,6 +734,7 @@ high
 bswap
 pointsto_access_paths_definition_symbolic
 pointsto_access_paths_definition_concrete
+pointsto_access_paths_definition_shifted
 pointsto_access_paths_definition_offsets
 pointsto_access_paths_shift
 pointsto_access_paths_dereference

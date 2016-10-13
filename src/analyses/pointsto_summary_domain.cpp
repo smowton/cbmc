@@ -12,6 +12,16 @@ Date: Octomber 2016
 \*******************************************************************/
 
 #include <analyses/pointsto_summary_domain.h>
+#include <summaries/summary_dump.h>
+#include <algorithm>
+#include <iterator>
+#include <iostream>
+
+
+static bool  irep_id_less(const irept&  a, const irept&  b)
+{
+  return a.id() < b.id();
+}
 
 
 pointsto_expressiont::pointsto_expressiont(const dstring&  keyword)
@@ -35,23 +45,41 @@ pointsto_set_of_offsetst::pointsto_set_of_offsetst(
     )
   : irept(keyword())
 {
-  get_sub().push_back(irept(is_exact ? "yes" : "no"));
   for (auto const&  offset : offset_names)
     get_sub().push_back(irept(offset));
+  get_sub().push_back(irept(is_exact ? "yes" : "no"));
 }
 
-void  pointsto_set_of_offsetst::get_offset_names(
-    offset_namest&  output_names
+std::size_t  pointsto_set_of_offsetst::get_num_offsets() const
+{
+  return get_sub().size() - 1UL;
+}
+
+const irep_idt&  pointsto_set_of_offsetst::get_offset_name(
+    const std::size_t offset_index
     ) const
 {
-  for (std::size_t  i = 1UL; i < get_sub().size(); ++i)
-    output_names.insert(get_sub().at(i).id());
+  assert(offset_index < get_num_offsets());
+  return get_sub().at(offset_index).id();
 }
 
 bool  pointsto_set_of_offsetst::is_exact() const
 {
-  return get_sub().front().id() == "yes";
+  return get_sub().back().id() == "yes";
 }
+
+bool  pointsto_set_of_offsetst::contains(
+    const irep_idt&  offset_name
+    ) const
+{
+  return std::binary_search(
+            get_sub().cbegin(),
+            std::prev(get_sub().cend()),
+            irept(offset_name),
+            irep_id_less
+            );
+}
+
 
 
 dstring pointsto_address_shiftt::keyword()
@@ -78,6 +106,16 @@ const pointsto_set_of_offsetst& pointsto_address_shiftt::get_offsets() const
 {
   return pointsto_as<pointsto_set_of_offsetst>(get_sub().back());
 }
+
+
+dstring pointsto_null_targett::keyword()
+{
+  return ID_NULL;
+}
+
+pointsto_null_targett::pointsto_null_targett()
+  : pointsto_expressiont(keyword())
+{}
 
 
 dstring pointsto_symbolic_set_of_targetst::keyword()
@@ -114,12 +152,12 @@ pointsto_set_of_concrete_targetst::pointsto_set_of_concrete_targetst(
     const irep_idt&  target_name
     )
   : pointsto_set_of_concrete_targetst(
-      std::unordered_set<irep_idt,dstring_hash>{target_name}
+      std::set<irep_idt>{target_name}
       )
 {}
 
 pointsto_set_of_concrete_targetst::pointsto_set_of_concrete_targetst(
-    const std::unordered_set<irep_idt,dstring_hash>&  targets
+    const target_namest&  targets
     )
   : pointsto_expressiont(keyword())
 {
@@ -136,7 +174,41 @@ const irep_idt&  pointsto_set_of_concrete_targetst::get_target_name(
     const std::size_t target_index
     ) const
 {
+  assert(target_index < get_num_targets());
   return get_sub().at(target_index).id();
+}
+
+bool  pointsto_set_of_concrete_targetst::contains(
+    const irep_idt&  target_name
+    ) const
+{
+  return std::binary_search(
+            get_sub().cbegin(),
+            get_sub().cend(),
+            irept(target_name),
+            irep_id_less
+            );
+}
+
+
+dstring  pointsto_set_of_address_shifted_targetst::keyword()
+{
+  return ID_pointsto_access_paths_definition_shifted;
+}
+
+pointsto_set_of_address_shifted_targetst::
+pointsto_set_of_address_shifted_targetst(
+      const pointsto_address_shiftt& shift
+      )
+  : pointsto_expressiont(keyword())
+{
+  get_sub().push_back(shift);
+}
+
+const pointsto_address_shiftt&
+pointsto_set_of_address_shifted_targetst::get_address_shift() const
+{
+  return pointsto_as<pointsto_address_shiftt>(get_sub().front());
 }
 
 
@@ -251,8 +323,17 @@ pointsto_if_empty_then_elset::get_false_branch_targets() const
 pointsto_expressiont  pointsto_expression_empty_set_of_targets()
 {
   return pointsto_set_of_concrete_targetst(
-            std::unordered_set<irep_idt,dstring_hash>{}
+            pointsto_set_of_concrete_targetst::target_namest{}
             );
+}
+
+bool  pointsto_is_empty_set_of_targets(const pointsto_expressiont& a)
+{
+  if (const pointsto_set_of_concrete_targetst* const targets =
+        pointsto_as<pointsto_set_of_concrete_targetst>(&a))
+    if (targets->empty())
+      return true;
+  return false;
 }
 
 
@@ -260,7 +341,52 @@ pointsto_expressiont  pointsto_expression_normalise(
     const pointsto_expressiont&  a
     )
 {
-  // TODO!
+  if (const pointsto_subtract_sets_of_targetst* const subtract =
+        pointsto_as<pointsto_subtract_sets_of_targetst>(&a))
+  {
+    if (const pointsto_set_of_concrete_targetst* const left =
+          pointsto_as<pointsto_set_of_concrete_targetst>(&subtract->get_left()))
+    {
+      if (const pointsto_set_of_concrete_targetst* const right =
+         pointsto_as<pointsto_set_of_concrete_targetst>(&subtract->get_right()))
+      {
+        pointsto_set_of_concrete_targetst::target_namest  names;
+        for (std::size_t  i = 0UL; i < left->get_num_targets(); ++i)
+          if (!right->contains(left->get_target_name(i)))
+            names.insert(left->get_target_name(i));
+        return pointsto_set_of_concrete_targetst{names};
+      }
+    }
+  }
+  if (const pointsto_union_sets_of_targetst* const punion =
+        pointsto_as<pointsto_union_sets_of_targetst>(&a))
+  {
+    if (pointsto_is_empty_set_of_targets(punion->get_left()))
+      return punion->get_right();
+    if (pointsto_is_empty_set_of_targets(punion->get_right()))
+      return punion->get_left();
+
+    if (const pointsto_union_sets_of_targetst* const right =
+          pointsto_as<pointsto_union_sets_of_targetst>(&punion->get_right()))
+    {
+      if (punion->get_left() == right->get_left())
+        return pointsto_union_sets_of_targetst(
+                  punion->get_left(),
+                  right->get_right()
+                  );
+
+    }
+
+  }
+  if (const pointsto_if_empty_then_elset* const ite =
+        pointsto_as<pointsto_if_empty_then_elset>(&a))
+  {
+    if (const pointsto_set_of_concrete_targetst* const cond =
+          pointsto_as<pointsto_set_of_concrete_targetst>(
+              &ite->get_conditional_targets()) )
+      return cond->empty() ? ite->get_true_branch_targets()  :
+                             ite->get_false_branch_targets() ;
+  }
   return a;
 }
 
@@ -295,19 +421,72 @@ pointsto_expressiont  pointsto_evaluate_expression(
 
 pointsto_expressiont  pointsto_evaluate_access_path(
     const pointsto_rulest&  domain_value,
-    const access_path_to_memoryt&  access_path
+    const access_path_to_memoryt&  access_path,
+    const bool  as_lvalue,
+    const namespacet&  ns
     )
 {
+  if (is_typecast(access_path))
+    return pointsto_evaluate_access_path(
+              domain_value,
+              get_typecast_target(access_path,ns),
+              as_lvalue,
+              ns
+              );
+
   if (is_identifier(access_path))
+  {
+    const pointsto_set_of_concrete_targetst  expression(
+                      name_of_symbol_access_path(access_path)
+                      );
+    if (as_lvalue)
+      return expression;
+    return pointsto_evaluate_expression(domain_value,expression);
+  }
+  if (is_dereference(access_path))
+    return pointsto_evaluate_access_path(
+              domain_value,
+              get_dereferenced_operand(access_path),
+              false,
+              ns
+              );
+  if (is_side_effect_malloc(access_path))
+  {
     return pointsto_set_of_concrete_targetst(
-                name_of_symbol_access_path(access_path)
-                );
-
-  // TODO!
-
+              get_malloc_of_side_effect(access_path).id()
+              );
+  }
   if (is_member(access_path))
   {
+    const irep_idt&  member_name = get_member_name(access_path);
+    const pointsto_expressiont  accessor =
+        pointsto_evaluate_access_path(
+            domain_value,
+            get_member_accessor(access_path),
+            false,
+            ns
+            );
+    if (pointsto_is_empty_set_of_targets(accessor))
+      return accessor;
+    const pointsto_address_shiftt  shift(
+        accessor,
+        pointsto_set_of_offsetst({member_name},true)
+        );
+    if (as_lvalue)
+      return pointsto_expression_normalise(
+                pointsto_set_of_address_shifted_targetst(shift)
+                );
+    else
+      return pointsto_expression_normalise(
+                pointsto_address_dereferencet(shift)
+                );
   }
+
+  std::cout << "\n\n**** UNSUPPORTED YET ***********************************\n";
+  dump_access_path_in_html(access_path,ns,std::cout);
+  std::cout << "\n";
+  dump_irept(access_path,std::cout);
+  std::cout.flush();
 
   return pointsto_expression_empty_set_of_targets();
 }

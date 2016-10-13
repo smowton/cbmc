@@ -1,6 +1,7 @@
 #include <goto-analyzer/pointsto_temp_analyser.h>
 #include <analyses/pointsto_summary_domain_dump.h>
 #include <goto-programs/goto_functions.h>
+#include <iostream>
 
 pointsto_temp_summaryt::pointsto_temp_summaryt(
     const pointsto_rulest&  input_,
@@ -129,6 +130,9 @@ static pointsto_rulest  pointsto_temp_join(
   pointsto_rulest  result = a;
   for (const auto&  elem : b)
   {
+    if (pointsto_is_empty_set_of_targets(elem.first) ||
+        pointsto_is_empty_set_of_targets(elem.second))
+      continue;
     auto it = result.find(elem.first);
     if (it == b.end())
       result.insert(elem);
@@ -149,8 +153,10 @@ static pointsto_rulest  pointsto_temp_assign(
     const namespacet&  ns
     )
 {
-  pointsto_expressiont const  left = pointsto_evaluate_access_path(a,lhs);
-  pointsto_expressiont const  right = pointsto_evaluate_access_path(a,rhs);
+  pointsto_expressiont const  left =
+      pointsto_evaluate_access_path(a,lhs,true,ns);
+  pointsto_expressiont const  right =
+      pointsto_evaluate_access_path(a,rhs,false,ns);
   pointsto_rulest  result;
   for (const auto&  elem : a)
     result =
@@ -392,10 +398,20 @@ pointsto_temp_summary_ptrt  pointsto_temp_summarise_function(
   pointsto_rulest const  input =
       domain->at(fn_iter->second.body.instructions.cbegin());
 
+int iii = 0;
+
   solver_work_set_t  work_set;
   initialise_workset(fn_iter->second,work_set);
   while (!work_set.empty())
   {
+    ++iii;
+    if (iii > 50)
+    {
+      std::cout << "ERROR: The analysis was early terminated (after 50 steps). "
+                   "The fixed point was not reached yet.\n";
+      break;
+    }
+
     instruction_iteratort const  src_instr_it = *work_set.cbegin();
     work_set.erase(work_set.cbegin());
 
