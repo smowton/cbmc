@@ -169,7 +169,15 @@ int goto_instrument_parse_optionst::doit()
       status() << "Pointer Analysis" << eom;
       namespacet ns(symbol_table);
       value_set_analysist value_set_analysis(ns);
-      value_set_analysis(goto_functions);
+
+      if(cmdline.isset("value-set-function"))
+      {
+        const goto_programt& gp=
+          goto_functions.function_map.at(cmdline.get_value("value-set-function")).body;
+        value_set_analysis(gp);
+      }
+      else
+        value_set_analysis(goto_functions);
 
       show_value_sets(get_ui(), goto_functions, value_set_analysis);
       return 0;
