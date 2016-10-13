@@ -247,6 +247,18 @@ pointsto_expressiont  pointsto_expression_normalise(
     const pointsto_expressiont&  a
     );
 
+//template<typename pointsto_expression_typet>
+//pointsto_expression_typet pointsto_expression_normalise(
+//    const pointsto_expression_typet& expression
+//    )
+//{
+//  return pointsto_as<pointsto_expression_typet>(
+//              pointsto_expression_normalise(
+//                  static_cast<const pointsto_expressiont&>(expression)
+//                  )
+//              );
+//}
+
 
 pointsto_expressiont  pointsto_evaluate_expression(
     const pointsto_rulest&  domain_value,

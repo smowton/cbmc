@@ -361,6 +361,8 @@ pointsto_expressiont  pointsto_expression_normalise(
   if (const pointsto_union_sets_of_targetst* const punion =
         pointsto_as<pointsto_union_sets_of_targetst>(&a))
   {
+    if (punion->get_left() == punion->get_right())
+      return punion->get_left();
     if (pointsto_is_empty_set_of_targets(punion->get_left()))
       return punion->get_right();
     if (pointsto_is_empty_set_of_targets(punion->get_right()))
@@ -376,7 +378,58 @@ pointsto_expressiont  pointsto_expression_normalise(
                   );
 
     }
-
+    return a;
+  }
+  if (const pointsto_address_dereferencet* const deref =
+        pointsto_as<pointsto_address_dereferencet>(&a))
+  {
+    const pointsto_address_shiftt&  shift = deref->get_address_shift();
+    if (const pointsto_union_sets_of_targetst* const punion =
+          pointsto_as<pointsto_union_sets_of_targetst>(&shift.get_targets()))
+      return pointsto_union_sets_of_targetst(
+                pointsto_expression_normalise(
+                    pointsto_address_dereferencet(
+                        pointsto_address_shiftt(
+                            punion->get_left(),
+                            shift.get_offsets()
+                            )
+                        )
+                    ),
+                pointsto_expression_normalise(
+                    pointsto_address_dereferencet(
+                        pointsto_address_shiftt(
+                            punion->get_right(),
+                            shift.get_offsets()
+                            )
+                        )
+                    )
+                );
+    if (const pointsto_address_dereferencet* const inner =
+          pointsto_as<pointsto_address_dereferencet>(&shift.get_targets()))
+    {
+      const pointsto_address_shiftt&  inner_shift = inner->get_address_shift();
+      pointsto_set_of_offsetst::offset_namest names;
+      {
+        const pointsto_set_of_offsetst& inner_offsets =
+            inner_shift.get_offsets();
+        for (std::size_t  i = 0UL; i < inner_offsets.get_num_offsets(); ++i)
+          names.insert(inner_offsets.get_offset_name(i));
+        const pointsto_set_of_offsetst& outer_offsets =
+            shift.get_offsets();
+        for (std::size_t  i = 0UL; i < outer_offsets.get_num_offsets(); ++i)
+          names.insert(outer_offsets.get_offset_name(i));
+      }
+      return pointsto_address_dereferencet(
+                  pointsto_address_shiftt(
+                      inner_shift.get_targets(),
+                      pointsto_set_of_offsetst(
+                          names,
+                          false
+                          )
+                      )
+                  );
+    }
+    return a;
   }
   if (const pointsto_if_empty_then_elset* const ite =
         pointsto_as<pointsto_if_empty_then_elset>(&a))
@@ -386,6 +439,7 @@ pointsto_expressiont  pointsto_expression_normalise(
               &ite->get_conditional_targets()) )
       return cond->empty() ? ite->get_true_branch_targets()  :
                              ite->get_false_branch_targets() ;
+    return a;
   }
   return a;
 }

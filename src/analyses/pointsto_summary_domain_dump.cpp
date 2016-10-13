@@ -156,7 +156,7 @@ std::string  pointsto_dump_set_of_offsetst_in_html(
   }
   ostr << '}';
   if (!offsets.is_exact())
-    ostr << "<b>*</b>";
+    ostr << "<b>!</b>";
   return ""; // No error.
 }
 
@@ -208,7 +208,7 @@ std::string  pointsto_dump_union_sets_of_targets_in_html(
     return error_message;
   if (enclose_in_brackets(expression.get_left()))
     ostr << ')';
-  ostr << " <b>U</b> ";
+  ostr << " <b>&#x2210;</b> ";
   if (enclose_in_brackets(expression.get_right()))
     ostr << '(';
   error_message =
