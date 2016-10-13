@@ -174,7 +174,7 @@ int goto_instrument_parse_optionst::doit()
       {
         const auto& fname=cmdline.get_value("value-set-function");
         const auto& gf=goto_functions.function_map.at(fname);
-        local_value_set_analysist value_set_analysis(ns,gf.parameter_identifiers);
+        local_value_set_analysist value_set_analysis(ns,gf.type);
         value_set_analysis(gf.body);
         show_value_sets(get_ui(), gf.body, value_set_analysis);
       }

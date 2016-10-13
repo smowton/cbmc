@@ -10,14 +10,15 @@ class local_value_set_analysist : public value_set_analysist {
 
  public:
   
- local_value_set_analysist(const namespacet& ns, const std::vector<irep_idt>& param_ids) :
+ local_value_set_analysist(const namespacet& ns, const code_typet& ftype) :
   value_set_analysist(ns),
-  parameter_identifiers(param_ids) {}
+    function_type(ftype) {}
+
   virtual void initialize(const goto_programt &goto_program);
 
  protected:
 
-  std::vector<irep_idt> parameter_identifiers;
+  const code_typet& function_type;
 
 };
 
