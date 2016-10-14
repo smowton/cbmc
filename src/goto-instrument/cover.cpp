@@ -1175,8 +1175,8 @@ void instrument_cover_goals(
              source_location.get_file()[0]!='<'&&
 	     cover_curr_function)
           {
-            std::string comment="function "+id2string(i_it->function)+" block "+b;
-	    const irep_idt function=i_it->function; 
+            std::string comment="function "+id2string(source_location.get_function())+" block "+b;
+	    const irep_idt function=source_location.get_function();
             goto_program.insert_before_swap(i_it);
             i_it->make_assertion(false_exprt());
             i_it->source_location=source_location;
