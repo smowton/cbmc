@@ -1555,6 +1555,16 @@ void value_sett::assign_rec(
 
     make_union(e.object_map, values_rhs);
   }
+  else if(lhs.id()=="external-value-set-init")
+  {
+    // Write through an opaque external value set.
+    const auto& evsi=to_external_value_set_initial_content(lhs);
+    const std::string name=evsi.get_access_path_label();
+    
+    entryt &e=get_entry(entryt(name,suffix), lhs.type(), ns);
+
+    make_union(e.object_map, values_rhs);
+  }
   else if(lhs.id()==ID_dereference)
   {
     if(lhs.operands().size()!=1)
