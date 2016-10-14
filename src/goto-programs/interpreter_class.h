@@ -152,10 +152,10 @@ public:
   bool done;
   bool show;
   bool stop_on_assertion;
-  int num_steps;
-  int total_steps;
+  size_t num_steps;
+  size_t total_steps;
   mutable int num_dynamic_objects;
-  int stack_depth;
+  size_t stack_depth;
   int thread_id;
 
   bool evaluate_boolean(const exprt &expr) const
