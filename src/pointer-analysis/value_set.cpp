@@ -8,6 +8,7 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <cassert>
 #include <ostream>
+#include <iostream>
 
 #include <util/symbol_table.h>
 #include <util/simplify_expr.h>
@@ -928,7 +929,7 @@ void value_sett::get_value_set_rec(
     else
       make_union(dest, v_it->second.object_map);
   }
-  else if(expr.id()=="external-value-set-init")
+  else if(expr.id()=="external-value-set")
   {
     // This represents an unknown external set of pointer-typed objects.
     // It points to another external value set representing an access path;
@@ -938,25 +939,27 @@ void value_sett::get_value_set_rec(
     if(field_type.id()==ID_pointer)
     {
     
-      const auto& extinit=to_external_value_set_initial_content(expr);
-      std::string basename=extinit.get_access_path_label();
+      const auto& extinit=to_external_value_set(expr);
+      access_path_entry_exprt newentry(suffix,function,i2string(location_number));
+      external_value_set_exprt new_ext_set=extinit;
+      new_ext_set.extend_access_path(newentry);
+      new_ext_set.type()=field_type.subtype();
+
+      std::string basename=new_ext_set.get_access_path_basename();
       std::string entryname=basename+suffix;
+        
       entryt entry(basename,suffix);
 
-      // TODO: figure out how to do this sort of on-demand-insert without such ugly const hacking:
-      auto insert_result=const_cast<valuest&>(values).insert(std::make_pair(irep_idt(entryname),entry));
+      // TODO: figure out how to do this sort of on-demand-insert
+      // without such ugly const hacking:
+      auto insert_result=const_cast<valuest&>(values).
+        insert(std::make_pair(irep_idt(entryname),entry));
 
       if(insert_result.second)
-      {
-        external_value_set_initial_content_exprt newinit=extinit;
-        access_path_entry_exprt newentry(suffix,"unknown function","0");
-        newinit.access_path_push_back(newentry);
-        newinit.type()=field_type.subtype();
-        insert(insert_result.first->second.object_map,newinit);
-      }
+        insert(insert_result.first->second.object_map,new_ext_set);
 
       make_union(dest,insert_result.first->second.object_map);
-
+      
     }
     else {
       // Deref-of-external yields a scalar type.
@@ -1555,11 +1558,15 @@ void value_sett::assign_rec(
 
     make_union(e.object_map, values_rhs);
   }
-  else if(lhs.id()=="external-value-set-init")
+  else if(lhs.id()=="external-value-set")
   {
     // Write through an opaque external value set.
-    const auto& evsi=to_external_value_set_initial_content(lhs);
-    const std::string name=evsi.get_access_path_label();
+    const auto& evsi=to_external_value_set(lhs);
+    access_path_entry_exprt newentry(suffix,function,i2string(location_number));
+    external_value_set_exprt new_ext_set=evsi;
+    new_ext_set.extend_access_path(newentry);
+    
+    const std::string name=new_ext_set.get_access_path_basename();
     
     entryt &e=get_entry(entryt(name,suffix), lhs.type(), ns);
 

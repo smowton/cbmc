@@ -4412,9 +4412,6 @@ std::string expr2ct::convert(
   else if(src.id()=="external-value-set")
     return convert_function(src, "EXT_VAL_SET", precedence=16);
 
-  else if(src.id()=="external-value-set-init")
-    return convert_function(src, "EXT_VAL_SET_INIT", precedence=16);
-
   else if(src.id()=="access-path-entry")
   {
     std::ostringstream result;

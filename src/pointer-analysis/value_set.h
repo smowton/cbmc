@@ -22,6 +22,8 @@ class namespacet;
 // An access path entry, indicating that an external object was accessed using e.g.
 // member-x--of-dereference (represented "->x") at function f location (instruction offset) z.
 
+const std::string ACCESS_PATH_LOOP_TAG=".<any-path>";
+
 class access_path_entry_exprt : public exprt
 {
  public:
@@ -35,11 +37,16 @@ class access_path_entry_exprt : public exprt
     set("access-path-function", function);
     set("access-path-loc", loc);
   }
+
+ static access_path_entry_exprt get_loop_tag() {
+   return access_path_entry_exprt(ACCESS_PATH_LOOP_TAG, "", "");
+ }
   
   inline irep_idt label() const { return get("access-path-label"); }
   inline void set_label(const irep_idt& i) { set("access-path-label", i); }
   inline irep_idt function() const { return get("access-path-function"); }
   inline irep_idt loc() const { return get("access-path-loc"); }
+  inline bool is_loop() const { return label()==ACCESS_PATH_LOOP_TAG; }
 };
 
 static inline access_path_entry_exprt& to_access_path_entry(exprt& e) {
@@ -62,20 +69,8 @@ class external_value_set_exprt : public exprt
     op0().id(ID_unknown);
   }
 
-  inline external_value_set_exprt(const irep_idt& id):exprt(id)
-  {
-    operands().resize(1);
-    op0().id(ID_unknown);
-  }
-
   inline external_value_set_exprt(const typet &type, const constant_exprt& label):
     exprt("external-value-set",type)
-  {
-    operands().push_back(label);
-  }
-
-  inline external_value_set_exprt(const irep_idt& id, const typet &type,
-                                  const constant_exprt& label):exprt(id,type)
   {
     operands().push_back(label);
   }
@@ -103,6 +98,48 @@ class external_value_set_exprt : public exprt
       ret+=id2string(access_path_entry(i).label());
     return ret;
   }
+  std::string get_access_path_basename() const
+  {
+    assert(access_path_size()!=0);
+    std::string ret=id2string(to_constant_expr(label()).get_value());
+    for(size_t i=0,ilim=access_path_size()-1; i!=ilim; ++i)
+      ret+=id2string(access_path_entry(i).label());
+    return ret;
+  }
+  bool access_path_loops() const
+  {
+    if(access_path_size()<2) return false;
+    return access_path_entry(access_path_size()-2).is_loop();
+  }
+  void create_access_path_loop()
+  {
+    copy_to_operands(access_path_entry_exprt::get_loop_tag());
+  }
+  void replace_access_path_tail(const access_path_entry_exprt& newtail)
+  {
+    operands()[operands().size()-1]=newtail;
+  }
+
+  void extend_access_path(const access_path_entry_exprt& newentry)
+  {
+    if(access_path_loops())
+    {
+      // Replace the existing tail field with this one.
+      replace_access_path_tail(newentry);
+    }
+    else
+    {
+      for(size_t i=0,ilim=access_path_size(); i!=ilim; ++i)
+      {
+        if(access_path_entry(i).label()==newentry.label())
+        {
+          create_access_path_loop();
+          break;
+        }
+      }
+      access_path_push_back(newentry);
+    }
+  }
     
 };
 
@@ -114,33 +151,10 @@ static inline const external_value_set_exprt& to_external_value_set(const exprt&
   return static_cast<const external_value_set_exprt&>(e);
 }
 
-// Represents the unknown initial *content* of an external value set.
-// For example, "arg1->x" would be initialised to the mapping:
-// external_val_set("arg1->x") -> { external_val_set_initial_content("arg1->x") }
-
-class external_value_set_initial_content_exprt : public external_value_set_exprt
-{
- public:
-  inline external_value_set_initial_content_exprt():
-    external_value_set_exprt("external-value-set-init") {}
-  inline external_value_set_initial_content_exprt(const typet &type, const constant_exprt& label):
-    external_value_set_exprt("external-value-set-init",type,label) {}
-};
-
-static inline external_value_set_initial_content_exprt&
-  to_external_value_set_initial_content(exprt& e) {
-  return static_cast<external_value_set_initial_content_exprt&>(e);
-}
-
-static inline const external_value_set_initial_content_exprt&
-  to_external_value_set_initial_content(const exprt& e) {
-  return static_cast<const external_value_set_initial_content_exprt&>(e);
-}
-
 class value_sett
 {
 public:
-  value_sett():location_number(0)
+ value_sett():location_number(0)
   {
   }
 
@@ -150,6 +164,7 @@ public:
     const namespacet &);
 
   unsigned location_number;
+  irep_idt function;
   static object_numberingt object_numbering;
 
   typedef irep_idt idt;
