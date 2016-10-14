@@ -460,6 +460,24 @@ void value_sett::get_value_set(
   get_value_set_rec(tmp, dest, "", tmp.type(), ns);
 }
 
+static const typet& type_from_suffix(
+  const typet& original_type, const std::string& suffix, const namespacet& ns)
+{
+  const typet* ret=&ns.follow(original_type);
+  size_t next_member=1;
+  while(next_member<suffix.size())
+  {
+    size_t member_after=suffix.find('.',next_member);
+    if(member_after==std::string::npos)
+      member_after=suffix.size();
+    std::string member=suffix.substr(next_member,member_after-next_member);
+    assert(ret->id()==ID_struct);
+    ret=&to_struct_type(*ret).get_component(member).type();
+    next_member=member_after+1;
+  }
+  return *ret;
+}
+
 /*******************************************************************\
 
 Function: value_sett::get_value_set_rec
@@ -909,6 +927,41 @@ void value_sett::get_value_set_rec(
       insert(dest, exprt(ID_unknown, original_type));
     else
       make_union(dest, v_it->second.object_map);
+  }
+  else if(expr.id()=="external-value-set-init")
+  {
+    // This represents an unknown external set of pointer-typed objects.
+    // It points to another external value set representing an access path;
+    // if it hasn't been initialised yet, do so now.
+
+    const typet& field_type=type_from_suffix(expr.type(),suffix,ns);
+    if(field_type.id()==ID_pointer)
+    {
+    
+      const auto& extinit=to_external_value_set_initial_content(expr);
+      std::string basename=extinit.get_access_path_label();
+      std::string entryname=basename+suffix;
+      entryt entry(basename,suffix);
+
+      // TODO: figure out how to do this sort of on-demand-insert without such ugly const hacking:
+      auto insert_result=const_cast<valuest&>(values).insert(std::make_pair(irep_idt(entryname),entry));
+
+      if(insert_result.second)
+      {
+        external_value_set_initial_content_exprt newinit=extinit;
+        access_path_entry_exprt newentry(suffix,"unknown function","0");
+        newinit.access_path_push_back(newentry);
+        newinit.type()=field_type.subtype();
+        insert(insert_result.first->second.object_map,newinit);
+      }
+
+      make_union(dest,insert_result.first->second.object_map);
+
+    }
+    else {
+      // Deref-of-external yields a scalar type.
+      insert(dest, exprt(ID_unknown, original_type));
+    }
   }
   else if(expr.id()==ID_byte_extract_little_endian ||
           expr.id()==ID_byte_extract_big_endian)

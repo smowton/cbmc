@@ -22,23 +22,4 @@ class local_value_set_analysist : public value_set_analysist {
 
 };
 
-class external_value_set_exprt : public exprt
-{
- public:
-  inline external_value_set_exprt():exprt("external-value-set")
-  {
-    operands().resize(1);
-    op0().id(ID_unknown);
-  }
-
-  inline explicit external_value_set_exprt(const typet &type, const constant_exprt& label):
-    exprt("external-value-set",type)
-  {
-    operands().push_back(label);
-  }
-
-  inline exprt &label() { return op0(); }
-  inline const exprt &label() const { return op0(); }
-};
-
 #endif

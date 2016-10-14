@@ -19,6 +19,124 @@ Author: Daniel Kroening, kroening@kroening.com
 
 class namespacet;
 
+// An access path entry, indicating that an external object was accessed using e.g.
+// member-x--of-dereference (represented "->x") at function f location (instruction offset) z.
+
+class access_path_entry_exprt : public exprt
+{
+ public:
+  inline access_path_entry_exprt():exprt("access-path-entry") {}
+  inline access_path_entry_exprt(const irep_idt& label,
+                                 const irep_idt& function,
+                                 const irep_idt& loc)
+    :exprt("access-path-entry")
+  {
+    set_label(label);
+    set("access-path-function", function);
+    set("access-path-loc", loc);
+  }
+  
+  inline irep_idt label() const { return get("access-path-label"); }
+  inline void set_label(const irep_idt& i) { set("access-path-label", i); }
+  inline irep_idt function() const { return get("access-path-function"); }
+  inline irep_idt loc() const { return get("access-path-loc"); }
+};
+
+static inline access_path_entry_exprt& to_access_path_entry(exprt& e) {
+  return static_cast<access_path_entry_exprt&>(e);
+}
+
+static inline const access_path_entry_exprt& to_access_path_entry(const exprt& e) {
+  return static_cast<const access_path_entry_exprt&>(e);
+}
+
+// Represents an external unknown points-to set that can't be directly referenced with a symbol,
+// such as "arg1->x"
+
+class external_value_set_exprt : public exprt
+{
+ public:
+  inline external_value_set_exprt():exprt("external-value-set")
+  {
+    operands().resize(1);
+    op0().id(ID_unknown);
+  }
+
+  inline external_value_set_exprt(const irep_idt& id):exprt(id)
+  {
+    operands().resize(1);
+    op0().id(ID_unknown);
+  }
+
+  inline external_value_set_exprt(const typet &type, const constant_exprt& label):
+    exprt("external-value-set",type)
+  {
+    operands().push_back(label);
+  }
+
+  inline external_value_set_exprt(const irep_idt& id, const typet &type,
+                                  const constant_exprt& label):exprt(id,type)
+  {
+    operands().push_back(label);
+  }
+
+  inline exprt &label() { return op0(); }
+  inline const exprt &label() const { return op0(); }
+
+  inline size_t access_path_size() const { return operands().size()-1; }
+  inline access_path_entry_exprt& access_path_entry(size_t index)
+  {
+    return to_access_path_entry(operands()[index+1]);
+  }
+  inline const access_path_entry_exprt& access_path_entry(size_t index) const
+  {
+    return to_access_path_entry(operands()[index+1]);
+  }  
+  inline void access_path_push_back(const access_path_entry_exprt& newentry)
+  {
+    copy_to_operands(newentry);
+  }
+  std::string get_access_path_label() const
+  {
+    std::string ret=id2string(to_constant_expr(label()).get_value());
+    for(size_t i=0,ilim=access_path_size(); i!=ilim; ++i)
+      ret+=id2string(access_path_entry(i).label());
+    return ret;
+  }
+    
+};
+
+static inline external_value_set_exprt& to_external_value_set(exprt& e) {
+  return static_cast<external_value_set_exprt&>(e);
+}
+
+static inline const external_value_set_exprt& to_external_value_set(const exprt& e) {
+  return static_cast<const external_value_set_exprt&>(e);
+}
+
+// Represents the unknown initial *content* of an external value set.
+// For example, "arg1->x" would be initialised to the mapping:
+// external_val_set("arg1->x") -> { external_val_set_initial_content("arg1->x") }
+
+class external_value_set_initial_content_exprt : public external_value_set_exprt
+{
+ public:
+  inline external_value_set_initial_content_exprt():
+    external_value_set_exprt("external-value-set-init") {}
+  inline external_value_set_initial_content_exprt(const typet &type, const constant_exprt& label):
+    external_value_set_exprt("external-value-set-init",type,label) {}
+};
+
+static inline external_value_set_initial_content_exprt&
+  to_external_value_set_initial_content(exprt& e) {
+  return static_cast<external_value_set_initial_content_exprt&>(e);
+}
+
+static inline const external_value_set_initial_content_exprt&
+  to_external_value_set_initial_content(const exprt& e) {
+  return static_cast<const external_value_set_initial_content_exprt&>(e);
+}
+
 class value_sett
 {
 public:

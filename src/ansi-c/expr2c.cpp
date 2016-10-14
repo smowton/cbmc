@@ -18,6 +18,7 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <map>
 #include <set>
+#include <sstream>
 
 #include <util/arith_tools.h>
 #include <util/c_misc.h>
@@ -4407,6 +4408,21 @@ std::string expr2ct::convert(
 
   else if(src.id()==ID_dynamic_object)
     return convert_function(src, "DYNAMIC_OBJECT", precedence=16);
+
+  else if(src.id()=="external-value-set")
+    return convert_function(src, "EXT_VAL_SET", precedence=16);
+
+  else if(src.id()=="external-value-set-init")
+    return convert_function(src, "EXT_VAL_SET_INIT", precedence=16);
+
+  else if(src.id()=="access-path-entry")
+  {
+    std::ostringstream result;
+    result << "{ " << src.get("access-path-label") << ", " <<
+      src.get("access-path-function") << ", " <<
+      src.get("access-path-loc") << " }";
+    return result.str();
+  }
 
   else if(src.id()=="is_zero_string")
     return convert_function(src, "IS_ZERO_STRING", precedence=16);
