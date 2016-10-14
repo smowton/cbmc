@@ -731,6 +731,7 @@ void java_bytecode_parsert::rbytecode(
   u4 code_length=read_u4();
   
   size_t address;
+  size_t bytecodeIndex = 0; // index of bytecode instruction
 
   for(address=0; address<code_length; address++)
   {
@@ -750,7 +751,7 @@ void java_bytecode_parsert::rbytecode(
     instructiont &instruction=instructions.back();
     instruction.statement=bytecodes[bytecode].mnemonic;
     instruction.address=start_of_instruction;
-    instruction.source_location.set_java_bytecode_offset(std::to_string(start_of_instruction));
+    instruction.source_location.set_java_bytecode_index(std::to_string(bytecodeIndex));
     
     switch(bytecodes[bytecode].format)
     {
@@ -938,6 +939,7 @@ void java_bytecode_parsert::rbytecode(
     default:
       assert(false && "unknown instruction");
     }
+    bytecodeIndex++;
   }
   
   if(address!=code_length)
