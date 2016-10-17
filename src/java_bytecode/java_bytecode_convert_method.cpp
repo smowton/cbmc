@@ -414,7 +414,7 @@ member_exprt to_member(const exprt &pointer, const exprt &fieldref)
     obj_deref, fieldref.get(ID_component_name), fieldref.type());
 }
 
-codet get_array_bounds_check(const exprt &arraystruct, const exprt &idx)
+codet get_array_bounds_check(const exprt &arraystruct, const exprt &idx, const source_locationt& original_sloc)
 {
   constant_exprt intzero=as_number(0,java_int_type());
   binary_relation_exprt gezero(idx,ID_ge,intzero);
@@ -423,9 +423,11 @@ codet get_array_bounds_check(const exprt &arraystruct, const exprt &idx)
   binary_relation_exprt ltlength(idx,ID_lt,length_field);
   code_blockt boundschecks;
   boundschecks.add(code_assertt(gezero));
+  boundschecks.operands().back().add_source_location()=original_sloc;  
   boundschecks.operands().back().add_source_location().set_comment("Array index < 0");
   boundschecks.operands().back().add_source_location().set_property_class("array-index-oob-low");
   boundschecks.add(code_assertt(ltlength));
+  boundschecks.operands().back().add_source_location()=original_sloc;    
   boundschecks.operands().back().add_source_location().set_comment("Array index >= length");
   boundschecks.operands().back().add_source_location().set_property_class("array-index-oob-high");
   
@@ -1011,7 +1013,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
       code_blockt assert_and_put;
       if(!disable_runtime_checks)
       {
-	codet bounds_check=get_array_bounds_check(deref,op[1]);
+	codet bounds_check=get_array_bounds_check(deref,op[1],i_it->source_location);
 	bounds_check.add_source_location()=i_it->source_location;
 	assert_and_put.move_to_operands(bounds_check);
       }
@@ -1055,7 +1057,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
 
       if(!disable_runtime_checks)
       {
-        codet bounds_check=get_array_bounds_check(deref,op[1]);
+        codet bounds_check=get_array_bounds_check(deref,op[1],i_it->source_location);
         bounds_check.add_source_location()=i_it->source_location;
 	c=std::move(bounds_check);
       }
