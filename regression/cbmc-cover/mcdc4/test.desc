@@ -3,12 +3,23 @@ main.c
 --cover mcdc
 ^EXIT=0$
 ^SIGNAL=0$
-^\[main.coverage.1\] file main.c line 11 function main MC/DC independence condition `A && B && C && !D.*: SATISFIED$
-^\[main.coverage.2\] file main.c line 11 function main MC/DC independence condition `A && !B && C && D.*: SATISFIED$
-^\[main.coverage.3\] file main.c line 11 function main MC/DC independence condition `A && !B && C && !D.*: SATISFIED$
-^\[main.coverage.4\] file main.c line 11 function main MC/DC independence condition `!C && D && A && !B.*: SATISFIED$
-^\[main.coverage.5\] file main.c line 11 function main MC/DC independence condition `!A && B && C && !D.*: SATISFIED$
-^\*\* .* of .* covered (100.0%)$
-^\*\* Used 9 iterations$
+** coverage results:
+^\[coverage.1\] file main.c line 11 MC/DC independence condition `A && B && C && !D.*: SATISFIED$
+^\[coverage.2\] file main.c line 11 MC/DC independence condition `A && !B && C && D.*: SATISFIED$
+^\[coverage.3\] file main.c line 11 MC/DC independence condition `A && !B && C && !D.*: SATISFIED$
+^\[coverage.4\] file main.c line 11 MC/DC independence condition `!C && D && A && !B.*: SATISFIED$
+^\[coverage.5\] file main.c line 11 MC/DC independence condition `!A && B && C && !D.*: SATISFIED$
+^\[coverage.6\] file main.c line 11 condition `D.* false: SATISFIED$
+^\[coverage.7\] file main.c line 11 condition `D.* true: SATISFIED$
+^\[coverage.8\] file main.c line 11 condition `C.* false: SATISFIED$
+^\[coverage.9\] file main.c line 11 condition `C.* true: SATISFIED$
+^\[coverage.10\] file main.c line 11 condition `B.* false: SATISFIED$
+^\[coverage.11\] file main.c line 11 condition `B.* true: SATISFIED$
+^\[coverage.12\] file main.c line 11 condition `A.* false: SATISFIED$
+^\[coverage.13\] file main.c line 11 condition `A.* true: SATISFIED$
+^\[main.coverage.1\] file main.c line 11 function main decision `A && B || C && D.* false: SATISFIED$
+^\[main.coverage.2\] file main.c line 11 function main decision `A && B || C && D.* true: SATISFIED$
+^\*\* 15 of 15 covered (100.0%)
+^\*\* Used 9 iterations
 --
 ^warning: ignoring

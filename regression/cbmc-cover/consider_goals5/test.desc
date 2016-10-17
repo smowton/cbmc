@@ -1,0 +1,8 @@
+CORE
+Person.class
+--cover location --no-trivial-tests
+^EXIT=0$
+^SIGNAL=0$
+^\*\* 15 of 23 covered (65.2%)
+--
+^warning: ignoring

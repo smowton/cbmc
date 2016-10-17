@@ -1,0 +1,9 @@
+CORE
+Account.class
+--cover location --no-trivial-tests
+^EXIT=0$
+^SIGNAL=0$
+^\*\* 23 of 23 covered (100.0%)
+\*\* Used 4 iterations
+--
+^warning: ignoring
