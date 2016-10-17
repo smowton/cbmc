@@ -13,6 +13,7 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <util/mp_arith.h>
 #include <util/reference_counting.h>
+#include <util/i2string.h>
 
 #include "object_numbering.h"
 #include "value_sets.h"
@@ -57,6 +58,11 @@ static inline const access_path_entry_exprt& to_access_path_entry(const exprt& e
   return static_cast<const access_path_entry_exprt&>(e);
 }
 
+enum local_value_set_analysis_modet {
+  LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET,
+  LOCAL_VALUE_SET_ANALYSIS_EXTERNAL_SET_PER_ACCESS_PATH
+};
+
 // Represents an external unknown points-to set that can't be directly referenced with a symbol,
 // such as "arg1->x"
 
@@ -69,10 +75,16 @@ class external_value_set_exprt : public exprt
     op0().id(ID_unknown);
   }
 
-  inline external_value_set_exprt(const typet &type, const constant_exprt& label):
+  inline external_value_set_exprt(const typet &type, const constant_exprt& label, const local_value_set_analysis_modet mode):
     exprt("external-value-set",type)
   {
     operands().push_back(label);
+    set("#lva_mode",i2string((int)mode));
+  }
+
+  inline local_value_set_analysis_modet analysis_mode() const
+  {
+    return (local_value_set_analysis_modet)get_int("#lva_mode");
   }
 
   inline exprt &label() { return op0(); }
@@ -93,6 +105,8 @@ class external_value_set_exprt : public exprt
   }
   std::string get_access_path_label() const
   {
+    if(analysis_mode()==LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET)
+      return "external_objects";
     std::string ret=id2string(to_constant_expr(label()).get_value());
     for(size_t i=0,ilim=access_path_size(); i!=ilim; ++i)
       ret+=id2string(access_path_entry(i).label());
@@ -100,6 +114,8 @@ class external_value_set_exprt : public exprt
   }
   std::string get_access_path_basename() const
   {
+    if(analysis_mode()==LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET)
+      return "external_objects";    
     assert(access_path_size()!=0);
     std::string ret=id2string(to_constant_expr(label()).get_value());
     for(size_t i=0,ilim=access_path_size()-1; i!=ilim; ++i)
@@ -122,6 +138,8 @@ class external_value_set_exprt : public exprt
 
   void extend_access_path(const access_path_entry_exprt& newentry)
   {
+    if(analysis_mode()==LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET)
+      return;
     if(access_path_loops())
     {
       // Replace the existing tail field with this one.

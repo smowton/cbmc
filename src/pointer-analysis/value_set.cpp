@@ -1566,11 +1566,18 @@ void value_sett::assign_rec(
     external_value_set_exprt new_ext_set=evsi;
     new_ext_set.extend_access_path(newentry);
     
-    const std::string name=new_ext_set.get_access_path_basename();
+    const std::string basename=new_ext_set.get_access_path_basename();
+    std::string entryname=basename+suffix;
     
-    entryt &e=get_entry(entryt(name,suffix), lhs.type(), ns);
+    entryt entry(basename,suffix);
 
-    make_union(e.object_map, values_rhs);
+    auto insert_result=const_cast<valuest&>(values).
+      insert(std::make_pair(irep_idt(entryname),entry));
+
+    if(insert_result.second)
+      insert(insert_result.first->second.object_map,new_ext_set);
+
+    make_union(insert_result.first->second.object_map,values_rhs);
   }
   else if(lhs.id()==ID_dereference)
   {
