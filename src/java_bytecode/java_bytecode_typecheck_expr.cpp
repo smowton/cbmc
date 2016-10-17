@@ -109,6 +109,9 @@ Function: java_bytecode_typecheckt::typecheck_expr_java_string_literal
 
 \*******************************************************************/
 
+static std::map<irep_idt,irep_idt> string_literal_to_symbol_name;
+static std::map<irep_idt,size_t> escaped_string_literal_count;
+
 void java_bytecode_typecheckt::typecheck_expr_java_string_literal(exprt &expr)
 { 
   const irep_idt value=expr.get(ID_value);
