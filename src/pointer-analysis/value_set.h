@@ -98,7 +98,12 @@ class external_value_set_exprt : public exprt
   inline const access_path_entry_exprt& access_path_entry(size_t index) const
   {
     return to_access_path_entry(operands()[index+1]);
-  }  
+  }
+  inline const access_path_entry_exprt& access_path_back() const
+  {
+    assert(operands().size()>1);
+    return operands().back();
+  }
   inline void access_path_push_back(const access_path_entry_exprt& newentry)
   {
     copy_to_operands(newentry);

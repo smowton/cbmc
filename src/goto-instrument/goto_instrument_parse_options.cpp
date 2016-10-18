@@ -173,10 +173,16 @@ int goto_instrument_parse_optionst::doit()
       if(cmdline.isset("value-set-function"))
       {
         const auto& fname=cmdline.get_value("value-set-function");
+        const auto& dbpath=cmdline.get_value("value-set-summary-db");
         const auto& gf=goto_functions.function_map.at(fname);
-        local_value_set_analysist value_set_analysis(ns,gf.type,LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET);
+        local_value_set_analysist value_set_analysis(
+          ns,gf.type,fname,dbpath,LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET);
+        if(dbpath.size()!=0)
+          value_set_analysis.load_summaries();
         value_set_analysis(gf.body);
         show_value_sets(get_ui(), gf.body, value_set_analysis);
+        if(dbpath.size()!=0)
+          value_set_analysis.save_summary();
       }
       else
       {

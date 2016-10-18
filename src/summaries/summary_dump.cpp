@@ -820,7 +820,20 @@ void write_database_as_json(
   }
 
   {
-    std::fstream  ostr(dump_root_directory+"/__index.json", std::ios_base::out);
+    std::string indexpath=dump_root_directory+"/__index.json";
+    if(fileutl_file_exists(indexpath))
+    {
+      null_message_handler nullmsg;
+      std::ifstream istr(indexpath);
+      json_objectt existing_index;
+      if(parse_json(istr,indexpath,nullmsg,existing_index))
+        throw "Failed to parse existing index";
+      assert(existing_index.is_object());
+      // This won't overwrite anything we've already defined locally:
+      for(const auto existing_entry : existing_index.object)
+        index.object.insert(existing_entry);
+    }
+    std::fstream  ostr(indexpath, std::ios_base::out);
     ostr << index;
   }
 }
