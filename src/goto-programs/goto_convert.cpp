@@ -2252,7 +2252,7 @@ void goto_convertt::generate_ifthenelse(
     return;
   }
 
-  bool is_guarded_goto;
+  bool is_guarded_goto=false;
 
   // do guarded gotos directly
   if(is_empty(false_case) &&
