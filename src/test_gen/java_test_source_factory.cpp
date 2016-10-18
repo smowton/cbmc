@@ -367,7 +367,6 @@ void reference_factoryt::add_value(std::string &result, const symbol_tablet &st,
     instance_expr = force_instantiate(qualified_class_file_name);
 
   result+='(' + qualified_class_name + ") " + instance_expr + ";\n";
-  indent(result,2u);
 
   if(should_mock)
     result+=mockenv_builder.register_mock_instance(qualified_class_name, this_name);
@@ -588,7 +587,7 @@ std::string symbol_to_function_name(const symbolt &s, bool instance_method=false
       return func_name_with_brackets.substr(0, sz - 2);
     }
 }
-  
+
 void add_func_call(std::string &result, const symbol_tablet &st,
                    const irep_idt &func_id, bool instance_method=false)
 {
