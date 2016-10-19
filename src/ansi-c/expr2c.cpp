@@ -4410,7 +4410,12 @@ std::string expr2ct::convert(
     return convert_function(src, "DYNAMIC_OBJECT", precedence=16);
 
   else if(src.id()=="external-value-set")
-    return convert_function(src, "EXT_VAL_SET", precedence=16);
+  {
+    std::string fnresult=convert_function(src, "EXT_VAL_SET", precedence=16);
+    if(src.get_bool("modified"))
+      fnresult+="<maybe-modified>";
+    return fnresult;
+  }
 
   else if(src.id()=="access-path-entry")
   {
