@@ -171,7 +171,6 @@ class summary_json_databaset : public database_of_summariest, public messaget {
       warning() << "Summaries: __index.json not found; starting with empty summary database" << eom;
       return;
     }
-    jsont index;
     {
       std::ifstream index_stream(index_filename);
       if(parse_json(index_stream,index_filename,get_message_handler(),index))
@@ -232,21 +231,27 @@ class summary_json_databaset : public database_of_summariest, public messaget {
   virtual void insert(object_summaryt const& object)
   {
     const auto& functionname=object.first;
-    std::string prefix=to_file_name(functionname);
-    unsigned unique_number=0;
-    std::string filename;
+    // Have we chosen a filename for this function yet?
+    if(!index.object.count(functionname))
+    {
 
-    do {
-      std::ostringstream filename_ss;
-      filename_ss << prefix;
-      if(unique_number!=1)
-        filename_ss << '_' << unique_number;
-      filename_ss << ".json";
-      filename=filename_ss.str();
-    } while(!used_filenames.insert(filename).second);
+      // If not, find one and add to the index.
+      std::string prefix=to_file_name(functionname);
+      unsigned unique_number=0;
+      std::string filename;
 
-    index[functionname]=json_stringt(filename);
+      do {
+        std::ostringstream filename_ss;
+        filename_ss << prefix;
+        if(++unique_number!=1)
+          filename_ss << '_' << unique_number++;
+        filename_ss << ".json";
+        filename=filename_ss.str();
+      } while(!used_filenames.insert(filename).second);
 
+      index[functionname]=json_stringt(filename);
+
+    }
     database_of_summariest::insert(object);
   }
   
