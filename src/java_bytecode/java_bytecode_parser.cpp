@@ -126,9 +126,9 @@ protected:
   void get_class_refs();
   void get_class_refs_rec(const typet &);
   
-  void skip_bytes(size_t bytes)
+  void skip_bytes(std::size_t bytes)
   {
-    for(size_t i=0; i<bytes; i++)
+    for(std::size_t i=0; i<bytes; i++)
     {
       if(!*in)
       {
@@ -313,7 +313,7 @@ void java_bytecode_parsert::rClassFile()
   
   u2 attributes_count=read_u2();
 
-  for(size_t j=0; j<attributes_count; j++)
+  for(std::size_t j=0; j<attributes_count; j++)
     rclass_attribute(parsed_class);
 
   get_class_refs();
@@ -665,7 +665,7 @@ void java_bytecode_parsert::rinterfaces(classt &parsed_class)
 {
   u2 interfaces_count=read_u2();
 
-  for(size_t i=0; i<interfaces_count; i++)
+  for(std::size_t i=0; i<interfaces_count; i++)
     parsed_class.implements.push_back(constant(read_u2()).type().get(ID_C_base_name));
 }
 
@@ -685,7 +685,7 @@ void java_bytecode_parsert::rfields(classt &parsed_class)
 {
   u2 fields_count=read_u2();
 
-  for(size_t i=0; i<fields_count; i++)
+  for(std::size_t i=0; i<fields_count; i++)
   {
     fieldt &field=parsed_class.add_field();
     
@@ -699,7 +699,7 @@ void java_bytecode_parsert::rfields(classt &parsed_class)
     field.is_final=(access_flags&ACC_FINAL)!=0;
     field.signature=id2string(pool_entry(descriptor_index).s);
 
-    for(size_t j=0; j<attributes_count; j++)
+    for(std::size_t j=0; j<attributes_count; j++)
       rfield_attribute(field);
   }
 }
@@ -730,13 +730,13 @@ void java_bytecode_parsert::rbytecode(
 {
   u4 code_length=read_u4();
   
-  size_t address;
+  u4 address;
   size_t bytecodeIndex = 0; // index of bytecode instruction
 
   for(address=0; address<code_length; address++)
   {
     bool wide_instruction=false;
-    size_t start_of_instruction=address;
+    u4 start_of_instruction=address;
     
     u1 bytecode=read_u1();
     
@@ -842,7 +842,7 @@ void java_bytecode_parsert::rbytecode(
       
     case 'L': // lookupswitch
       {
-        size_t base_offset=address;
+        u4 base_offset=address;
       
         // first a pad to 32-bit align
         while(((address+1)&3)!=0) { read_u1(); address++; }
@@ -856,9 +856,9 @@ void java_bytecode_parsert::rbytecode(
         u4 npairs=read_u4();
         address+=4;
         
-        for(size_t i=0; i<npairs; i++)
+        for(std::size_t i=0; i<npairs; i++)
         {
-          s4  match=read_u4();
+          s4 match=read_u4();
           s4 offset=read_u4();
           instruction.args.push_back(from_integer(match, integer_typet()));
           instruction.args.push_back(from_integer(base_offset+offset, integer_typet()));
@@ -887,8 +887,8 @@ void java_bytecode_parsert::rbytecode(
         s4 high_value=read_u4();
         address+=4;
 
-        // there are high-low+1 offsets
-        for(signed i=low_value; i<=high_value; i++)
+        // there are high-low+1 offsets, and they are signed
+        for(s4 i=low_value; i<=high_value; i++)
         {
           s4 offset=read_u4();
           instruction.args.push_back(from_integer(i, integer_typet()));
@@ -978,7 +978,7 @@ void java_bytecode_parsert::rmethod_attribute(methodt &method)
     u2 exception_table_length=read_u2();
     method.exception_table.resize(exception_table_length);
 
-    for(size_t e=0; e<exception_table_length; e++)
+    for(std::size_t e=0; e<exception_table_length; e++)
     {
       u2 start_pc=read_u2();
       u2 end_pc=read_u2();
@@ -994,7 +994,7 @@ void java_bytecode_parsert::rmethod_attribute(methodt &method)
 
     u2 attributes_count=read_u2();
     
-    for(size_t j=0; j<attributes_count; j++)
+    for(std::size_t j=0; j<attributes_count; j++)
       rcode_attribute(method);
       
     irep_idt line_number;
@@ -1093,7 +1093,7 @@ void java_bytecode_parsert::rcode_attribute(methodt &method)
 
     u2 line_number_table_length=read_u2();
 
-    for(size_t i=0; i<line_number_table_length; i++)
+    for(std::size_t i=0; i<line_number_table_length; i++)
     {
       u2 start_pc=read_u2();
       u2 line_number=read_u2();
@@ -1112,7 +1112,7 @@ void java_bytecode_parsert::rcode_attribute(methodt &method)
 
     method.local_variable_table.resize(local_variable_table_length);
 
-    for(size_t i=0; i<local_variable_table_length; i++)
+    for(std::size_t i=0; i<local_variable_table_length; i++)
     {
       u2 start_pc=read_u2();
       u2 length=read_u2();
@@ -1379,7 +1379,7 @@ void java_bytecode_parsert::relement_value_pair(
   case '[':
     {
       u2 num_values=read_u2();
-      for(size_t i=0; i<num_values; i++)
+      for(std::size_t i=0; i<num_values; i++)
       {
         annotationt::element_value_pairt element_value;
         relement_value_pair(element_value); // recursive call
@@ -1480,7 +1480,7 @@ void java_bytecode_parsert::rmethods(classt &parsed_class)
 {
   u2 methods_count=read_u2();
 
-  for(size_t j=0; j<methods_count; j++)
+  for(std::size_t j=0; j<methods_count; j++)
     rmethod(parsed_class);
 }
 
@@ -1532,7 +1532,7 @@ void java_bytecode_parsert::rmethod(classt &parsed_class)
   
   u2 attributes_count=read_u2();
   
-  for(size_t j=0; j<attributes_count; j++)
+  for(std::size_t j=0; j<attributes_count; j++)
     rmethod_attribute(method);
 }
 

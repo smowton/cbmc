@@ -181,8 +181,6 @@ void java_bytecode_convert_methodt::push(const exprt::operandst &o)
     stack[stack.size()-o.size()+i]=o[i];
 }
 
-
-
 /*******************************************************************\
 
 Function: java_bytecode_convert_methodt::convert
