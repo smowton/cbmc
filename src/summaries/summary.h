@@ -155,7 +155,11 @@ class summary_json_databaset : public database_of_summariest, public messaget {
  public:
   
  summary_json_databaset(const std::string& dirname) : database_dirname(dirname)
-  { load_index(); }
+  {
+    if(dirname!="")
+      fileutl_create_directory(dirname);
+    load_index();
+  }
 
   void load_index()
   {
@@ -163,7 +167,10 @@ class summary_json_databaset : public database_of_summariest, public messaget {
       return;
     std::string index_filename=database_dirname+"/"+"__index.json";
     if(!fileutl_file_exists(index_filename))
-      throw "Summaries: __index.json not found";
+    {
+      warning() << "Summaries: __index.json not found; starting with empty summary database" << eom;
+      return;
+    }
     jsont index;
     {
       std::ifstream index_stream(index_filename);
