@@ -75,16 +75,22 @@ class external_value_set_exprt : public exprt
     op0().id(ID_unknown);
   }
 
-  inline external_value_set_exprt(const typet &type, const constant_exprt& label, const local_value_set_analysis_modet mode):
+  inline external_value_set_exprt(const typet &type, const constant_exprt& label, const local_value_set_analysis_modet mode, bool modified):
     exprt("external-value-set",type)
   {
     operands().push_back(label);
     set("#lva_mode",i2string((int)mode));
+    set("modified",i2string((int)modified));
   }
 
   inline local_value_set_analysis_modet analysis_mode() const
   {
     return (local_value_set_analysis_modet)get_int("#lva_mode");
+  }
+
+  inline bool is_modified() const
+  {
+    return get_bool("modified");
   }
 
   inline exprt &label() { return op0(); }
@@ -102,7 +108,7 @@ class external_value_set_exprt : public exprt
   inline const access_path_entry_exprt& access_path_back() const
   {
     assert(operands().size()>1);
-    return operands().back();
+    return to_access_path_entry(operands().back());
   }
   inline void access_path_push_back(const access_path_entry_exprt& newentry)
   {
@@ -162,6 +168,13 @@ class external_value_set_exprt : public exprt
       }
       access_path_push_back(newentry);
     }
+  }
+
+  external_value_set_exprt as_modified() const
+  {
+    external_value_set_exprt copy=*this;
+    copy.set("modified",ID_1);
+    return copy;
   }
     
 };

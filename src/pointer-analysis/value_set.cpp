@@ -1574,10 +1574,28 @@ void value_sett::assign_rec(
     auto insert_result=const_cast<valuest&>(values).
       insert(std::make_pair(irep_idt(entryname),entry));
 
+    auto& lhs_entry=insert_result.first->second;
+    
     if(insert_result.second)
-      insert(insert_result.first->second.object_map,new_ext_set);
+      insert(lhs_entry.object_map,new_ext_set);
 
-    make_union(insert_result.first->second.object_map,values_rhs);
+    // Special case: if an ext-val-set with modified=false is written,
+    // set modified=true before inserting, to represent the fact that
+    // <some external>.x = <some external>.x might have a side-effect if
+    // the two externals differ.
+
+    for(const auto& obj : values_rhs.read())
+    {
+      const exprt& objexpr=object_numbering[obj.first];
+      if(objexpr.id()=="external-value-set")
+      {
+        external_value_set_exprt mod(
+          to_external_value_set(objexpr).as_modified());
+        insert(lhs_entry.object_map,mod,obj.second);
+      }
+      else
+        insert(lhs_entry.object_map,obj.first,obj.second);
+    }
   }
   else if(lhs.id()==ID_dereference)
   {
