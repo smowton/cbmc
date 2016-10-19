@@ -176,7 +176,7 @@ class summary_json_databaset : public database_of_summariest, public messaget {
       std::ifstream index_stream(index_filename);
       if(parse_json(index_stream,index_filename,get_message_handler(),index))
         throw "Failed to parse summaries index";
-      assert(index.is_array());
+      assert(index.is_object());
       for(const auto& entry : index.object)
         used_filenames.insert(entry.second.value);
     }
