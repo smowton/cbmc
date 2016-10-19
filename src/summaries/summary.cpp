@@ -14,7 +14,7 @@ It in particular comprises loop, function, and module summaries.
 \*******************************************************************/
 
 #include <summaries/summary.h>
-
+#include <util/file_util.h>
 
 void  database_of_summariest::insert(
     object_summaryt const&  object_and_summary
@@ -34,3 +34,5 @@ database_of_summariest::cend() const
 {
   return m_cache.cend();
 }
+
+
