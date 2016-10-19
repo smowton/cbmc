@@ -65,8 +65,6 @@ protected:
   
   void instrument(const namespacet &, goto_functionst &);
   void instrument(const namespacet &, goto_functionst::goto_functiont &);
-
-  void read_summaries(const std::string&, database_of_summariest&);
 };
 
 class bitvector_analysis_with_summariest:public custom_bitvector_analysist, public messaget
@@ -387,45 +385,6 @@ void bitvector_analysis_with_summariest::transform_function_call_stub(
   
 }
 
-void taint_analysist::read_summaries(
-  const std::string& dir,
-  database_of_summariest& summarydb)
-{
-  std::string index_filename=dir+"/"+"__index.json";
-  if(!fileutl_file_exists(index_filename))
-    throw "Summaries: __index.json not found";
-  jsont index;
-  {
-    std::ifstream index_stream(index_filename);
-    if(parse_json(index_stream,index_filename,get_message_handler(),index))
-      throw "Failed to parse summaries index";
-  }
-  // In future, we'll load summaries on demand. For now, load everything in the index:
-  assert(index.is_object() && "Summaries: expected __index to contain an object");
-  for(const auto& entry : index.object)
-  {
-    assert(entry.second.is_string() && "Summaries: expected __index value to be a string");
-    std::string entry_filename=dir+"/"+entry.second.value;
-    if(!fileutl_file_exists(entry_filename))
-      throw "Summaries: function json not found";
-
-    jsont entry_json;
-    {
-      std::ifstream entry_stream(entry_filename);
-      if(parse_json(entry_stream,entry_filename,get_message_handler(),entry_json))
-	throw "Failed to parse entry json";
-    }
-    if(!entry_json.is_object())
-      throw "Summaries: expected entry json to contain an object";
-
-    const auto& entry_obj=static_cast<const json_objectt&>(entry_json);
-    auto deserialised_entry=
-        summary_from_json(entry_obj,taint_summary_domain_ptrt());
-    summarydb.insert(deserialised_entry);
-  }
-}
-   
-
 /*******************************************************************\
 
 Function: taint_analysist::operator()
@@ -456,11 +415,15 @@ bool taint_analysist::operator()(
     return true;
   }
 
-  database_of_summaries_ptrt summarydb =
-    std::make_shared<database_of_summariest>();
+  database_of_summaries_ptrt summarydb;
   if(summaries_directory!="")
-    read_summaries(summaries_directory,*summarydb);
-
+  {
+    auto jsdb=std::make_shared<summary_json_databaset<taint_summaryt> >(summaries_directory);
+    jsdb->load_all();
+    summarydb=jsdb;
+  }
+  else
+    summarydb=std::make_shared<database_of_summariest>();
   return (*this)(symbol_table,goto_functions,show_full,json_file_name,summarydb);
 }
 

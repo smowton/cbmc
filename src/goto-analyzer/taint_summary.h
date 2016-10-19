@@ -15,6 +15,8 @@ This module defines interfaces and functionality for taint summaries.
 #ifndef CPROVER_TAINT_SUMMARY_H
 #define CPROVER_TAINT_SUMMARY_H
 
+#include "taint_summary_json.h"
+
 #include <summaries/summary.h>
 #include <summaries/utility.h>
 #include <goto-programs/goto_model.h>
@@ -263,13 +265,15 @@ typedef std::shared_ptr<taint_symmary_domaint>  taint_summary_domain_ptrt;
  Purpose:
 
 \*******************************************************************/
-class  taint_summaryt : public summaryt
+class  taint_summaryt : public json_serialisable_summaryt
 {
 public:
 
   taint_summaryt(taint_map_from_lvalues_to_svaluest const&  input,
                  taint_map_from_lvalues_to_svaluest const&  output,
                  taint_summary_domain_ptrt const domain);
+
+  taint_summaryt() {}
 
   std::string  kind() const noexcept;
   std::string  description() const noexcept;
@@ -281,6 +285,9 @@ public:
 
   taint_summary_domain_ptrt  domain() const noexcept { return m_domain; }
   void  drop_domain() { m_domain.reset(); }
+
+  json_objectt to_json() const;
+  void from_json(const json_objectt&);
 
 private:
   taint_map_from_lvalues_to_svaluest  m_input;
