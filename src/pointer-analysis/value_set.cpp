@@ -8,6 +8,7 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <cassert>
 #include <ostream>
+#include <iostream>
 
 #include <util/symbol_table.h>
 #include <util/simplify_expr.h>
@@ -460,6 +461,24 @@ void value_sett::get_value_set(
   get_value_set_rec(tmp, dest, "", tmp.type(), ns);
 }
 
+static const typet& type_from_suffix(
+  const typet& original_type, const std::string& suffix, const namespacet& ns)
+{
+  const typet* ret=&ns.follow(original_type);
+  size_t next_member=1;
+  while(next_member<suffix.size())
+  {
+    size_t member_after=suffix.find('.',next_member);
+    if(member_after==std::string::npos)
+      member_after=suffix.size();
+    std::string member=suffix.substr(next_member,member_after-next_member);
+    assert(ret->id()==ID_struct);
+    ret=&to_struct_type(*ret).get_component(member).type();
+    next_member=member_after+1;
+  }
+  return *ret;
+}
+
 /*******************************************************************\
 
 Function: value_sett::get_value_set_rec
@@ -909,6 +928,43 @@ void value_sett::get_value_set_rec(
       insert(dest, exprt(ID_unknown, original_type));
     else
       make_union(dest, v_it->second.object_map);
+  }
+  else if(expr.id()=="external-value-set")
+  {
+    // This represents an unknown external set of pointer-typed objects.
+    // It points to another external value set representing an access path;
+    // if it hasn't been initialised yet, do so now.
+
+    const typet& field_type=type_from_suffix(expr.type(),suffix,ns);
+    if(field_type.id()==ID_pointer)
+    {
+    
+      const auto& extinit=to_external_value_set(expr);
+      access_path_entry_exprt newentry(suffix,function,i2string(location_number));
+      external_value_set_exprt new_ext_set=extinit;
+      new_ext_set.extend_access_path(newentry);
+      new_ext_set.type()=field_type.subtype();
+
+      std::string basename=new_ext_set.get_access_path_basename();
+      std::string entryname=basename+suffix;
+        
+      entryt entry(basename,suffix);
+
+      // TODO: figure out how to do this sort of on-demand-insert
+      // without such ugly const hacking:
+      auto insert_result=const_cast<valuest&>(values).
+        insert(std::make_pair(irep_idt(entryname),entry));
+
+      if(insert_result.second)
+        insert(insert_result.first->second.object_map,new_ext_set);
+
+      make_union(dest,insert_result.first->second.object_map);
+      
+    }
+    else {
+      // Deref-of-external yields a scalar type.
+      insert(dest, exprt(ID_unknown, original_type));
+    }
   }
   else if(expr.id()==ID_byte_extract_little_endian ||
           expr.id()==ID_byte_extract_big_endian)
@@ -1501,6 +1557,45 @@ void value_sett::assign_rec(
     entryt &e=get_entry(entryt(name, suffix), lhs.type(), ns);
 
     make_union(e.object_map, values_rhs);
+  }
+  else if(lhs.id()=="external-value-set")
+  {
+    // Write through an opaque external value set.
+    const auto& evsi=to_external_value_set(lhs);
+    access_path_entry_exprt newentry(suffix,function,i2string(location_number));
+    external_value_set_exprt new_ext_set=evsi;
+    new_ext_set.extend_access_path(newentry);
+    
+    const std::string basename=new_ext_set.get_access_path_basename();
+    std::string entryname=basename+suffix;
+    
+    entryt entry(basename,suffix);
+
+    auto insert_result=const_cast<valuest&>(values).
+      insert(std::make_pair(irep_idt(entryname),entry));
+
+    auto& lhs_entry=insert_result.first->second;
+    
+    if(insert_result.second)
+      insert(lhs_entry.object_map,new_ext_set);
+
+    // Special case: if an ext-val-set with modified=false is written,
+    // set modified=true before inserting, to represent the fact that
+    // <some external>.x = <some external>.x might have a side-effect if
+    // the two externals differ.
+
+    for(const auto& obj : values_rhs.read())
+    {
+      const exprt& objexpr=object_numbering[obj.first];
+      if(objexpr.id()=="external-value-set")
+      {
+        external_value_set_exprt mod(
+          to_external_value_set(objexpr).as_modified());
+        insert(lhs_entry.object_map,mod,obj.second);
+      }
+      else
+        insert(lhs_entry.object_map,obj.first,obj.second);
+    }
   }
   else if(lhs.id()==ID_dereference)
   {

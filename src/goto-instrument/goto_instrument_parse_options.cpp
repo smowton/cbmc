@@ -34,6 +34,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-programs/parameter_assignments.h>
 
 #include <pointer-analysis/value_set_analysis.h>
+#include <pointer-analysis/local_value_set_analysis.h>
 #include <pointer-analysis/goto_program_dereference.h>
 #include <pointer-analysis/add_failed_symbols.h>
 #include <pointer-analysis/show_value_sets.h>
@@ -168,10 +169,27 @@ int goto_instrument_parse_optionst::doit()
 
       status() << "Pointer Analysis" << eom;
       namespacet ns(symbol_table);
-      value_set_analysist value_set_analysis(ns);
-      value_set_analysis(goto_functions);
 
-      show_value_sets(get_ui(), goto_functions, value_set_analysis);
+      if(cmdline.isset("value-set-function"))
+      {
+        const auto& fname=cmdline.get_value("value-set-function");
+        const auto& dbpath=cmdline.get_value("value-set-summary-db");
+        const auto& gf=goto_functions.function_map.at(fname);
+        local_value_set_analysist value_set_analysis(
+          ns,gf.type,fname,dbpath,LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET);
+        value_set_analysis.set_message_handler(get_message_handler());
+        value_set_analysis(gf.body);
+        show_value_sets(get_ui(), gf.body, value_set_analysis);
+        if(dbpath.size()!=0)
+          value_set_analysis.save_summary(gf.body);
+      }
+      else
+      {
+        value_set_analysist value_set_analysis(ns);       
+        value_set_analysis(goto_functions);
+        show_value_sets(get_ui(), goto_functions, value_set_analysis);
+      }
+
       return 0;
     }
 

@@ -205,7 +205,7 @@ Function:
 
 \*******************************************************************/
 static void  build_symbols_substitution(
-    std::unordered_map<taint_svaluet::symbolt,taint_svaluet>&
+    std::unordered_map<taint_svaluet::taint_symbolt,taint_svaluet>&
         symbols_substitution,
     taint_map_from_lvalues_to_svaluest const&  a,
     taint_summary_ptrt const  summary,
@@ -342,7 +342,7 @@ Function:
 static void  build_substituted_summary(
     taint_map_from_lvalues_to_svaluest&  substituted_summary,
     taint_map_from_lvalues_to_svaluest const&  original_summary,
-    std::unordered_map<taint_svaluet::symbolt,taint_svaluet> const&
+    std::unordered_map<taint_svaluet::taint_symbolt,taint_svaluet> const&
         symbols_substitution,
     irep_idt const&  caller_ident,
     irep_idt const&  callee_ident,
@@ -669,7 +669,7 @@ taint_map_from_lvalues_to_svaluest  transform(
 
           taint_map_from_lvalues_to_svaluest  substituted_summary;
           {
-            std::unordered_map<taint_svaluet::symbolt,taint_svaluet>
+            std::unordered_map<taint_svaluet::taint_symbolt,taint_svaluet>
                 symbols_substitution;
             build_symbols_substitution(
                   symbols_substitution,

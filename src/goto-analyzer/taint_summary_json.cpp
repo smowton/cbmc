@@ -32,18 +32,11 @@ static json_arrayt taint_map_to_json(
   return values;
 }
 
-json_objectt summary_to_json(const object_summaryt& obj)
+json_objectt taint_summaryt::to_json() const
 {
   json_objectt root;
-  root["name"]=json_stringt(id2string(obj.first));
-  taint_summary_ptrt const summary =
-    std::dynamic_pointer_cast<taint_summaryt const>(obj.second);
-  if (!summary)
-    throw "Expected summaryt";
-
-  root["inputs"]=taint_map_to_json(summary->input());
-  root["outputs"]=taint_map_to_json(summary->output());
-
+  root["inputs"]=taint_map_to_json(input());
+  root["outputs"]=taint_map_to_json(output());
   return root;
 }
 
@@ -108,17 +101,12 @@ static taint_map_from_lvalues_to_svaluest taint_map_from_json(const jsont& js)
   return ret;
 }
 
-object_summaryt summary_from_json(const json_objectt& js,
-                                  const taint_summary_domain_ptrt domain)
+void taint_summaryt::from_json(const json_objectt& js)
 {
-  object_summaryt ret;
   assert_has_keys(js.object,
 		  std::vector<std::string>({"inputs","name","outputs"}),
 		  "JSON object is not a taint summary");
-  ret.first=js["name"].value;
-  taint_map_from_lvalues_to_svaluest inputs=taint_map_from_json(js["inputs"]);
-  taint_map_from_lvalues_to_svaluest outputs=taint_map_from_json(js["outputs"]);
-  ret.second=std::make_shared<taint_summaryt>(inputs,outputs,domain);
-  return ret;
+  m_input=taint_map_from_json(js["inputs"]);
+  m_output=taint_map_from_json(js["outputs"]);
 }
 

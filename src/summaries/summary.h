@@ -17,11 +17,16 @@ It in particular comprises loop, function, and module summaries.
 #define CPROVER_SUMMARIES_SUMMARY_H
 
 #include <goto-programs/goto_model.h>
+#include <json/json_parser.h>
 #include <util/irep.h>
+#include <util/message.h>
+#include <util/json.h>
+#include <util/file_util.h>
 #include <string>
 #include <unordered_map>
 #include <memory>
 #include <tuple>
+#include <fstream>
 
 /*******************************************************************\
 
@@ -60,6 +65,13 @@ public:
   // TODO: define other interface functions!!
 };
 
+class json_serialisable_summaryt : public summaryt {
+ public:
+  
+  virtual void from_json(const json_objectt&)=0;
+  virtual json_objectt to_json() const =0;
+  
+};
 
 /*******************************************************************\
  We represent a summary of an object (loop, function, etc.) as a pair:
@@ -104,7 +116,7 @@ public:
       summarised_object_idt const&  object_id
       ) const;
 
-  void  insert(object_summaryt const&  object_and_summary);
+  virtual void  insert(object_summaryt const&  object_and_summary);
 
   databaset::const_iterator  cbegin() const;
   databaset::const_iterator  begin() const { return cbegin(); }  
@@ -117,7 +129,7 @@ public:
   const summary_ptrt& operator[](const summarised_object_idt& id) const
   { return m_cache.at(id); }
 
-private:
+protected:
   cachet  m_cache;
 };
 
@@ -134,8 +146,147 @@ std::shared_ptr<summary_typet const>  database_of_summariest::find(
             ;
 }
 
-
 typedef std::shared_ptr<database_of_summariest>  database_of_summaries_ptrt;
 
+std::string to_file_name(std::string);
+
+template<class SummaryType>
+class summary_json_databaset : public database_of_summariest, public messaget {
+ public:
+  
+ summary_json_databaset(const std::string& dirname) : database_dirname(dirname)
+  {
+    if(dirname!="")
+      fileutl_create_directory(dirname);
+    load_index();
+  }
+
+  void load_index()
+  {
+    if(database_dirname=="")
+      return;
+    std::string index_filename=database_dirname+"/"+"__index.json";
+    if(!fileutl_file_exists(index_filename))
+    {
+      warning() << "Summaries: __index.json not found; starting with empty summary database" << eom;
+      return;
+    }
+    {
+      std::ifstream index_stream(index_filename);
+      if(parse_json(index_stream,index_filename,get_message_handler(),index))
+        throw "Failed to parse summaries index";
+      assert(index.is_object());
+      for(const auto& entry : index.object)
+        used_filenames.insert(entry.second.value);
+    }
+  }
+    
+  void load_all()
+  {
+    for(const auto& entry : index.object)
+    {
+      assert(entry.second.is_string() && "Summaries: expected __index value to be a string");
+      load(entry.first,entry.second.value);
+    }
+  }
+
+  bool load(const std::string& functionname)
+  {
+    // Already loaded?
+    if(m_cache.count(functionname))
+      return true;
+  
+    const auto& findit=index.object.find(id2string(functionname));
+    if(findit==index.object.end())
+    {
+      warning() << "No summary available for " << functionname << eom;
+      return false;
+    }
+  
+    std::string entry_filename=database_dirname+"/"+findit->second.value;
+    load(functionname, entry_filename);
+    return true;
+  }
+
+  void load(const std::string& functionname, const std::string& filename)
+  {
+    if(!fileutl_file_exists(filename))
+      throw "Summaries: function json not found";
+
+    jsont entry_json;
+    {
+      std::ifstream entry_stream(filename);
+      if(parse_json(entry_stream,filename,get_message_handler(),entry_json))
+        throw "Failed to parse entry json";
+    }
+    if(!entry_json.is_object())
+      throw "Summaries: expected entry json to contain an object";
+
+    const auto& entry_obj=static_cast<const json_objectt&>(entry_json);
+    auto new_entry=std::make_shared<SummaryType>();
+    new_entry->from_json(entry_obj);
+    m_cache[functionname]=new_entry;
+  }
+
+  virtual void insert(object_summaryt const& object)
+  {
+    const auto& functionname=object.first;
+    // Have we chosen a filename for this function yet?
+    if(!index.object.count(functionname))
+    {
+
+      // If not, find one and add to the index.
+      std::string prefix=to_file_name(functionname);
+      unsigned unique_number=0;
+      std::string filename;
+
+      do {
+        std::ostringstream filename_ss;
+        filename_ss << prefix;
+        if(++unique_number!=1)
+          filename_ss << '_' << unique_number++;
+        filename_ss << ".json";
+        filename=filename_ss.str();
+      } while(!used_filenames.insert(filename).second);
+
+      index[functionname]=json_stringt(filename);
+
+    }
+    database_of_summariest::insert(object);
+  }
+  
+  void save(const std::string& functionname)
+  {
+    if(database_dirname=="")
+      return;
+    std::string filename=index.object.at(functionname).value;
+    json_objectt as_json=
+      static_cast<const json_serialisable_summaryt*>((*this)[functionname].get())->to_json();
+    std::ofstream ostr(database_dirname+"/"+filename);
+    ostr << as_json;
+  }
+
+  void save_index()
+  {
+    if(database_dirname=="")
+      return;
+    std::string indexpath=database_dirname+"/__index.json";
+    std::fstream  ostr(indexpath, std::ios_base::out);
+    ostr << index;
+  }
+
+  void save_all()
+  {
+    for(const auto& entry : index.object)
+      save(entry.first);
+    save_index();
+  }
+
+ protected:
+  const std::string database_dirname;
+  json_objectt index;
+  std::unordered_set<std::string> used_filenames;  
+
+};
 
 #endif
