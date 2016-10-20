@@ -2,6 +2,7 @@
 #define LOCAL_VALUE_SET_ANALYSIS_H
 
 #include "value_set_analysis.h"
+#include "external_value_set_expr.h"
 #include <summaries/summary.h>
 #include <util/message.h>
 
