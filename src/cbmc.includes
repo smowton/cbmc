@@ -10,6 +10,13 @@ big-int
 cbmc
 cegis/cegis-util
 cegis/constant
+cegis/control/facade
+cegis/control/learn
+cegis/control/options
+cegis/control/preprocessing
+cegis/control/simplify
+cegis/control/value
+cegis/control/verify
 cegis/danger/constraint
 cegis/danger/facade
 cegis/danger/genetic
@@ -44,6 +51,15 @@ cegis/jsa/value
 cegis/jsa/verify
 cegis/learn
 cegis/options
+cegis/refactor/environment
+cegis/refactor/facade
+cegis/refactor/instructionset
+cegis/refactor/learn
+cegis/refactor/nullobject
+cegis/refactor/options
+cegis/refactor/preprocessing
+cegis/refactor/value
+cegis/refactor/verify
 cegis/runner
 cegis/safety/constraint
 cegis/safety/facade
@@ -94,4 +110,5 @@ solvers/smt2
 summaries
 symex
 util
+util/old
 xmllang
