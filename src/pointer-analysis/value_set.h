@@ -150,23 +150,33 @@ class external_value_set_exprt : public exprt
   void extend_access_path(const access_path_entry_exprt& newentry)
   {
     if(analysis_mode()==LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET)
-      return;
-    if(access_path_loops())
     {
-      // Replace the existing tail field with this one.
-      replace_access_path_tail(newentry);
+      // Any attempt to extend a path yields <all-externals>->fieldname
+      label()=constant_exprt("external_objects",string_typet());
+      if(access_path_size()==0)
+        access_path_push_back(newentry);
+      else
+        replace_access_path_tail(newentry);
     }
     else
     {
-      for(size_t i=0,ilim=access_path_size(); i!=ilim; ++i)
+      if(access_path_loops())
       {
-        if(access_path_entry(i).label()==newentry.label())
-        {
-          create_access_path_loop();
-          break;
-        }
+        // Replace the existing tail field with this one.
+        replace_access_path_tail(newentry);
       }
-      access_path_push_back(newentry);
+      else
+      {
+        for(size_t i=0,ilim=access_path_size(); i!=ilim; ++i)
+        {
+          if(access_path_entry(i).label()==newentry.label())
+          {
+            create_access_path_loop();
+            break;
+          }
+        }
+        access_path_push_back(newentry);
+      }
     }
   }
 
