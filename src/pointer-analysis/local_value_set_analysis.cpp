@@ -158,24 +158,31 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
   }
 
   // OK, read all the RHS sets, now assign to the LHS symbols:
-  const std::string external_objects_prefix="external_objects.";
+  const std::string external_objects_basename="external_objects";
   
   for(const auto& assignment : call_summary.field_assignments)
   {
     const auto& rhs_values=pre_call_rhs_value_sets.at(assignment.second);
-    if(has_prefix(assignment.first,external_objects_prefix))
+    if(assignment.first.basename==external_objects_basename)
     {
-      std::string fieldname=assignment.first.substr(external_objects_prefix.size()-1);
       std::vector<value_sett::entryt*> lhs_entries;
-      get_all_field_value_sets(fieldname,valuesets,lhs_entries);
+      get_all_field_value_sets(assignment.first.fieldname,valuesets,lhs_entries);
       for(auto lhs_entry : lhs_entries)
         valuesets.make_union(lhs_entry->object_map,rhs_values);
+    }
+    else if(has_prefix(assignment.first.basename,"value_set::dynamic_object"))
+    {
+      std::string objkey=assignment.first.basename+assignment.first.fieldname;
+      value_sett::entryt dynobj_entry_name(assignment.first.basename,assignment.first.fieldname);
+      auto insertit=valuesets.values.insert(std::make_pair(objkey, dynobj_entry_name));
+      valuesets.make_union(insertit.first->second.object_map,rhs_values);
     }
     else
     {
       // The only other kind of symbols mentioned in summary LHS are global variables.
-      const auto& global_sym=ns.lookup(assignment.first);
-      value_sett::entryt global_entry_name(assignment.first,"");
+      assert(assignment.first.fieldname=="");
+      const auto& global_sym=ns.lookup(assignment.first.basename);
+      value_sett::entryt global_entry_name(assignment.first.basename,"");
       auto& global_entry=valuesets.get_entry(global_entry_name,global_sym.type,ns);
       valuesets.make_union(global_entry.object_map,rhs_values);
     }
@@ -222,6 +229,11 @@ void lvsaa_single_external_set_summaryt::from_final_state(
     bool export_this_entry=false;
     if(has_prefix(entryname,prefix))
       export_this_entry=true;
+    if(has_prefix(entryname,"value_set::dynamic_object"))
+    {
+      // TODO: escape analysis to restrict the set of dynamic objects we export.
+      export_this_entry=true;
+    }
     if(!export_this_entry)
     {
       const symbolt& sym=ns.lookup(entry.first);
@@ -235,7 +247,8 @@ void lvsaa_single_external_set_summaryt::from_final_state(
       for(const auto& pointsto_number : pointsto)
       {
         const auto& pointsto_expr=final_state.object_numbering[pointsto_number.first];
-        field_assignments.push_back(std::make_pair(entryname,pointsto_expr));
+        struct fieldname thisname = {id2string(entry.second.identifier), entry.second.suffix};
+        field_assignments.push_back(std::make_pair(thisname,pointsto_expr));
       }
     }
   }
@@ -247,7 +260,8 @@ json_objectt lvsaa_single_external_set_summaryt::to_json() const
   for(const auto& entry : field_assignments)
   {
     json_objectt assign;
-    assign["lhs"]=json_stringt(entry.first);
+    assign["lhs_basename"]=json_stringt(entry.first.basename);
+    assign["lhs_fieldname"]=json_stringt(entry.first.fieldname);    
     assign["rhs"]=irep_to_json(entry.second);
     assigns.push_back(assign);
   }
@@ -262,10 +276,17 @@ void lvsaa_single_external_set_summaryt::from_json(const json_objectt& json)
   assert(json.object.at("assigns").is_array());
   for(const auto& entry : json.object.at("assigns").array)
   {
-    assert(entry.object.at("lhs").is_string());
+    assert(entry.object.at("lhs_basename").is_string());
+    assert(entry.object.at("lhs_fieldname").is_string());    
     irept rhs_irep=irep_from_json(entry.object.at("rhs"));
-    field_assignments.push_back(std::make_pair(entry.object.at("lhs").value,
-                                               static_cast<const exprt&>(rhs_irep)));
+    field_assignments.resize(field_assignments.size()+1);
+    field_assignments.back().first=
+      {
+        entry.object.at("lhs_basename").value,
+        entry.object.at("lhs_fieldname").value
+      };
+    field_assignments.back().second=
+      static_cast<const exprt&>(rhs_irep);
   }
 
 }

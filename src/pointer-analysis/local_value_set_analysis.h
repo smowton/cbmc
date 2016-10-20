@@ -10,7 +10,11 @@ class lvsaa_single_external_set_summaryt : public json_serialisable_summaryt {
  public:
   std::string kind() const noexcept { return "lvsaa"; }
 
-  std::vector<std::pair<std::string, exprt> > field_assignments;
+  struct fieldname {
+    std::string basename;
+    std::string fieldname;
+  };
+  std::vector<std::pair<fieldname, exprt> > field_assignments;
 
   void from_json(const json_objectt&);
   json_objectt to_json() const;
