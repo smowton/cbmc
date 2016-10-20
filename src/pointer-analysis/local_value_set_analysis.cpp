@@ -4,29 +4,64 @@
 #include <util/prefix.h>
 #include <util/json_irep.h>
 
+#include <algorithm>
+
+static void gather_external_symbols(
+  const exprt& e, const namespacet& ns, std::vector<symbol_exprt>& result)
+{
+  if(e.id()==ID_symbol)
+  {
+    auto& symexpr=to_symbol_expr(e);
+    if(ns.lookup(symexpr.get_identifier()).is_static_lifetime)
+      result.push_back(symexpr);
+  }
+  else
+  {
+    forall_operands(it,e)
+      gather_external_symbols(*it,ns,result);
+  }
+}
+
+static void gather_external_symbols(
+  const goto_programt& fun, const namespacet& ns, std::vector<symbol_exprt>& result)
+{
+  forall_goto_program_instructions(it,fun) gather_external_symbols(it->code,ns,result);
+}
+
 void local_value_set_analysist::initialize(const goto_programt& fun)
 {
   summarydb.set_message_handler(get_message_handler());
   value_set_analysist::initialize(fun);
-  
-  if(fun.instructions.size()!=0)
-  {
-    auto& initial_state=(*this)[fun.instructions.begin()].value_set;
-  
-    // Now insert fresh symbols for each parameter, indicating an unknown external points-to set.
-    for(const auto& param : function_type.parameters())
-    {
-      if(param.type().id()==ID_pointer)
-      {
-        const auto& param_name=param.get_identifier();
-        value_sett::entryt param_entry_blank(id2string(param_name),"");
-        auto& param_entry=initial_state.get_entry(param_entry_blank, param.type().subtype(), ns);
-        external_value_set_exprt param_var(
-          param.type().subtype(),constant_exprt(param_name,string_typet()),mode,false);
-        initial_state.insert(param_entry.object_map,param_var);
-      }
-    }
 
+  if(fun.instructions.size()==0)
+    return;
+
+  std::vector<symbol_exprt> external_symbols;
+
+  for(const auto& param : function_type.parameters())
+    external_symbols.push_back(symbol_exprt(param.get_identifier(),param.type()));
+
+  gather_external_symbols(fun,ns,external_symbols);
+
+  std::sort(external_symbols.begin(),external_symbols.end());
+  external_symbols.erase(std::unique(external_symbols.begin(),external_symbols.end()),
+                         external_symbols.end());
+
+  auto& initial_state=(*this)[fun.instructions.begin()].value_set;
+  
+  // Now insert fresh symbols for each external symbol,
+  // indicating an unknown external points-to set.
+  for(const auto& extsym : external_symbols)
+  {
+    if(extsym.type().id()==ID_pointer)
+    {
+      const auto& extsym_name=extsym.get_identifier();
+      value_sett::entryt extsym_entry_blank(id2string(extsym_name),"");
+      auto& extsym_entry=initial_state.get_entry(extsym_entry_blank, extsym.type().subtype(), ns);
+      external_value_set_exprt extsym_var(
+        extsym.type().subtype(),constant_exprt(extsym_name,string_typet()),mode,false);
+      initial_state.insert(extsym_entry.object_map,extsym_var);
+    }
   }
 }
 
