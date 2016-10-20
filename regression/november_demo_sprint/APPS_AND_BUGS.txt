@@ -1,0 +1,9 @@
+Sakai (https://github.com/sakaiproject/sakai.git)
+  commits:
+    8550c168cdf16363e864bfdfdbeae96a1e8eac51 (XSS)
+    f37e314b1131272cb059f27da218df6b130b60e3 (XSS)
+    127c408107ad21a29856c30596c0e3baa3ae2ff3 (XSS)
+    bb4a2fcfe0fa63be3b4ad9c3ab7e69efc0146495 (XSS)
+    0635e98865fd3031a699a09ec9e37d9c0bb4c7c4 (XSS)
+    dbdf9e73b764de532fa555b59e3d83e9f815f95a (SQL injection)
+
