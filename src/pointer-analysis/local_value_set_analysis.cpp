@@ -123,7 +123,7 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
       else {
         // This should be an external value set assigned to initialise some global or parameter.
         assert(evse.access_path_size()==0);
-        const symbolt& inflow_symbol=ns.lookup(evse.label());
+        const symbolt& inflow_symbol=ns.lookup(to_constant_expr(evse.label()).get_value());
         if(inflow_symbol.is_static_lifetime)
         {
           // Global variable. Read its actual incoming value set:
@@ -165,7 +165,7 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
     const auto& rhs_values=pre_call_rhs_value_sets.at(assignment.second);
     if(has_prefix(assignment.first,external_objects_prefix))
     {
-      std::string fieldname=assignment.first.substr(external_objects_prefix.size());
+      std::string fieldname=assignment.first.substr(external_objects_prefix.size()-1);
       std::vector<value_sett::entryt*> lhs_entries;
       get_all_field_value_sets(fieldname,valuesets,lhs_entries);
       for(auto lhs_entry : lhs_entries)
@@ -204,13 +204,14 @@ void local_value_set_analysist::save_summary(const goto_programt& goto_program)
   locationt last_loc=std::prev(goto_program.instructions.end());
   const auto& final_state=static_cast<const value_set_domaint&>(get_state(last_loc));
   auto summaryptr=std::make_shared<lvsaa_single_external_set_summaryt>();
-  summaryptr->from_final_state(final_state.value_set);
+  summaryptr->from_final_state(final_state.value_set,ns);
   summarydb.insert(std::make_pair(function_name,summaryptr));
   summarydb.save(function_name);
   summarydb.save_index();
 }
 
-void lvsaa_single_external_set_summaryt::from_final_state(const value_sett& final_state)
+void lvsaa_single_external_set_summaryt::from_final_state(
+  const value_sett& final_state, const namespacet& ns)
 {
   // Just save a list of fields that may be overwritten by this function, and the values
   // they may be assigned.
@@ -218,14 +219,23 @@ void lvsaa_single_external_set_summaryt::from_final_state(const value_sett& fina
   {
     const std::string prefix="external_objects.";
     const std::string entryname=id2string(entry.first);
+    bool export_this_entry=false;
     if(has_prefix(entryname,prefix))
+      export_this_entry=true;
+    if(!export_this_entry)
+    {
+      const symbolt& sym=ns.lookup(entry.first);
+      if(sym.is_static_lifetime)
+        export_this_entry=true;
+    }
+    if(export_this_entry)
     {
       std::string fieldname=entryname.substr(prefix.length());
       const auto& pointsto=entry.second.object_map.read();
       for(const auto& pointsto_number : pointsto)
       {
         const auto& pointsto_expr=final_state.object_numbering[pointsto_number.first];
-        field_assignments.push_back(std::make_pair(fieldname,pointsto_expr));
+        field_assignments.push_back(std::make_pair(entryname,pointsto_expr));
       }
     }
   }
