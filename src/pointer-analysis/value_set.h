@@ -195,6 +195,12 @@ public:
     exprt &expr,
     const namespacet &ns) const;
 
+  void get_value_set(
+    const exprt &expr,
+    object_mapt &dest,
+    const namespacet &ns,
+    bool is_simplified) const;
+ 
 protected:
   void get_value_set_rec(
     const exprt &expr,
@@ -202,12 +208,6 @@ protected:
     const std::string &suffix,
     const typet &original_type,
     const namespacet &ns) const;
-
-  void get_value_set(
-    const exprt &expr,
-    object_mapt &dest,
-    const namespacet &ns,
-    bool is_simplified) const;
 
   void get_reference_set(
     const exprt &expr,

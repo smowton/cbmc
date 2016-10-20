@@ -65,52 +65,119 @@ void local_value_set_analysist::initialize(const goto_programt& fun)
   }
 }
 
-static const std::vector<value_sett::entryt*>& get_all_field_value_sets(
+static void get_all_field_value_sets(
   const std::string& fieldname,
   value_sett& state,
-  std::map<std::string, std::vector<value_sett::entryt*> >& suffix_to_entries)
+  std::vector<value_sett::entryt*>& entrylist)
 {
-  auto insert_result=suffix_to_entries.insert(
-    std::make_pair(fieldname, std::vector<value_sett::entryt*>()));
-  auto& entrylist=insert_result.first->second;  
-  if(insert_result.second)
+  // Find all value sets we're currently aware of that may be affected by
+  // a write to the given field:
+  for(auto& entry : state.values)
   {
-    // Find all value sets we're currently aware of that may be affected by
-    // a write to the given field:
-    for(auto& entry : state.values)
-    {
-      if(entry.second.suffix==fieldname)
-        entrylist.push_back(&entry.second);
-    }
+    if(entry.second.suffix==fieldname)
+      entrylist.push_back(&entry.second);
   }
-  return entrylist;
 }
 
 void local_value_set_analysist::transform_function_stub_single_external_set(
   const irep_idt& fname, statet& state, locationt l_call, locationt l_return)
 {
-  auto& valuesets=static_cast<value_set_domaint&>(state).value_set;
-  std::map<std::string, std::vector<value_sett::entryt*> > suffix_to_entries;
+
+  const symbolt& function_symbol=ns.lookup(fname);
+  const code_function_callt& fcall=to_code_function_call(l_call->code);
+  
   const auto& call_summary=static_cast<const lvsaa_single_external_set_summaryt&>(
     *(summarydb[id2string(fname)]));
+
+  // The summary gives a list of inclusions, in the form symbol1 <- symbol2,
+  // indicating that values reachable before the call from symbol2
+  // may now be reachable from symbol1. The assignments are simeltaneous.
+  // Thus start by reading all RHS values, before any changes are made:
+
+  auto& valuesets=static_cast<value_set_domaint&>(state).value_set;
+  std::map<exprt, value_sett::object_mapt> pre_call_rhs_value_sets;
+
   for(const auto& assignment : call_summary.field_assignments)
   {
-    auto& lhs_entries=get_all_field_value_sets(assignment.first,valuesets,suffix_to_entries);
+    const auto& rhs_expr=assignment.second;
+    if(pre_call_rhs_value_sets.count(rhs_expr))
+      continue;
+    auto& rhs_map=pre_call_rhs_value_sets[rhs_expr];
     if(assignment.second.id()=="external-value-set")
     {
-      const auto& rhs_entries=get_all_field_value_sets(
-        id2string(to_external_value_set(assignment.second).access_path_back().label()),
-        valuesets,
-        suffix_to_entries);
-      value_sett static_valset;
-      for(auto& lhs_entry : lhs_entries)
+      auto& evse=to_external_value_set(assignment.second);
+      if(to_constant_expr(evse.label()).get_value()=="external_objects")
+      {
+        // external objects without is_modified set represent the possibility
+        // of the field remaining unchanged, and therefore represent no flow.
+        if(!evse.is_modified())
+          continue;
+        std::vector<value_sett::entryt*> rhs_entries;
+        get_all_field_value_sets(
+          id2string(to_external_value_set(assignment.second).access_path_back().label()),
+          valuesets,
+          rhs_entries);
         for(const auto& rhs_entry : rhs_entries)
-          valuesets.make_union(lhs_entry->object_map,rhs_entry->object_map);
+          valuesets.make_union(rhs_map,rhs_entry->object_map);
+      }
+      else {
+        // This should be an external value set assigned to initialise some global or parameter.
+        assert(evse.access_path_size()==0);
+        const symbolt& inflow_symbol=ns.lookup(evse.label());
+        if(inflow_symbol.is_static_lifetime)
+        {
+          // Global variable. Read its actual incoming value set:
+          value_sett::entryt global_entry_name(inflow_symbol.name,"");
+          value_sett::entryt& global_entry=
+            valuesets.get_entry(global_entry_name,inflow_symbol.type,ns);
+          valuesets.make_union(rhs_map,global_entry.object_map);
+        }
+        else
+        {
+          // Parameter. Get the value-set for the actual argument:
+          size_t paramidx=(size_t)-1;
+          const auto& params=to_code_type(function_symbol.type).parameters();
+          for(size_t i=0, ilim=params.size(); i!=ilim; ++i)
+          {
+            if(params[i].get_identifier()==inflow_symbol.name)
+            {
+              paramidx=i;
+              break;
+            }
+          }
+          assert(paramidx!=(size_t)-1 && "Unknown parameter symbol?");
+          valuesets.get_value_set(fcall.arguments()[paramidx],rhs_map,ns,false);
+        }
+      }
     }
     else
     {
-      for(auto& lhs_entry : lhs_entries)
-        valuesets.insert(lhs_entry->object_map,assignment.second);
+      // Ordinary value set member; just add to the RHS map.
+      valuesets.insert(rhs_map,assignment.second);
+    }
+  }
+
+  // OK, read all the RHS sets, now assign to the LHS symbols:
+  const std::string external_objects_prefix="external_objects.";
+  
+  for(const auto& assignment : call_summary.field_assignments)
+  {
+    const auto& rhs_values=pre_call_rhs_value_sets.at(assignment.second);
+    if(has_prefix(assignment.first,external_objects_prefix))
+    {
+      std::string fieldname=assignment.first.substr(external_objects_prefix.size());
+      std::vector<value_sett::entryt*> lhs_entries;
+      get_all_field_value_sets(fieldname,valuesets,lhs_entries);
+      for(auto lhs_entry : lhs_entries)
+        valuesets.make_union(lhs_entry->object_map,rhs_values);
+    }
+    else
+    {
+      // The only other kind of symbols mentioned in summary LHS are global variables.
+      const auto& global_sym=ns.lookup(assignment.first);
+      value_sett::entryt global_entry_name(assignment.first,"");
+      auto& global_entry=valuesets.get_entry(global_entry_name,global_sym.type,ns);
+      valuesets.make_union(global_entry.object_map,rhs_values);
     }
   }
 }
