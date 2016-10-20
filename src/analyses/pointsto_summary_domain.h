@@ -204,6 +204,9 @@ class pointsto_union_sets_of_targetst
     : public pointsto_expressiont
 {
 public:
+  typedef std::unordered_set<pointsto_expressiont,irep_hash,irep_full_eq>
+          operants_sett;
+
   static dstring keyword();
 
   pointsto_union_sets_of_targetst(
@@ -211,8 +214,14 @@ public:
       const pointsto_expressiont&  right
       );
 
-  const pointsto_expressiont&  get_left() const;
-  const pointsto_expressiont&  get_right() const;
+  pointsto_union_sets_of_targetst(
+      const operants_sett&  operands
+      );
+
+  std::size_t  get_num_operands() const;
+  const pointsto_expressiont&  get_operand(
+      const std::size_t operand_index
+      ) const;
 };
 
 
@@ -247,6 +256,18 @@ pointsto_expressiont  pointsto_expression_normalise(
     const pointsto_expressiont&  a
     );
 
+//template<typename pointsto_expression_typet>
+//pointsto_expression_typet pointsto_expression_normalise(
+//    const pointsto_expression_typet& expression
+//    )
+//{
+//  return pointsto_as<pointsto_expression_typet>(
+//              pointsto_expression_normalise(
+//                  static_cast<const pointsto_expressiont&>(expression)
+//                  )
+//              );
+//}
+
 
 pointsto_expressiont  pointsto_evaluate_expression(
     const pointsto_rulest&  domain_value,
@@ -257,7 +278,15 @@ pointsto_expressiont  pointsto_evaluate_access_path(
     const pointsto_rulest&  domain_value,
     const access_path_to_memoryt&  access_path,
     const bool  as_lvalue,
+    const irep_idt&  fn_name,
+    const unsigned int  location_id,
     const namespacet&  ns
+    );
+
+
+pointsto_expressiont  pointsto_temp_prune_pure_locals(
+    const pointsto_expressiont&  a,
+    namespacet const&  ns
     );
 
 

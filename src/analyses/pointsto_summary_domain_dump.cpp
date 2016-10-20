@@ -12,6 +12,7 @@ static bool enclose_in_brackets(const pointsto_expressiont&  expression)
         pointsto_is_of<pointsto_symbolic_set_of_targetst>(expression)
         || pointsto_is_of<pointsto_set_of_concrete_targetst>(expression)
         || pointsto_is_of<pointsto_address_dereferencet>(expression)
+        || pointsto_is_of<pointsto_set_of_address_shifted_targetst>(expression)
         );
 }
 
@@ -88,7 +89,7 @@ std::string  pointsto_dump_address_shifted_targets_in_html(
     std::ostream&  ostr
     )
 {
-  ostr << '{';
+  ostr << "<b>{</b>";
   std::string const  error_message =
       pointsto_dump_address_shift_in_html(
           targets.get_address_shift(),
@@ -96,7 +97,7 @@ std::string  pointsto_dump_address_shifted_targets_in_html(
           );
   if (!error_message.empty())
     return error_message;
-  ostr << '}';
+  ostr << "<b>}</b>";
   return ""; // No error.
 }
 
@@ -156,7 +157,7 @@ std::string  pointsto_dump_set_of_offsetst_in_html(
   }
   ostr << '}';
   if (!offsets.is_exact())
-    ostr << "<b>*</b>";
+    ostr << "<b>!</b>";
   return ""; // No error.
 }
 
@@ -197,29 +198,22 @@ std::string  pointsto_dump_union_sets_of_targets_in_html(
     std::ostream&  ostr
     )
 {
-  if (enclose_in_brackets(expression.get_left()))
-    ostr << '(';
-  std::string  error_message =
-      pointsto_dump_expression_in_html(
-        expression.get_left(),
-        ostr
-        );
-  if (!error_message.empty())
-    return error_message;
-  if (enclose_in_brackets(expression.get_left()))
-    ostr << ')';
-  ostr << " <b>U</b> ";
-  if (enclose_in_brackets(expression.get_right()))
-    ostr << '(';
-  error_message =
-      pointsto_dump_expression_in_html(
-        expression.get_right(),
-        ostr
-        );
-  if (!error_message.empty())
-    return error_message;
-  if (enclose_in_brackets(expression.get_right()))
-    ostr << ')';
+  for (std::size_t  i = 0UL; i < expression.get_num_operands(); ++i)
+  {
+    if (enclose_in_brackets(expression.get_operand(i)))
+      ostr << '(';
+    std::string  error_message =
+        pointsto_dump_expression_in_html(
+          expression.get_operand(i),
+          ostr
+          );
+    if (!error_message.empty())
+      return error_message;
+    if (enclose_in_brackets(expression.get_operand(i)))
+      ostr << ')';
+    if (i+1UL < expression.get_num_operands())
+      ostr << " <b>&#x2210;</b> ";
+  }
   return ""; // No error.
 }
 

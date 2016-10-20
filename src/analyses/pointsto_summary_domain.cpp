@@ -13,6 +13,7 @@ Date: Octomber 2016
 
 #include <analyses/pointsto_summary_domain.h>
 #include <summaries/summary_dump.h>
+#include <util/msgstream.h>
 #include <algorithm>
 #include <iterator>
 #include <iostream>
@@ -267,20 +268,31 @@ pointsto_union_sets_of_targetst::pointsto_union_sets_of_targetst(
     const pointsto_expressiont&  left,
     const pointsto_expressiont&  right
     )
+  : pointsto_union_sets_of_targetst(operants_sett{left,right})
+{}
+
+pointsto_union_sets_of_targetst::pointsto_union_sets_of_targetst(
+    const operants_sett&  operands
+    )
   : pointsto_expressiont(keyword())
 {
-  get_sub().push_back(left);
-  get_sub().push_back(right);
+  for (const auto&  operand : operands)
+    if (!pointsto_is_empty_set_of_targets(operand))
+      get_sub().push_back(operand);
+  while (get_sub().size() < 2UL)
+    get_sub().push_back(pointsto_expression_empty_set_of_targets());
 }
 
-const pointsto_expressiont& pointsto_union_sets_of_targetst::get_left() const
+std::size_t  pointsto_union_sets_of_targetst::get_num_operands() const
 {
-  return pointsto_as<pointsto_expressiont>(get_sub().front());
+  return get_sub().size();
 }
 
-const pointsto_expressiont& pointsto_union_sets_of_targetst::get_right()const
+const pointsto_expressiont&  pointsto_union_sets_of_targetst::get_operand(
+    const std::size_t operand_index
+    ) const
 {
-  return pointsto_as<pointsto_expressiont>(get_sub().back());
+  return pointsto_as<pointsto_expressiont>(get_sub().at(operand_index));
 }
 
 
@@ -361,22 +373,94 @@ pointsto_expressiont  pointsto_expression_normalise(
   if (const pointsto_union_sets_of_targetst* const punion =
         pointsto_as<pointsto_union_sets_of_targetst>(&a))
   {
-    if (pointsto_is_empty_set_of_targets(punion->get_left()))
-      return punion->get_right();
-    if (pointsto_is_empty_set_of_targets(punion->get_right()))
-      return punion->get_left();
-
-    if (const pointsto_union_sets_of_targetst* const right =
-          pointsto_as<pointsto_union_sets_of_targetst>(&punion->get_right()))
+    pointsto_union_sets_of_targetst::operants_sett  operands;
+    for (std::size_t  i = 0UL; i < punion->get_num_operands(); ++i)
+      if (!pointsto_is_empty_set_of_targets(punion->get_operand(i)))
+      {
+        if (const pointsto_union_sets_of_targetst* const inner =
+              pointsto_as<pointsto_union_sets_of_targetst>(
+                  &punion->get_operand(i)))
+          for (std::size_t  j = 0UL; j < inner->get_num_operands(); ++j)
+            operands.insert(inner->get_operand(j));
+        else
+          operands.insert(punion->get_operand(i));
+      }
+    if (operands.empty())
+      return pointsto_expression_empty_set_of_targets();
+    if (operands.size() == 1UL)
+      return *operands.cbegin();
+    return pointsto_union_sets_of_targetst(operands);
+  }
+  if (const pointsto_address_dereferencet* const deref =
+        pointsto_as<pointsto_address_dereferencet>(&a))
+  {
+    const pointsto_address_shiftt&  shift = deref->get_address_shift();
+    if (const pointsto_union_sets_of_targetst* const punion =
+          pointsto_as<pointsto_union_sets_of_targetst>(&shift.get_targets()))
     {
-      if (punion->get_left() == right->get_left())
-        return pointsto_union_sets_of_targetst(
-                  punion->get_left(),
-                  right->get_right()
-                  );
-
+      pointsto_union_sets_of_targetst::operants_sett  operands;
+      for (std::size_t  i = 0UL; i < punion->get_num_operands(); ++i)
+        operands.insert(
+            pointsto_expression_normalise(
+                pointsto_address_dereferencet(
+                    pointsto_address_shiftt(
+                        punion->get_operand(i),
+                        shift.get_offsets()
+                        )
+                    )
+                )
+            );
+      return pointsto_union_sets_of_targetst(operands);
     }
-
+    if (const pointsto_address_dereferencet* const inner =
+          pointsto_as<pointsto_address_dereferencet>(&shift.get_targets()))
+    {
+      const pointsto_address_shiftt&  inner_shift = inner->get_address_shift();
+      pointsto_set_of_offsetst::offset_namest names;
+      {
+        const pointsto_set_of_offsetst& inner_offsets =
+            inner_shift.get_offsets();
+        for (std::size_t  i = 0UL; i < inner_offsets.get_num_offsets(); ++i)
+          names.insert(inner_offsets.get_offset_name(i));
+        const pointsto_set_of_offsetst& outer_offsets =
+            shift.get_offsets();
+        for (std::size_t  i = 0UL; i < outer_offsets.get_num_offsets(); ++i)
+          names.insert(outer_offsets.get_offset_name(i));
+      }
+      return pointsto_address_dereferencet(
+                  pointsto_address_shiftt(
+                      inner_shift.get_targets(),
+                      pointsto_set_of_offsetst(
+                          names,
+                          false
+                          )
+                      )
+                  );
+    }
+    return a;
+  }
+  if (const pointsto_set_of_address_shifted_targetst* const shifted =
+        pointsto_as<pointsto_set_of_address_shifted_targetst>(&a))
+  {
+    const pointsto_address_shiftt&  shift = shifted->get_address_shift();
+    if (const pointsto_union_sets_of_targetst* const punion =
+          pointsto_as<pointsto_union_sets_of_targetst>(&shift.get_targets()))
+    {
+      pointsto_union_sets_of_targetst::operants_sett  operands;
+      for (std::size_t  i = 0UL; i < punion->get_num_operands(); ++i)
+        operands.insert(
+            pointsto_expression_normalise(
+                pointsto_set_of_address_shifted_targetst(
+                    pointsto_address_shiftt(
+                        punion->get_operand(i),
+                        shift.get_offsets()
+                        )
+                    )
+                )
+            );
+      return pointsto_union_sets_of_targetst(operands);
+    }
+    return a;
   }
   if (const pointsto_if_empty_then_elset* const ite =
         pointsto_as<pointsto_if_empty_then_elset>(&a))
@@ -386,6 +470,7 @@ pointsto_expressiont  pointsto_expression_normalise(
               &ite->get_conditional_targets()) )
       return cond->empty() ? ite->get_true_branch_targets()  :
                              ite->get_false_branch_targets() ;
+    return a;
   }
   return a;
 }
@@ -423,6 +508,8 @@ pointsto_expressiont  pointsto_evaluate_access_path(
     const pointsto_rulest&  domain_value,
     const access_path_to_memoryt&  access_path,
     const bool  as_lvalue,
+    const irep_idt&  fn_name,
+    const unsigned int  location_id,
     const namespacet&  ns
     )
 {
@@ -431,6 +518,8 @@ pointsto_expressiont  pointsto_evaluate_access_path(
               domain_value,
               get_typecast_target(access_path,ns),
               as_lvalue,
+              fn_name,
+              location_id,
               ns
               );
 
@@ -448,12 +537,16 @@ pointsto_expressiont  pointsto_evaluate_access_path(
               domain_value,
               get_dereferenced_operand(access_path),
               false,
+              fn_name,
+              location_id,
               ns
               );
   if (is_side_effect_malloc(access_path))
   {
     return pointsto_set_of_concrete_targetst(
-              get_malloc_of_side_effect(access_path).id()
+              msgstream() << fn_name << '@' << location_id << "::"
+                          << get_malloc_of_side_effect(access_path).id()
+                          << msgstream::end()
               );
   }
   if (is_member(access_path))
@@ -464,6 +557,8 @@ pointsto_expressiont  pointsto_evaluate_access_path(
             domain_value,
             get_member_accessor(access_path),
             false,
+            fn_name,
+            location_id,
             ns
             );
     if (pointsto_is_empty_set_of_targets(accessor))
@@ -489,4 +584,92 @@ pointsto_expressiont  pointsto_evaluate_access_path(
   std::cout.flush();
 
   return pointsto_expression_empty_set_of_targets();
+}
+
+
+pointsto_expressiont  pointsto_temp_prune_pure_locals(
+    const pointsto_expressiont&  a,
+    namespacet const&  ns
+    )
+{
+  if (const pointsto_set_of_concrete_targetst* const targets =
+        pointsto_as<pointsto_set_of_concrete_targetst>(&a))
+  {
+    pointsto_set_of_concrete_targetst::target_namest  names;
+    for (std::size_t  i = 0UL; i < targets->get_num_targets(); ++i)
+    {
+      if (as_string(targets->get_target_name(i)).find("::malloc")
+          != std::string::npos)
+        names.insert(targets->get_target_name(i));
+      else
+      {
+        const symbolt* symbol = nullptr;
+        ns.lookup(targets->get_target_name(i),symbol);
+        if (symbol != nullptr && symbol->is_static_lifetime)
+          names.insert(targets->get_target_name(i));
+      }
+    }
+    return pointsto_set_of_concrete_targetst(names);
+  }
+  if (const pointsto_set_of_address_shifted_targetst* const targets =
+        pointsto_as<pointsto_set_of_address_shifted_targetst>(&a))
+  {
+    const pointsto_expressiont  shifts =
+        pointsto_temp_prune_pure_locals(
+            targets->get_address_shift().get_targets(),
+            ns
+            );
+    if (pointsto_is_empty_set_of_targets(shifts))
+      return pointsto_expression_empty_set_of_targets();
+    return pointsto_set_of_address_shifted_targetst(
+                pointsto_address_shiftt(
+                    shifts,
+                    targets->get_address_shift().get_offsets()
+                    )
+                );
+  }
+  if (const pointsto_subtract_sets_of_targetst* const subtract =
+        pointsto_as<pointsto_subtract_sets_of_targetst>(&a))
+  {
+    const pointsto_expressiont  left =
+        pointsto_temp_prune_pure_locals(subtract->get_left(),ns);
+    if (pointsto_is_empty_set_of_targets(left))
+      return pointsto_expression_empty_set_of_targets();
+    const pointsto_expressiont  right =
+        pointsto_temp_prune_pure_locals(subtract->get_right(),ns);
+    if (pointsto_is_empty_set_of_targets(right))
+      return left;
+    return pointsto_subtract_sets_of_targetst(left,right);
+  }
+  if (const pointsto_union_sets_of_targetst* const punion =
+        pointsto_as<pointsto_union_sets_of_targetst>(&a))
+  {
+    pointsto_union_sets_of_targetst::operants_sett  operands;
+    for (std::size_t  i = 0UL; i < punion->get_num_operands(); ++i)
+    {
+      const pointsto_expressiont  pruned =
+          pointsto_temp_prune_pure_locals(punion->get_operand(i),ns);
+      if (!pointsto_is_empty_set_of_targets(pruned))
+        operands.insert(pruned);
+    }
+    if (operands.empty())
+      return pointsto_expression_empty_set_of_targets();
+    if (operands.size() == 1UL)
+      return *operands.cbegin();
+    return pointsto_union_sets_of_targetst(operands);
+  }
+  if (const pointsto_if_empty_then_elset* const ite =
+        pointsto_as<pointsto_if_empty_then_elset>(&a))
+  {
+    const pointsto_expressiont  cond =
+        pointsto_temp_prune_pure_locals(ite->get_conditional_targets(),ns);
+    const pointsto_expressiont  true_expr =
+        pointsto_temp_prune_pure_locals(ite->get_true_branch_targets(),ns);
+    const pointsto_expressiont  false_expr =
+        pointsto_temp_prune_pure_locals(ite->get_false_branch_targets(),ns);
+    if (pointsto_is_empty_set_of_targets(cond))
+      return true_expr;
+    return pointsto_if_empty_then_elset(cond,true_expr,false_expr);
+  }
+  return a;
 }
