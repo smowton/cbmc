@@ -684,7 +684,15 @@ static void collect_lvsa_access_paths(
   value_setst::valuest referees;
   lvsa.get_values(instit,address_of_exprt(e),referees);
   for(const auto& target : referees)
-    collect_referee_access_paths(target,ns,result,all_keys);
+  {
+    if(target.id()==ID_unknown)
+    {
+      std::cerr << "Warning: ignoring unknown value-set entry for now.\n";
+      continue;
+    }
+    assert(target.id()==ID_object_descriptor);
+    collect_referee_access_paths(to_object_descriptor_expr(target).object(),ns,result,all_keys);
+  }
 }
 
 taint_map_from_lvalues_to_svaluest  transform(
