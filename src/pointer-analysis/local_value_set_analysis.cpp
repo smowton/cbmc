@@ -211,14 +211,15 @@ void local_value_set_analysist::save_summary(const goto_programt& goto_program)
   locationt last_loc=std::prev(goto_program.instructions.end());
   const auto& final_state=static_cast<const value_set_domaint&>(get_state(last_loc));
   auto summaryptr=std::make_shared<lvsaa_single_external_set_summaryt>();
-  summaryptr->from_final_state(final_state.value_set,ns);
+  bool export_return_value=function_type.return_type().id()==ID_pointer;
+  summaryptr->from_final_state(final_state.value_set,ns,export_return_value);
   summarydb.insert(std::make_pair(function_name,summaryptr));
   summarydb.save(function_name);
   summarydb.save_index();
 }
 
 void lvsaa_single_external_set_summaryt::from_final_state(
-  const value_sett& final_state, const namespacet& ns)
+  const value_sett& final_state, const namespacet& ns, bool export_return_value)
 {
   // Just save a list of fields that may be overwritten by this function, and the values
   // they may be assigned.
@@ -229,10 +230,17 @@ void lvsaa_single_external_set_summaryt::from_final_state(
     bool export_this_entry=false;
     if(has_prefix(entryname,prefix))
       export_this_entry=true;
-    if(has_prefix(entryname,"value_set::dynamic_object"))
+    if((!export_this_entry) && has_prefix(entryname,"value_set::dynamic_object"))
     {
       // TODO: escape analysis to restrict the set of dynamic objects we export.
       export_this_entry=true;
+    }
+    if((!export_this_entry) && entryname=="value_set::return_value")
+    {
+      if(export_return_value)
+        export_this_entry=true;
+      else
+        continue;
     }
     if(!export_this_entry)
     {

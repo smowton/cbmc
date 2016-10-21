@@ -18,7 +18,7 @@ class lvsaa_single_external_set_summaryt : public json_serialisable_summaryt {
 
   void from_json(const json_objectt&);
   json_objectt to_json() const;
-  void from_final_state(const value_sett& state, const namespacet&);
+  void from_final_state(const value_sett& state, const namespacet&, bool export_return_value);
 };
 
 // Value-set analysis extended to use free variables labelled with access paths
