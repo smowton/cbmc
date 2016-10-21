@@ -40,7 +40,8 @@ class optionst;
   "(non-null)(show-non-null)" \
   "(summary-only)" \
   "(taint-analysis):" \
-  "(run-pointsto-temp-analyser)"
+  "(run-pointsto-temp-analyser)" \
+  "(lvsa-summary-directory):"
 
 class goto_analyzer_parse_optionst:
   public parse_options_baset,
