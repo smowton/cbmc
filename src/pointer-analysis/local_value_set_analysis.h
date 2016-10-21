@@ -60,6 +60,8 @@ class local_value_set_analysist : public value_set_analysist, public messaget {
   const local_value_set_analysis_modet mode;
   summary_json_databaset<lvsaa_single_external_set_summaryt> summarydb;
 
+  virtual bool get_ignore_recursion() { return false; }
+
 };
 
 #endif

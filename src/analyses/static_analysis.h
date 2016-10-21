@@ -97,6 +97,7 @@ public:
     ns(_ns),
     initialized(false)
   {
+    ignore_recursion=get_ignore_recursion();
   }
   
   virtual void initialize(
@@ -259,6 +260,10 @@ protected:
     locationt l,
     const exprt &expr,
     std::list<exprt> &dest)=0;
+
+  bool ignore_recursion;
+  virtual bool get_ignore_recursion() { return true; }
+  
 };
 
 // T is expected to be derived from domain_baset

@@ -537,14 +537,17 @@ void static_analysis_baset::do_function_call_rec(
   if(function.id()==ID_symbol)
   {
     const irep_idt &identifier=function.get(ID_identifier);
-    
-    if(recursion_set.find(identifier)!=recursion_set.end())
+
+    if(ignore_recursion)
     {
-      // recursion detected!
-      return;
+      if(recursion_set.find(identifier)!=recursion_set.end())
+      {
+        // recursion detected!
+        return;
+      }
+      else
+        recursion_set.insert(identifier);
     }
-    else
-      recursion_set.insert(identifier);
       
     goto_functionst::function_mapt::const_iterator it=
       goto_functions.function_map.find(identifier);
@@ -558,8 +561,9 @@ void static_analysis_baset::do_function_call_rec(
       it,
       arguments,
       new_state);
-    
-    recursion_set.erase(identifier);
+
+    if(ignore_recursion)
+      recursion_set.erase(identifier);
   }
   else if(function.id()==ID_if)
   {
