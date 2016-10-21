@@ -753,7 +753,7 @@ taint_map_from_lvalues_to_svaluest  transform(
         collect_lvsa_access_paths(asgn.lhs(),ns,lhs,*lvsa,result,Iit);
         for(const auto& path : lhs)
         {
-          if(lhs.size()==1)
+          if(lhs.size()>1)
             maybe_assign(result,normalise(path,ns),rvalue);
           else
             assign(result,normalise(path,ns),rvalue);
