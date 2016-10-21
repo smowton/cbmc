@@ -31,6 +31,8 @@ static void gather_external_symbols(
 void local_value_set_analysist::initialize(const goto_programt& fun)
 {
   summarydb.set_message_handler(get_message_handler());
+  // TODO: replace this with something less ugly.
+  value_sett::use_malloc_type=true; 
   value_set_analysist::initialize(fun);
 
   if(fun.instructions.size()==0)

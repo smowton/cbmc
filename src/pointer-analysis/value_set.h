@@ -35,6 +35,8 @@ public:
   unsigned location_number;
   irep_idt function;
   static object_numberingt object_numbering;
+  // TODO: figure out a less awful way to get configuration state into value-set.
+  static bool use_malloc_type;
 
   typedef irep_idt idt;
   
