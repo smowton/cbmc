@@ -681,17 +681,28 @@ static void collect_lvsa_access_paths(
   taint_map_from_lvalues_to_svaluest const& all_keys,
   instruction_iteratort const& instit)
 {
-  value_setst::valuest referees;
-  lvsa.get_values(instit,address_of_exprt(e),referees);
-  for(const auto& target : referees)
+  if(e.id()==ID_symbol ||
+     e.id()==ID_index ||
+     e.id()==ID_member ||
+     e.id()==ID_dereference)
   {
-    if(target.id()==ID_unknown)
+    value_setst::valuest referees;
+    lvsa.get_values(instit,address_of_exprt(e),referees);
+    for(const auto& target : referees)
     {
-      std::cerr << "Warning: ignoring unknown value-set entry for now.\n";
-      continue;
+      if(target.id()==ID_unknown)
+      {
+        std::cerr << "Warning: ignoring unknown value-set entry for now.\n";
+        continue;
+      }
+      assert(target.id()==ID_object_descriptor);
+      collect_referee_access_paths(to_object_descriptor_expr(target).object(),ns,result,all_keys);
     }
-    assert(target.id()==ID_object_descriptor);
-    collect_referee_access_paths(to_object_descriptor_expr(target).object(),ns,result,all_keys);
+  }
+  else
+  {
+    forall_operands(it,e)
+      collect_lvsa_access_paths(*it,ns,result,lvsa,all_keys,instit);
   }
 }
 
