@@ -329,6 +329,8 @@ static void  build_symbols_substitution(
     assert(!lvalue_svalue.second.is_bottom());
     assert(lvalue_svalue.second.expression().size() == 1UL);
 
+    taint_lvalues_sett  argument_lvalues;
+    
     if (is_parameter(lvalue_svalue.first,ns))
     {
       std::size_t  param_idx;
@@ -342,9 +344,7 @@ static void  build_symbols_substitution(
 
       assert(param_idx < fn_call.arguments().size());
 
-      taint_svaluet  argument_svalue = taint_make_bottom();
       {
-        taint_lvalues_sett  argument_lvalues;
         if(lvsa)
         {
           collect_lvsa_access_paths(
@@ -353,7 +353,6 @@ static void  build_symbols_substitution(
               argument_lvalues,
               *lvsa,
               Iit);
-          expand_external_objects(argument_lvalues,a);
         }
         else
         {
@@ -363,29 +362,6 @@ static void  build_symbols_substitution(
             argument_lvalues
             );
         }
-        for (auto const&  lvalue : argument_lvalues)
-        {
-          auto const  it = a.find(lvalue);
-          if (it != a.cend())
-            argument_svalue = join(argument_svalue,it->second);
-        }
-      }
-
-      symbols_substitution.insert({
-          *lvalue_svalue.second.expression().cbegin(),
-          argument_svalue
-          });
-
-      if (log != nullptr)
-      {
-        *log << "<li>From parameter no. " << param_idx << "(lvalue=";
-        taint_dump_lvalue_in_html(lvalue_svalue.first,ns,*log);
-        *log << "): "
-             << *lvalue_svalue.second.expression().cbegin()
-             << " &rarr; "
-             ;
-        taint_dump_svalue_in_html(argument_svalue,*log);
-        *log << "</li>\n";
       }
     }
     else
@@ -398,34 +374,24 @@ static void  build_symbols_substitution(
             fn_type,
             ns
             );
-      auto const  it = a.find(translated_lvalue);
-      if (it != a.cend())
-      {
-        symbols_substitution.insert({
-            *lvalue_svalue.second.expression().cbegin(),
-            it->second
-            });
-
-        if (log != nullptr)
-        {
-          *log << "<li>From exterior scope of the function (lvalue=";
-          taint_dump_lvalue_in_html(lvalue_svalue.first,ns,*log);
-          *log << "): "
-               << *lvalue_svalue.second.expression().cbegin()
-               << " &rarr; "
-               ;
-          taint_dump_svalue_in_html(it->second,*log);
-          *log << "</li>\n";
-        }
-      }
-      else
-        if (log != nullptr)
-        {
-          *log << "<li>SKIPPING lvalue '";
-          taint_dump_lvalue_in_html(lvalue_svalue.first,ns,*log);
-          *log << "'.</li>\n";
-        }
+      argument_lvalues.insert(translated_lvalue);
     }
+
+    expand_external_objects(argument_lvalues,a);
+      
+    taint_svaluet  argument_svalue = taint_make_bottom();
+    for (auto const&  lvalue : argument_lvalues)
+    {
+      auto const  it = a.find(lvalue);
+      if (it != a.cend())
+        argument_svalue = join(argument_svalue,it->second);
+    }
+
+    symbols_substitution.insert({
+        *lvalue_svalue.second.expression().cbegin(),
+        argument_svalue
+    });
+
   }
 
   if (log != nullptr)
@@ -755,6 +721,23 @@ static void collect_referee_access_paths(
   }
 }
 
+static exprt replace_member_of_external_objects(const exprt& e)
+{
+  if(e.id()==ID_member && e.op0().id()=="external-value-set")
+  {
+    // Fold any member-of-external expression into the external value set within,
+    // to avoid using multiple distinct exprts to refer to the same alias set.
+    auto evs_copy=to_external_value_set(e.op0());
+    access_path_entry_exprt new_entry("."+id2string(to_member_expr(e).get_component_name()),"","");
+    evs_copy.extend_access_path(new_entry);
+    evs_copy.label()=constant_exprt("external_objects",string_typet());
+    evs_copy.type()=e.type();
+    return evs_copy;
+  }
+  else
+    return e;
+}
+
 static void collect_lvsa_access_paths(
   exprt const& e,
   namespacet const& ns,
@@ -777,7 +760,7 @@ static void collect_lvsa_access_paths(
         continue;
       }
       assert(target.id()==ID_object_descriptor);
-      collect_referee_access_paths(to_object_descriptor_expr(target).object(),ns,result);
+      result.insert(replace_member_of_external_objects(to_object_descriptor_expr(target).object()));
     }
   }
   else
