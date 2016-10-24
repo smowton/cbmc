@@ -476,18 +476,44 @@ int goto_analyzer_parse_optionst::doit()
   if(cmdline.isset("local-value-set-analysis"))
   {
     const auto& dbpath=cmdline.get_value("lvsa-summary-directory");
+    if(dbpath=="")
+    {
+      error() << "Must specify lvsa-summary-directory";
+      abort();
+    }
+    
+    local_value_set_analysist::dbt summarydb(dbpath);
+    namespacet ns(goto_model.symbol_table);
     if(cmdline.isset("lvsa-function"))
     {
       const auto& fname=cmdline.get_value("lvsa-function");
       const auto& gf=goto_model.goto_functions.function_map.at(fname);
-      namespacet ns(goto_model.symbol_table);
       local_value_set_analysist value_set_analysis(
-        ns,gf.type,fname,dbpath,LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET);
+        ns,gf.type,fname,summarydb,LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET);
       value_set_analysis.set_message_handler(get_message_handler());
       value_set_analysis(gf.body);
       show_value_sets(get_ui(), gf.body, value_set_analysis);
       if(dbpath.size()!=0)
         value_set_analysis.save_summary(gf.body);
+    }
+    else {
+      call_grapht const call_graph(goto_model.goto_functions);
+      std::vector<irep_idt> process_order;
+      get_inverted_topological_order(call_graph,goto_model.goto_functions,process_order);
+      for(const auto& fname : process_order)
+      {
+        debug() << "LVSA: analysing " << fname << eom;
+        const auto& gf=goto_model.goto_functions.function_map.at(fname);
+        if(!gf.body_available())
+          continue;
+        local_value_set_analysist value_set_analysis(
+          ns,gf.type,id2string(fname),summarydb,LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET);
+        value_set_analysis.set_message_handler(get_message_handler());
+        value_set_analysis(gf.body);
+        show_value_sets(get_ui(), gf.body, value_set_analysis);
+        if(dbpath.size()!=0)
+          value_set_analysis.save_summary(gf.body);
+      }
     }
     return 0;
   }

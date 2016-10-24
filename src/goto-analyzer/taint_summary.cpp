@@ -941,16 +941,9 @@ void  taint_summarise_all_functions(
     )
 {
   std::vector<irep_idt>  inverted_topological_order;
-  {
-    std::unordered_set<irep_idt,dstring_hash>  processed;
-    for (auto const&  elem : instrumented_program.goto_functions.function_map)
-      inverted_partial_topological_order(
-            call_graph,
-            elem.first,
-            processed,
-            inverted_topological_order
-            );
-  }
+  get_inverted_topological_order(call_graph,
+                                 instrumented_program.goto_functions,
+                                 inverted_topological_order);
   for (auto const&  fn_name : inverted_topological_order)
   {
     goto_functionst::function_mapt  const  functions_map =
@@ -994,8 +987,9 @@ taint_summary_ptrt  taint_summarise_function(
   assert(fn_iter != functions.cend());
   assert(fn_iter->second.body_available());
 
+  local_value_set_analysist::dbt lvsa_db(lvsa_directory);
   local_value_set_analysist lvsainst(ns,fn_iter->second.type,id2string(function_id),
-                                     lvsa_directory,LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET);
+                                     lvsa_db,LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET);
   local_value_set_analysist* lvsa=lvsa_directory=="" ? NULL : &lvsainst;
   if(lvsa)
   {
