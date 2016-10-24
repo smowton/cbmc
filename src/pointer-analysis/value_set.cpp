@@ -31,6 +31,7 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "value_set.h"
 #include "add_failed_symbols.h"
+#include "external_value_set_expr.h"
 
 const value_sett::object_map_dt value_sett::object_map_dt::blank;
 object_numberingt value_sett::object_numbering;
@@ -811,8 +812,13 @@ void value_sett::get_value_set_rec(
     else if(statement==ID_malloc)
     {
       assert(suffix=="");
+
+      if(use_malloc_type)
+        assert(expr.type().id()==ID_pointer);
       
       const typet &dynamic_type=
+        use_malloc_type ?
+        expr.type().subtype() :
         static_cast<const typet &>(expr.find("#type"));
 
       dynamic_object_exprt dynamic_object(dynamic_type);
@@ -2007,3 +2013,4 @@ exprt value_sett::make_member(
   return member_expr;
 }
 
+bool value_sett::use_malloc_type;

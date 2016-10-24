@@ -560,7 +560,9 @@ std::string  taint_plannert::compute_summaries(
               fn_name,
               program,
               *summary_database,
-              log
+              log,
+              "",
+              get_message_handler()
               ),
           });
   }

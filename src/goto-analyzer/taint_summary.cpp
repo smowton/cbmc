@@ -16,6 +16,7 @@ This module defines interfaces and functionality for taint summaries.
 #include <goto-analyzer/taint_summary_dump.h>
 #include <summaries/utility.h>
 #include <summaries/summary_dump.h>
+#include <pointer-analysis/local_value_set_analysis.h>
 #include <util/std_types.h>
 #include <util/file_util.h>
 #include <util/msgstream.h>
@@ -463,6 +464,18 @@ static void  assign(
     it->second = svalue;
 }
 
+static void  maybe_assign(
+    taint_map_from_lvalues_to_svaluest&  map,
+    taint_lvaluet const&  lvalue,
+    taint_svaluet const&  svalue
+    )
+{
+  auto const  it = map.find(lvalue);
+  if (it == map.end())
+    map.insert({lvalue,svalue});
+  else
+    it->second = join(it->second,svalue);
+}
 
 taint_svaluet  taint_make_symbol()
 {
@@ -600,17 +613,100 @@ bool  operator<(
   return true;
 }
 
+static void collect_referee_access_paths(
+  exprt const& e,
+  namespacet const& ns,
+  taint_lvalues_sett& result,
+  taint_map_from_lvalues_to_svaluest const& all_keys)
+{
+  if(e.id()==ID_member)
+  {
+    taint_lvalues_sett newresults;
+    collect_referee_access_paths(e.op0(),ns,newresults,all_keys);
+    for(const auto& res : newresults)
+      result.insert(member_exprt(res,to_member_expr(e).get_component_name(),e.type()));
+  }
+  else
+  {
+    if(e.id()=="external-value-set")
+    {
+
+      const auto& evse=to_external_value_set(e);
+      const auto& label=to_constant_expr(evse.label()).get_value();
+      if(label=="external_objects")
+      {
+        assert(evse.access_path_size()==1);
+        std::string fieldname=id2string(evse.access_path_back().label());
+        assert(fieldname.size()>=2);
+        assert(fieldname[0]=='.');
+        fieldname=fieldname.substr(1);
+        // This represents a given field of all objects
+        // preceding entering this function.
+        // Return all known keys that match the field.
+        for(const auto& keyval : all_keys)
+        {
+          const auto& key=keyval.first;
+          if(key.id()==ID_member)
+          {
+            auto key_field=to_member_expr(key).get_component_name();
+            if(key_field==fieldname)
+              result.insert(key);
+          }
+        }
+      }
+      else
+      {
+        // This represents the referees of a pointer retrieved
+        // from a named parameter or global variable, as they were
+        // at the time the function was entered.
+        const symbolt& sym=ns.lookup(label);
+        auto symexpr=sym.symbol_expr();
+        assert(sym.type.id()==ID_pointer);
+        result.insert(dereference_exprt(symexpr,sym.type.subtype()));
+      }
+    }
+    else
+    {
+      // Dynamic object expression, or static symbol.
+      result.insert(e);
+    }
+  }
+}
+
+static void collect_lvsa_access_paths(
+  exprt const& e,
+  namespacet const& ns,
+  taint_lvalues_sett& result,
+  local_value_set_analysist& lvsa,
+  taint_map_from_lvalues_to_svaluest const& all_keys,
+  instruction_iteratort const& instit)
+{
+  value_setst::valuest referees;
+  lvsa.get_values(instit,address_of_exprt(e),referees);
+  for(const auto& target : referees)
+  {
+    if(target.id()==ID_unknown)
+    {
+      std::cerr << "Warning: ignoring unknown value-set entry for now.\n";
+      continue;
+    }
+    assert(target.id()==ID_object_descriptor);
+    collect_referee_access_paths(to_object_descriptor_expr(target).object(),ns,result,all_keys);
+  }
+}
 
 taint_map_from_lvalues_to_svaluest  transform(
     taint_map_from_lvalues_to_svaluest const&  a,
-    goto_programt::instructiont const&  I,
+    instruction_iteratort const& Iit,
     irep_idt const&  caller_ident,
     goto_functionst::function_mapt const&  functions_map,
     database_of_summariest const&  database,
+    local_value_set_analysist* lvsa,
     namespacet const&  ns,
     std::ostream* const  log
     )
 {
+  goto_programt::instructiont const&  I=*Iit;
   taint_map_from_lvalues_to_svaluest  result = a;
   switch(I.type)
   {
@@ -629,7 +725,10 @@ taint_map_from_lvalues_to_svaluest  transform(
       taint_svaluet  rvalue = taint_make_bottom();
       {
         taint_lvalues_sett  rhs;
-        collect_access_paths(asgn.rhs(),ns,rhs);
+        if(!lvsa)
+          collect_access_paths(asgn.rhs(),ns,rhs);
+        else
+          collect_lvsa_access_paths(asgn.rhs(),ns,rhs,*lvsa,result,Iit);
         for (auto const&  lvalue : rhs)
         {
           auto const  it = a.find(lvalue);
@@ -647,7 +746,19 @@ taint_map_from_lvalues_to_svaluest  transform(
       if (log != nullptr)
         *log << "}.</p>\n";
 
-      assign(result,normalise(asgn.lhs(),ns),rvalue);
+      if(!lvsa)
+        assign(result,normalise(asgn.lhs(),ns),rvalue);
+      else {
+        taint_lvalues_sett lhs;
+        collect_lvsa_access_paths(asgn.lhs(),ns,lhs,*lvsa,result,Iit);
+        for(const auto& path : lhs)
+        {
+          if(lhs.size()>1)
+            maybe_assign(result,normalise(path,ns),rvalue);
+          else
+            assign(result,normalise(path,ns),rvalue);
+        }
+      }
     }
     break;
   case FUNCTION_CALL:
@@ -824,7 +935,9 @@ void  taint_summarise_all_functions(
     goto_modelt const&  instrumented_program,
     database_of_summariest&  summaries_to_compute,
     call_grapht const&  call_graph,
-    std::ostream* const  log
+    std::ostream* const  log,
+    const std::string& lvsa_directory,
+    message_handlert& msg
     )
 {
   std::vector<irep_idt>  inverted_topological_order;
@@ -850,7 +963,9 @@ void  taint_summarise_all_functions(
               fn_name,
               instrumented_program,
               summaries_to_compute,
-              log
+              log,
+              lvsa_directory,
+              msg
               ),
           });
   }
@@ -860,7 +975,9 @@ taint_summary_ptrt  taint_summarise_function(
     irep_idt const&  function_id,
     goto_modelt const&  instrumented_program,
     database_of_summariest const&  database,
-    std::ostream* const  log
+    std::ostream* const  log,
+    const std::string& lvsa_directory,
+    message_handlert& msg
     )
 {
   if (log != nullptr)
@@ -877,11 +994,20 @@ taint_summary_ptrt  taint_summarise_function(
   assert(fn_iter != functions.cend());
   assert(fn_iter->second.body_available());
 
+  local_value_set_analysist lvsainst(ns,fn_iter->second.type,id2string(function_id),
+                                     lvsa_directory,LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET);
+  local_value_set_analysist* lvsa=lvsa_directory=="" ? NULL : &lvsainst;
+  if(lvsa)
+  {
+    lvsainst.set_message_handler(msg);
+    lvsainst(fn_iter->second.body);
+  }
+  
   taint_summary_domain_ptrt  domain = std::make_shared<taint_symmary_domaint>();
   initialise_domain(
         function_id,
         fn_iter->second,
-        functions,
+        functions, 
         ns,
         database,
         *domain,
@@ -934,10 +1060,11 @@ taint_summary_ptrt  taint_summarise_function(
         taint_map_from_lvalues_to_svaluest const  transformed =
             transform(
                 src_value,
-                *src_instr_it,
+                src_instr_it,
                 function_id,
                 functions,
                 database,
+                lvsa,
                 ns,
                 log
                 );

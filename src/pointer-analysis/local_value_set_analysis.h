@@ -2,6 +2,7 @@
 #define LOCAL_VALUE_SET_ANALYSIS_H
 
 #include "value_set_analysis.h"
+#include "external_value_set_expr.h"
 #include <summaries/summary.h>
 #include <util/message.h>
 
@@ -9,11 +10,15 @@ class lvsaa_single_external_set_summaryt : public json_serialisable_summaryt {
  public:
   std::string kind() const noexcept { return "lvsaa"; }
 
-  std::vector<std::pair<std::string, exprt> > field_assignments;
+  struct fieldname {
+    std::string basename;
+    std::string fieldname;
+  };
+  std::vector<std::pair<fieldname, exprt> > field_assignments;
 
   void from_json(const json_objectt&);
   json_objectt to_json() const;
-  void from_final_state(const value_sett& state);
+  void from_final_state(const value_sett& state, const namespacet&, bool export_return_value);
 };
 
 // Value-set analysis extended to use free variables labelled with access paths
@@ -54,6 +59,8 @@ class local_value_set_analysist : public value_set_analysist, public messaget {
   const std::string function_name;
   const local_value_set_analysis_modet mode;
   summary_json_databaset<lvsaa_single_external_set_summaryt> summarydb;
+
+  virtual bool get_ignore_recursion() { return false; }
 
 };
 
