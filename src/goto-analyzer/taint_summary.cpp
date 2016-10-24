@@ -29,19 +29,19 @@ This module defines interfaces and functionality for taint summaries.
 
 #include <iostream>
 
-struct parameter_matches_identifier {
-  parameter_matches_identifier(const irep_idt& _id) : id(_id) {}
-  bool operator()(const code_typet::parametert& p) { return p.get_identifier()==id; }
-protected:
-  const irep_idt id;
-};
-
 static void collect_lvsa_access_paths(
   exprt const& e,
   namespacet const& ns,
   taint_lvalues_sett& result,
   local_value_set_analysist& lvsa,
   instruction_iteratort const& instit);
+
+struct parameter_matches_id {
+  parameter_matches_id(const irep_idt& _id) : id(_id) {}
+  bool operator()(const code_typet::parametert& p) const { return id==p.get_identifier(); }
+protected:
+  const irep_idt id;
+};
 
 /*******************************************************************\
 
@@ -101,18 +101,17 @@ static void  initialise_domain(
               if (is_parameter(lvalue_svalue.first,ns))
               {
                 // Collect access paths for the corresponding actual argument:
-                parameter_matches_identifier match(
-                  to_symbol_expr(lvalue_svalue.first).get_identifier());
+                parameter_matches_id match(to_symbol_expr(lvalue_svalue.first).get_identifier());
                 auto findit=std::find_if(fn_type.parameters().begin(),
                                          fn_type.parameters().end(),
                                          match);
-                assert(findit!=fn_type.parameters().end() && "Couldn't find child parameter?");
-                auto dist=std::distance(fn_type.parameters().begin(),findit);
+                assert(findit!=fn_type.parameters().end() && "Parameter symbol doesn't match?");
+                const auto paramidx=std::distance(fn_type.parameters().begin(),findit);
                 if(lvsa)
-                  collect_lvsa_access_paths(fn_call.arguments()[dist],ns,environment,
+                  collect_lvsa_access_paths(fn_call.arguments()[paramidx],ns,environment,
                                             *lvsa,first_instruction);
                 else
-                  collect_access_paths(fn_call.arguments()[dist],ns,environment);
+                  collect_access_paths(fn_call.arguments()[paramidx],ns,environment);
               }
               else if (!is_parameter(lvalue_svalue.first,ns) &&
                        !is_return_value_auxiliary(lvalue_svalue.first,ns))
@@ -231,6 +230,54 @@ static void  erase_dead_lvalue(
   }
 }
 
+static void expand_external_objects(taint_lvalues_sett& lvalue_set,
+                                    taint_map_from_lvalues_to_svaluest const& all_keys)
+{
+  // Whenever a value like external_value_set("external_objects.x") occurs,
+  // expand that to include the 'x' fields of all objects we know about,
+  // as what is external to the callee might be local to us.
+
+  // Leave the external-objects entry there, since it might refer to things that
+  // are external to *us* as well.
+
+  // TODO: figure out when an external reference made by the callee
+  // is certain to be resolved here, so we can remove the external reference.
+
+  std::vector<exprt> new_keys;
+  for(const auto& lval : lvalue_set)
+  {
+    if(lval.id()=="external-value-set")
+    {
+      const auto& evse=to_external_value_set(lval);
+      const auto& label=to_constant_expr(evse.label()).get_value();
+      if(label=="external_objects")
+      {
+        assert(evse.access_path_size()==1);
+        std::string fieldname=id2string(evse.access_path_back().label());
+        assert(fieldname.size()>=2);
+        assert(fieldname[0]=='.');
+        fieldname=fieldname.substr(1);
+        // This represents a given field of all objects
+        // preceding entering this function.
+        // Return all known keys that match the field.
+        for(const auto& keyval : all_keys)
+        {
+          const auto& key=keyval.first;
+          if(key.id()==ID_member)
+          {
+            auto key_field=to_member_expr(key).get_component_name();
+            if(key_field==fieldname)
+              new_keys.push_back(key);
+          }
+        }
+      }
+    }
+  }
+
+  for(const auto& key : new_keys)
+    lvalue_set.insert(key);
+}
+  
 
 /*******************************************************************\
 
@@ -253,6 +300,8 @@ static void  build_symbols_substitution(
     code_function_callt const&  fn_call,
     code_typet const&  fn_type,
     namespacet const&  ns,
+    local_value_set_analysist* lvsa,
+    instruction_iteratort const& Iit,
     std::ostream* const  log
     )
 {
@@ -292,6 +341,16 @@ static void  build_symbols_substitution(
       taint_svaluet  argument_svalue = taint_make_bottom();
       {
         taint_lvalues_sett  argument_lvalues;
+        if(lvsa)
+        {
+          collect_lvsa_access_paths(
+              fn_call.arguments().at(param_idx),
+              ns,
+              argument_lvalues,
+              *lvsa,
+              Iit);
+          expand_external_objects(argument_lvalues,a);
+        }
         collect_access_paths(
               fn_call.arguments().at(param_idx),
               ns,
@@ -652,33 +711,6 @@ bool  operator<(
   return true;
 }
 
-// Stuff to do to EVS at a call site:
-/*
-      const auto& evse=to_external_value_set(e);
-      const auto& label=to_constant_expr(evse.label()).get_value();
-      if(label=="external_objects")
-      {
-        assert(evse.access_path_size()==1);
-        std::string fieldname=id2string(evse.access_path_back().label());
-        assert(fieldname.size()>=2);
-        assert(fieldname[0]=='.');
-        fieldname=fieldname.substr(1);
-        // This represents a given field of all objects
-        // preceding entering this function.
-        // Return all known keys that match the field.
-        for(const auto& keyval : all_keys)
-        {
-          const auto& key=keyval.first;
-          if(key.id()==ID_member)
-          {
-            auto key_field=to_member_expr(key).get_component_name();
-            if(key_field==fieldname)
-              result.insert(key);
-          }
-        }
-      }
-*/
- 
 static void collect_referee_access_paths(
   exprt const& e,
   namespacet const& ns,
@@ -841,6 +873,8 @@ taint_map_from_lvalues_to_svaluest  transform(
                   fn_call,
                   fn_type,
                   ns,
+                  lvsa,
+                  Iit,
                   log
                   );
             build_substituted_summary(
