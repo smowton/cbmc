@@ -56,6 +56,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-analyzer/taint_summary_json.h>
 #include <goto-analyzer/taint_planner.h>
 #include <goto-analyzer/taint_planner_dump.h>
+#include <goto-analyzer/taint_trace_recogniser.h>
+#include <goto-analyzer/taint_trace_dump.h>
 
 #include "goto_analyzer_parse_options.h"
 #include "taint_analysis.h"
@@ -450,7 +452,19 @@ int goto_analyzer_parse_optionst::doit()
                                           &log,lvsa_json_directory,get_message_handler());
         summaries.insert(std::make_pair(fname,ret));
       }
-        
+
+
+      std::vector<taint_tracet>  error_traces;
+      taint_recognise_error_traces(
+            error_traces,
+            goto_model,
+            call_graph,
+            summaries,
+            taint_sources,
+            taint_sinks,
+            &log
+            );
+
       if(json_directory=="")
       {
         dump_in_html(
@@ -460,6 +474,12 @@ int goto_analyzer_parse_optionst::doit()
           call_graph,
           "./dump_taint_summaries",
           &log
+          );
+
+        taint_dump_traces_in_html(
+          error_traces,
+          static_cast<goto_modelt const&>(goto_model),
+          "./dump_taint_traces"
           );
       }
       else

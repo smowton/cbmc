@@ -694,6 +694,8 @@ goto-analyzer/taint_summary_json.cpp
 goto-analyzer/taint_summary_json.h
 goto-analyzer/taint_trace_recogniser.cpp
 goto-analyzer/taint_trace_recogniser.h
+goto-analyzer/taint_trace_dump.cpp
+goto-analyzer/taint_trace_dump.h
 goto-analyzer/unreachable_instructions.cpp
 goto-analyzer/unreachable_instructions.h
 goto-cc/xml_binaries/read_goto_object.cpp
