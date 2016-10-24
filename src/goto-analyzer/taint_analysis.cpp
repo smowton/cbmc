@@ -62,9 +62,23 @@ public:
 protected:
   taint_parse_treet taint;
   class_hierarchyt class_hierarchy;
-  
-  void instrument(const namespacet &, goto_functionst &);
-  void instrument(const namespacet &, goto_functionst::goto_functiont &);
+
+  void instrument(const namespacet & ns, goto_functionst & fns)
+  {
+    taint_sources_mapt taint_sources;
+    taint_sinks_mapt taint_sinks;
+    instrument(ns,fns,taint_sources,taint_sinks);
+  }
+
+  void instrument(const namespacet &, goto_functionst &,
+                  taint_sources_mapt&  taint_sources,
+                  taint_sinks_mapt&  taint_sinks
+                  );
+  void instrument(const namespacet &, goto_functionst::goto_functiont &,
+                  const irep_idt &fn_name,
+                  taint_sources_mapt&  taint_sources,
+                  taint_sinks_mapt&  taint_sinks
+                  );
 };
 
 class bitvector_analysis_with_summariest:public custom_bitvector_analysist, public messaget
@@ -107,10 +121,13 @@ Function: taint_analysist::instrument
 
 void taint_analysist::instrument(
   const namespacet &ns,
-  goto_functionst &goto_functions)
+  goto_functionst &goto_functions,
+  taint_sources_mapt&  taint_sources,
+  taint_sinks_mapt&  taint_sinks
+  )
 {
   for(auto & function : goto_functions.function_map)
-    instrument(ns, function.second);
+    instrument(ns, function.second, function.first,taint_sources,taint_sinks);
 }
 
 /*******************************************************************\
@@ -127,7 +144,11 @@ Function: taint_analysist::instrument
 
 void taint_analysist::instrument(
   const namespacet &ns,
-  goto_functionst::goto_functiont &goto_function)
+  goto_functionst::goto_functiont &goto_function,
+  const irep_idt &fn_name,
+  taint_sources_mapt&  taint_sources,
+  taint_sinks_mapt&  taint_sinks
+  )
 {
   for(goto_programt::instructionst::iterator
       it=goto_function.body.instructions.begin();
@@ -235,6 +256,9 @@ void taint_analysist::instrument(
                   goto_programt::targett t=tmp.add_instruction();
                   t->make_other(code_set_may);
                   t->source_location=instruction.source_location;
+
+                  taint_sources[as_string(rule.taint)][as_string(fn_name)]
+                      .push_back(t);
                 }
                 break;
               
@@ -248,6 +272,9 @@ void taint_analysist::instrument(
                   t->source_location=instruction.source_location;
                   t->source_location.set_property_class("taint rule "+id2string(rule.id));
                   t->source_location.set_comment(rule.message);
+
+                  taint_sinks[as_string(rule.taint)][as_string(fn_name)]
+                      .push_back(t);
                 }
                 break;
               
@@ -642,7 +669,8 @@ bool taint_analysis(
   message_handlert &message_handler,
   bool show_full,
   const std::string &json_file_name,
-  const database_of_summaries_ptrt& summarydb)
+  const database_of_summaries_ptrt& summarydb
+  )
 {
   taint_analysist taint_analysis;
   taint_analysis.set_message_handler(message_handler);
@@ -653,14 +681,19 @@ bool taint_analysis(
 std::string  taint_analysis_instrument_knowledge(
   goto_modelt&  model,
   std::string const&  taint_file_name,
-  message_handlert&  logger
+  message_handlert&  logger,
+  taint_sources_mapt&  taint_sources,
+  taint_sinks_mapt&  taint_sinks
   )
 {
   struct taint_analysis_accessor_t : public taint_analysist {
     taint_parse_treet& get_taint() { return taint; }
     class_hierarchyt& get_class_hierarchy() { return class_hierarchy; }
-    void instrument(namespacet const&  ns, goto_functionst& fns) {
-      taint_analysist::instrument(ns,fns);
+    void instrument(namespacet const&  ns, goto_functionst& fns,
+                    taint_sources_mapt&  taint_sources,
+                    taint_sinks_mapt&  taint_sinks
+                    ) {
+      taint_analysist::instrument(ns,fns,taint_sources,taint_sinks);
     }
   };
   taint_analysis_accessor_t  analysis;
@@ -668,7 +701,8 @@ std::string  taint_analysis_instrument_knowledge(
   if (taint_parser(taint_file_name, analysis.get_taint(), logger) == true)
     return "Failed to read taint definition file";
   analysis.get_class_hierarchy()(model.symbol_table);
-  analysis.instrument(namespacet(model.symbol_table), model.goto_functions);
+  analysis.instrument(namespacet(model.symbol_table), model.goto_functions,
+                      taint_sources,taint_sinks);
   model.goto_functions.update();
   return ""; // Success
 }

@@ -9,6 +9,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #ifndef CPROVER_TAINT_ANALYSIS_H
 #define CPROVER_TAINT_ANALYSIS_H
 
+#include <goto-analyzer/taint_trace_recogniser.h>
 #include <util/message.h>
 #include <util/namespace.h>
 #include <goto-programs/goto_model.h>
@@ -32,7 +33,9 @@ bool taint_analysis(
 std::string  taint_analysis_instrument_knowledge(
   goto_modelt&  model,
   std::string const&  taint_file_name,
-  message_handlert&  logger
+  message_handlert&  logger,
+  taint_sources_mapt&  taint_sources,
+  taint_sinks_mapt&  taint_sinks
   );
 
 

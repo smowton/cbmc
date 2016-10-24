@@ -421,10 +421,15 @@ int goto_analyzer_parse_optionst::doit()
     }
     else if (cmdline.isset("summary-only"))
     {
+      taint_sources_mapt  taint_sources;
+      taint_sinks_mapt  taint_sinks;
+
       taint_analysis_instrument_knowledge(
           goto_model,
           taint_file,
-          get_message_handler()
+          get_message_handler(),
+          taint_sources,
+          taint_sinks
           );
       std::stringstream  log;
       std::string json_directory=cmdline.get_value("json");

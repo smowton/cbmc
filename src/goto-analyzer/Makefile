@@ -6,7 +6,8 @@ SRC = goto_analyzer_main.cpp goto_analyzer_parse_options.cpp \
       taint_planner.cpp \
       taint_planner_dump.cpp \
       pointsto_temp_analyser.cpp \
-      pointsto_temp_summary_dump.cpp
+      pointsto_temp_summary_dump.cpp \
+      taint_trace_recogniser.cpp
 
 OBJ += ../ansi-c/ansi-c$(LIBEXT) \
       ../cpp/cpp$(LIBEXT) \
