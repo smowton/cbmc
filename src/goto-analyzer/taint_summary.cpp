@@ -730,7 +730,7 @@ static void collect_referee_access_paths(
       const auto& evse=to_external_value_set(e);
       if(evse.label()!=constant_exprt("external_objects",string_typet()))
       {
-        const symbolt& sym=ns.lookup(evse.label());
+        const symbolt& sym=ns.lookup(to_constant_expr(evse.label()).get_value());
         auto symexpr=sym.symbol_expr();
         assert(sym.type.id()==ID_pointer);
         result.insert(dereference_exprt(symexpr,sym.type.subtype()));
