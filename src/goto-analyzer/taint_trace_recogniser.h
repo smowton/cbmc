@@ -27,13 +27,17 @@ Date: Octomber 2016
 
 
 typedef std::unordered_map<
+          std::string,  // Name of a function in a goto-program
+          std::vector<goto_programt::targett>,
+                        // A vector of istructions of taint sources
+          dstring_hash
+          >
+        taint_hot_locations_mapt;
+
+typedef std::unordered_map<
           std::string,  // Name of the taint: 'taint_parse_treet::rulet::taint'
-          std::unordered_map<
-            std::string,  // Name of a function in a goto-program
-            std::vector<goto_programt::targett>,
-                          // A vector of istructions of taint sources
-            dstring_hash
-            > >
+          taint_hot_locations_mapt
+          >
         taint_sources_mapt;
 
 typedef taint_sources_mapt
@@ -69,14 +73,28 @@ typedef std::vector<taint_trace_elementt>
 
 
 void taint_recognise_error_traces(
-      std::vector<taint_tracet>&  output_traces,
-      goto_modelt const&  goto_model,
-      call_grapht const&  call_graph,
-      database_of_summariest const&  summaries,
-      taint_sources_mapt const&  taint_sources,
-      taint_sinks_mapt const&  taint_sinks,
-      std::stringstream* const  log
-      );
+    std::vector<taint_tracet>&  output_traces,
+    goto_modelt const&  goto_model,
+    call_grapht const&  call_graph,
+    database_of_summariest const&  summaries,
+    taint_sources_mapt const&  taint_sources,
+    taint_sinks_mapt const&  taint_sinks,
+    std::stringstream* const  log
+    );
+
+
+void taint_recognise_error_traces(
+    std::vector<taint_tracet>&  output_traces,
+    goto_modelt const&  goto_model,
+    call_grapht const&  call_graph,
+    database_of_summariest const&  summaries,
+    std::string const&  taint_name,
+    std::string const&  source_function_name,
+    goto_programt::targett const source_instruction,
+    std::string const&  sink_function_name,
+    goto_programt::targett const sink_instruction,
+    std::stringstream* const  log
+    );
 
 
 #endif
