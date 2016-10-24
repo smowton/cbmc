@@ -69,7 +69,6 @@ static void  initialise_domain(
   // TODO: Improve this to only count as inputs those values which may be read
   // without a preceding write within the same function.
   taint_lvalues_sett  environment;
-  auto first_instruction=function.body.instructions.begin();
   {
     for (auto  it = function.body.instructions.cbegin();
          it != function.body.instructions.cend();
@@ -77,11 +76,16 @@ static void  initialise_domain(
       if (it->type == ASSIGN)
       {
         code_assignt const&  asgn = to_code_assign(it->code);
-        environment.insert(normalise(asgn.lhs(),ns));
         if(lvsa)
-          collect_lvsa_access_paths(asgn.rhs(),ns,environment,*lvsa,first_instruction);
+        {
+          collect_lvsa_access_paths(asgn.lhs(),ns,environment,*lvsa,it);
+          collect_lvsa_access_paths(asgn.rhs(),ns,environment,*lvsa,it);
+        }
         else
+        {
+          environment.insert(normalise(asgn.lhs(),ns));          
           collect_access_paths(asgn.rhs(),ns,environment);
+        }
       }
       else if (it->type == FUNCTION_CALL)
       {
@@ -109,7 +113,7 @@ static void  initialise_domain(
                 const auto paramidx=std::distance(fn_type.parameters().begin(),findit);
                 if(lvsa)
                   collect_lvsa_access_paths(fn_call.arguments()[paramidx],ns,environment,
-                                            *lvsa,first_instruction);
+                                            *lvsa,it);
                 else
                   collect_access_paths(fn_call.arguments()[paramidx],ns,environment);
               }
@@ -351,11 +355,14 @@ static void  build_symbols_substitution(
               Iit);
           expand_external_objects(argument_lvalues,a);
         }
-        collect_access_paths(
-              fn_call.arguments().at(param_idx),
-              ns,
-              argument_lvalues
-              );
+        else
+        {
+          collect_access_paths(
+            fn_call.arguments().at(param_idx),
+            ns,
+            argument_lvalues
+            );
+        }
         for (auto const&  lvalue : argument_lvalues)
         {
           auto const  it = a.find(lvalue);
@@ -733,10 +740,12 @@ static void collect_referee_access_paths(
         const symbolt& sym=ns.lookup(to_constant_expr(evse.label()).get_value());
         auto symexpr=sym.symbol_expr();
         assert(sym.type.id()==ID_pointer);
-        result.insert(dereference_exprt(symexpr,sym.type.subtype()));
+        result.insert(symexpr);
       }
       else
+      {
         result.insert(e);
+      }
     }
     else
     {
