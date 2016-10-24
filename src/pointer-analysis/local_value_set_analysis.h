@@ -27,17 +27,19 @@ class lvsaa_single_external_set_summaryt : public json_serialisable_summaryt {
 class local_value_set_analysist : public value_set_analysist, public messaget {
 
  public:
+
+  typedef summary_json_databaset<lvsaa_single_external_set_summaryt> dbt;
   
  local_value_set_analysist(const namespacet& ns,
                            const code_typet& ftype,
                            const std::string& fname,
-                           const std::string& dbname,
+                           dbt& summarydb,
                            local_value_set_analysis_modet m) :
   value_set_analysist(ns),
     function_type(ftype),
     function_name(fname),
     mode(m),
-    summarydb(dbname)
+    summarydb(summarydb)
     { }
 
   virtual void initialize(const goto_programt &goto_program);
@@ -58,7 +60,7 @@ class local_value_set_analysist : public value_set_analysist, public messaget {
   const code_typet& function_type;
   const std::string function_name;
   const local_value_set_analysis_modet mode;
-  summary_json_databaset<lvsaa_single_external_set_summaryt> summarydb;
+  summary_json_databaset<lvsaa_single_external_set_summaryt>& summarydb;
 
   virtual bool get_ignore_recursion() { return false; }
 

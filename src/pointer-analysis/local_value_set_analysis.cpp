@@ -298,5 +298,5 @@ void lvsaa_single_external_set_summaryt::from_json(const json_objectt& json)
     field_assignments.back().second=
       static_cast<const exprt&>(rhs_irep);
   }
-
 }
+

@@ -125,6 +125,10 @@ void  inverted_partial_topological_order(
     std::vector<irep_idt>&  output
     );
 
+void get_inverted_topological_order(
+  call_grapht const& call_graph,
+  goto_functionst const& functions,
+  std::vector<irep_idt>& output);
 
 bool  exists_direct_call(
     call_grapht const&  call_graph,

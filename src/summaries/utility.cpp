@@ -192,6 +192,7 @@ bool  is_pure_local(access_path_to_memoryt const&  lvalue,
                     namespacet const&  ns)
 {
   return lvalue.id() != ID_member &&
+         lvalue.id() != "external-value-set" &&
          !is_parameter(lvalue,ns) &&
          !is_static(lvalue,ns)
          ;

@@ -225,6 +225,20 @@ void  inverted_partial_topological_order(
   output.push_back(start_function);
 }
 
+void get_inverted_topological_order(
+  call_grapht const& call_graph,
+  goto_functionst const& functions,
+  std::vector<irep_idt>& output)
+{
+  std::unordered_set<irep_idt,dstring_hash>  processed;
+  for (auto const&  elem : functions.function_map)
+    inverted_partial_topological_order(
+      call_graph,
+      elem.first,
+      processed,
+      output);
+}
+
 
 bool  exists_direct_call(
     call_grapht const&  call_graph,
@@ -274,3 +288,4 @@ bool  exists_direct_or_indirect_call(
   std::unordered_set<irep_idt,dstring_hash>  ignored;
   return exists_direct_or_indirect_call(call_graph,caller,callee,ignored);
 }
+
