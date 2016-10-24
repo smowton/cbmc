@@ -201,6 +201,35 @@ inline bool  operator<=(
 }
 
 
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
+std::string find_taint_value(const exprt &expr);
+
+
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
+exprt find_taint_expression(const exprt &expr);
+
 
 /*******************************************************************\
 

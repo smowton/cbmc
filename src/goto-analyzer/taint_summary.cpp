@@ -73,6 +73,26 @@ static void  initialise_domain(
 
           auto const&  fn_type = functions_map.at(callee_ident).type;
 
+          for (exprt const&  arg : fn_call.arguments())
+          {
+            set_of_access_pathst  paths;
+            collect_access_paths(arg,ns,paths);
+            for (auto const&  path : paths)
+              if (!is_pure_local(path,ns) &&
+                  !is_return_value_auxiliary(path,ns) &&
+                  !is_this(path,ns))
+                environment.insert(
+                      scope_translation(
+                          path,
+                          callee_ident,
+                          function_id,
+                          fn_call,
+                          fn_type,
+                          ns
+                          )
+                      );
+          }
+
           taint_summary_ptrt const  summary =
               database.find<taint_summaryt>(callee_ident);
           if (summary.operator bool())
@@ -241,9 +261,10 @@ static void  build_symbols_substitution(
     {
       std::size_t  param_idx;
       {
-        auto const  it = parameter_indices.find(
-              name_of_symbol_access_path(lvalue_svalue.first)
-              );
+//std::string const  caller = as_string(caller_ident);
+        std::string const  param_name =
+            name_of_symbol_access_path(lvalue_svalue.first);
+        auto const  it = parameter_indices.find(param_name);
         assert(it != parameter_indices.cend());
         param_idx = it->second;
       }
@@ -695,6 +716,29 @@ static void collect_lvsa_access_paths(
   }
 }
 
+std::string find_taint_value(const exprt &expr)
+{
+  if (expr.id() == ID_typecast)
+    return find_taint_value(to_typecast_expr(expr).op());
+  else if (expr.id() == ID_address_of)
+    return find_taint_value(to_address_of_expr(expr).object());
+  else if (expr.id() == ID_index)
+    return find_taint_value(to_index_expr(expr).array());
+  else if (expr.id() == ID_string_constant)
+    return as_string(expr.get(ID_value));
+  else
+    return ""; // ERROR!
+}
+
+exprt find_taint_expression(const exprt &expr)
+{
+  if (expr.id() == ID_dereference)
+    return to_dereference_expr(expr).pointer();
+  else
+    return expr;
+}
+
+
 taint_map_from_lvalues_to_svaluest  transform(
     taint_map_from_lvalues_to_svaluest const&  a,
     instruction_iteratort const& Iit,
@@ -820,6 +864,83 @@ taint_map_from_lvalues_to_svaluest  transform(
                   "function.</p>\n";
     }
     break;
+  case OTHER:
+    if (I.code.get_statement() == "set_may")
+    {
+      assert(I.code.operands().size() == 2UL);
+      std::string const  taint_name = find_taint_value(I.code.op1());
+      if (!taint_name.empty())
+      {
+        taint_svaluet const  rvalue({taint_name},false,false);
+        taint_lvaluet const  lvalue =
+            normalise(find_taint_expression(I.code.op0()),ns);
+        if (lvsa == nullptr)
+          assign(result,lvalue,rvalue);
+        else
+        {
+          taint_lvalues_sett lhs;
+          collect_lvsa_access_paths(lvalue,ns,lhs,*lvsa,result,Iit);
+          for (const auto& path : lhs)
+          {
+            if (lhs.size() > 1UL)
+              maybe_assign(result,normalise(path,ns),rvalue);
+            else
+              assign(result,normalise(path,ns),rvalue);
+          }
+        }
+      }
+    }
+    else if (I.code.get_statement() == "clear_may")
+    {
+      assert(I.code.operands().size() == 2UL);
+      std::string const  taint_name = find_taint_value(I.code.op1());
+      if (!taint_name.empty())
+      {
+        taint_lvaluet const  lvalue =
+            normalise(find_taint_expression(I.code.op0()),ns);
+        if (lvsa == nullptr)
+        {
+          taint_svaluet rvalue = taint_make_bottom();
+          {
+            auto const  it = a.find(lvalue);
+            if (it != a.end())
+            {
+              taint_svaluet::expressiont symbols = it->second.expression();
+              symbols.erase(taint_name);
+              if (!symbols.empty())
+                rvalue = taint_svaluet(symbols,false,false);
+            }
+          }
+          assign(result,normalise(lvalue,ns),rvalue);
+        }
+        else
+        {
+          taint_lvalues_sett lhs;
+          collect_lvsa_access_paths(lvalue,ns,lhs,*lvsa,result,Iit);
+          if (lhs.size() == 1UL)
+          {
+            taint_svaluet rvalue = taint_make_bottom();
+            {
+              auto const  it = a.find(*lhs.cbegin());
+              if (it != a.end())
+              {
+                taint_svaluet::expressiont symbols = it->second.expression();
+                symbols.erase(taint_name);
+                if (!symbols.empty())
+                  rvalue = taint_svaluet(symbols,false,false);
+              }
+            }
+            assign(result,normalise(*lhs.cbegin(),ns),rvalue);
+          }
+        }
+      }
+    }
+    else
+      if (log != nullptr)
+        *log << "<p>!!! WARNING !!! : Recognised OTHER instruction type, which "
+                "is neither 'set_may' nor 'clear_may' function call. The "
+                "transformation function is thus identity.</p>\n";
+    break;
   case DEAD:
     {
       code_deadt const&  dead = to_code_dead(I.code);
@@ -865,7 +986,6 @@ taint_map_from_lvalues_to_svaluest  transform(
               "The transformation function is identity.</p>\n";
     break;
   case RETURN:
-  case OTHER:
   case DECL:
   case ASSUME:
   case ASSERT:
