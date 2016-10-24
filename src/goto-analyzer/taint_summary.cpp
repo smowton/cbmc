@@ -29,6 +29,12 @@ This module defines interfaces and functionality for taint summaries.
 
 #include <iostream>
 
+struct parameter_matches_identifier {
+  parameter_matches_identifier(const irep_idt& _id) : id(_id) {}
+  bool operator()(const code_typet::parametert& p) { return p.get_identifier()==id; }
+protected:
+  const irep_idt id;
+};
 
 /*******************************************************************\
 
@@ -77,8 +83,21 @@ static void  initialise_domain(
               database.find<taint_summaryt>(callee_ident);
           if (summary.operator bool())
             for (auto const&  lvalue_svalue : summary->input())
-              if (!is_parameter(lvalue_svalue.first,ns) &&
-                  !is_return_value_auxiliary(lvalue_svalue.first,ns))
+            {
+              if (is_parameter(lvalue_svalue.first,ns))
+              {
+                // Collect access paths for the corresponding actual argument:
+                parameter_matches_identifier match(
+                  to_symbol_expr(lvalue_svalue.first).get_identifier());
+                auto findit=std::find_if(fn_type.parameters().begin(),
+                                         fn_type.parameters().end(),
+                                         match);
+                assert(findit!=fn_type.parameters().end() && "Couldn't find child parameter?");
+                auto dist=std::distance(fn_type.parameters().begin(),findit);
+                collect_access_paths(fn_call.arguments()[dist],ns,environment);
+              }
+              else if (!is_parameter(lvalue_svalue.first,ns) &&
+                       !is_return_value_auxiliary(lvalue_svalue.first,ns))
                 environment.insert(
                       scope_translation(
                           lvalue_svalue.first,
@@ -89,6 +108,7 @@ static void  initialise_domain(
                           ns
                           )
                       );
+            }
         }
       }
   }
