@@ -36,6 +36,13 @@ protected:
   const irep_idt id;
 };
 
+static void collect_lvsa_access_paths(
+  exprt const& e,
+  namespacet const& ns,
+  taint_lvalues_sett& result,
+  local_value_set_analysist& lvsa,
+  instruction_iteratort const& instit);
+
 /*******************************************************************\
 
 Function:
@@ -55,10 +62,14 @@ static void  initialise_domain(
     namespacet const&  ns,
     database_of_summariest const&  database,
     taint_symmary_domaint&  domain,
+    local_value_set_analysist* lvsa,
     std::ostream* const  log
     )
 {
+  // TODO: Improve this to only count as inputs those values which may be read
+  // without a preceding write within the same function.
   taint_lvalues_sett  environment;
+  auto first_instruction=function.body.instructions.begin();
   {
     for (auto  it = function.body.instructions.cbegin();
          it != function.body.instructions.cend();
@@ -67,7 +78,10 @@ static void  initialise_domain(
       {
         code_assignt const&  asgn = to_code_assign(it->code);
         environment.insert(normalise(asgn.lhs(),ns));
-        collect_access_paths(asgn.rhs(),ns,environment);
+        if(lvsa)
+          collect_lvsa_access_paths(asgn.rhs(),ns,environment,*lvsa,first_instruction);
+        else
+          collect_access_paths(asgn.rhs(),ns,environment);
       }
       else if (it->type == FUNCTION_CALL)
       {
@@ -94,7 +108,11 @@ static void  initialise_domain(
                                          match);
                 assert(findit!=fn_type.parameters().end() && "Couldn't find child parameter?");
                 auto dist=std::distance(fn_type.parameters().begin(),findit);
-                collect_access_paths(fn_call.arguments()[dist],ns,environment);
+                if(lvsa)
+                  collect_lvsa_access_paths(fn_call.arguments()[dist],ns,environment,
+                                            *lvsa,first_instruction);
+                else
+                  collect_access_paths(fn_call.arguments()[dist],ns,environment);
               }
               else if (!is_parameter(lvalue_svalue.first,ns) &&
                        !is_return_value_auxiliary(lvalue_svalue.first,ns))
@@ -118,7 +136,8 @@ static void  initialise_domain(
   for (taint_lvaluet const&  lvalue : environment)
     if (!is_pure_local(lvalue,ns) &&
         !is_return_value_auxiliary(lvalue,ns) &&
-        !is_this(lvalue,ns))
+        !is_this(lvalue,ns) &&
+        !(lvalue.id()==ID_dynamic_object))
     {
       entry_map.insert({lvalue, taint_make_symbol() });
       others_map.insert({lvalue, taint_make_bottom() });
@@ -633,24 +652,8 @@ bool  operator<(
   return true;
 }
 
-static void collect_referee_access_paths(
-  exprt const& e,
-  namespacet const& ns,
-  taint_lvalues_sett& result,
-  taint_map_from_lvalues_to_svaluest const& all_keys)
-{
-  if(e.id()==ID_member)
-  {
-    taint_lvalues_sett newresults;
-    collect_referee_access_paths(e.op0(),ns,newresults,all_keys);
-    for(const auto& res : newresults)
-      result.insert(member_exprt(res,to_member_expr(e).get_component_name(),e.type()));
-  }
-  else
-  {
-    if(e.id()=="external-value-set")
-    {
-
+// Stuff to do to EVS at a call site:
+/*
       const auto& evse=to_external_value_set(e);
       const auto& label=to_constant_expr(evse.label()).get_value();
       if(label=="external_objects")
@@ -674,16 +677,34 @@ static void collect_referee_access_paths(
           }
         }
       }
-      else
+*/
+ 
+static void collect_referee_access_paths(
+  exprt const& e,
+  namespacet const& ns,
+  taint_lvalues_sett& result)
+{
+  if(e.id()==ID_member)
+  {
+    taint_lvalues_sett newresults;
+    collect_referee_access_paths(e.op0(),ns,newresults);
+    for(const auto& res : newresults)
+      result.insert(member_exprt(res,to_member_expr(e).get_component_name(),e.type()));
+  }
+  else
+  {
+    if(e.id()=="external-value-set")
+    {
+      const auto& evse=to_external_value_set(e);
+      if(evse.label()!=constant_exprt("external_objects",string_typet()))
       {
-        // This represents the referees of a pointer retrieved
-        // from a named parameter or global variable, as they were
-        // at the time the function was entered.
-        const symbolt& sym=ns.lookup(label);
+        const symbolt& sym=ns.lookup(evse.label());
         auto symexpr=sym.symbol_expr();
         assert(sym.type.id()==ID_pointer);
         result.insert(dereference_exprt(symexpr,sym.type.subtype()));
       }
+      else
+        result.insert(e);
     }
     else
     {
@@ -698,7 +719,6 @@ static void collect_lvsa_access_paths(
   namespacet const& ns,
   taint_lvalues_sett& result,
   local_value_set_analysist& lvsa,
-  taint_map_from_lvalues_to_svaluest const& all_keys,
   instruction_iteratort const& instit)
 {
   if(e.id()==ID_symbol ||
@@ -716,13 +736,13 @@ static void collect_lvsa_access_paths(
         continue;
       }
       assert(target.id()==ID_object_descriptor);
-      collect_referee_access_paths(to_object_descriptor_expr(target).object(),ns,result,all_keys);
+      collect_referee_access_paths(to_object_descriptor_expr(target).object(),ns,result);
     }
   }
   else
   {
     forall_operands(it,e)
-      collect_lvsa_access_paths(*it,ns,result,lvsa,all_keys,instit);
+      collect_lvsa_access_paths(*it,ns,result,lvsa,instit);
   }
 }
 
@@ -759,7 +779,7 @@ taint_map_from_lvalues_to_svaluest  transform(
         if(!lvsa)
           collect_access_paths(asgn.rhs(),ns,rhs);
         else
-          collect_lvsa_access_paths(asgn.rhs(),ns,rhs,*lvsa,result,Iit);
+          collect_lvsa_access_paths(asgn.rhs(),ns,rhs,*lvsa,Iit);
         for (auto const&  lvalue : rhs)
         {
           auto const  it = a.find(lvalue);
@@ -781,7 +801,7 @@ taint_map_from_lvalues_to_svaluest  transform(
         assign(result,normalise(asgn.lhs(),ns),rvalue);
       else {
         taint_lvalues_sett lhs;
-        collect_lvsa_access_paths(asgn.lhs(),ns,lhs,*lvsa,result,Iit);
+        collect_lvsa_access_paths(asgn.lhs(),ns,lhs,*lvsa,Iit);
         for(const auto& path : lhs)
         {
           if(lhs.size()>1)
@@ -1036,6 +1056,7 @@ taint_summary_ptrt  taint_summarise_function(
         ns,
         database,
         *domain,
+        lvsa,
         log
         );
 
