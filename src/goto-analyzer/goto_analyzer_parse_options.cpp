@@ -35,6 +35,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <analyses/goto_check.h>
 #include <analyses/local_may_alias.h>
 
+#include <pointer-analysis/show_value_sets.h>
+
 #include <langapi/mode.h>
 
 #include <util/language.h>
@@ -469,6 +471,25 @@ int goto_analyzer_parse_optionst::doit()
         taint_analysis(goto_model, taint_file, get_message_handler(), false, json_file, summary_directory);
       return result?10:0;
     }
+  }
+
+  if(cmdline.isset("local-value-set-analysis"))
+  {
+    const auto& dbpath=cmdline.get_value("lvsa-summary-directory");
+    if(cmdline.isset("lvsa-function"))
+    {
+      const auto& fname=cmdline.get_value("lvsa-function");
+      const auto& gf=goto_model.goto_functions.function_map.at(fname);
+      namespacet ns(goto_model.symbol_table);
+      local_value_set_analysist value_set_analysis(
+        ns,gf.type,fname,dbpath,LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET);
+      value_set_analysis.set_message_handler(get_message_handler());
+      value_set_analysis(gf.body);
+      show_value_sets(get_ui(), gf.body, value_set_analysis);
+      if(dbpath.size()!=0)
+        value_set_analysis.save_summary(gf.body);
+    }
+    return 0;
   }
 
   if(cmdline.isset("unreachable-instructions"))
