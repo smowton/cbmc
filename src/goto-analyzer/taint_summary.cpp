@@ -437,6 +437,7 @@ static void  build_substituted_summary(
     taint_map_from_lvalues_to_svaluest const&  original_summary,
     std::unordered_map<taint_svaluet::taint_symbolt,taint_svaluet> const&
         symbols_substitution,
+    taint_map_from_lvalues_to_svaluest const& local_lvalues,
     irep_idt const&  caller_ident,
     irep_idt const&  callee_ident,
     code_function_callt const&  fn_call,
@@ -457,21 +458,27 @@ static void  build_substituted_summary(
           );
     if (!is_empty(translated_lvalue))
     {
-      if (lvalue_svalue.second.is_bottom() || lvalue_svalue.second.is_top())
-        substituted_summary.insert({translated_lvalue,lvalue_svalue.second});
-      else
+      taint_lvalues_sett lhs_set;
+      lhs_set.insert(translated_lvalue);
+      expand_external_objects(lhs_set,local_lvalues);
+      for(const auto& lhs : lhs_set)
       {
-        taint_svaluet  substituted_svalue = taint_make_bottom();
-        for (auto const&  symbol : lvalue_svalue.second.expression())
-        {
-          auto const  it = symbols_substitution.find(symbol);
-          if (it != symbols_substitution.cend())
-            substituted_svalue = join(substituted_svalue,it->second);
-          else
-            substituted_svalue =
-                join(substituted_svalue,{{symbol},false,false});
-        }
-        substituted_summary.insert({translated_lvalue,substituted_svalue});
+	if (lvalue_svalue.second.is_bottom() || lvalue_svalue.second.is_top())
+	  substituted_summary.insert({lhs,lvalue_svalue.second});
+	else
+	{
+	  taint_svaluet  substituted_svalue = taint_make_bottom();
+	  for (auto const&  symbol : lvalue_svalue.second.expression())
+	  {
+	    auto const  it = symbols_substitution.find(symbol);
+	    if (it != symbols_substitution.cend())
+	      substituted_svalue = join(substituted_svalue,it->second);
+	    else
+	      substituted_svalue =
+		join(substituted_svalue,{{symbol},false,false});
+	  }
+	  substituted_summary.insert({lhs,substituted_svalue});
+	}
       }
     }
   }
@@ -943,6 +950,7 @@ taint_map_from_lvalues_to_svaluest  transform(
                   substituted_summary,
                   summary->output(),
                   symbols_substitution,
+		  a,
                   caller_ident,
                   callee_ident,
                   fn_call,
