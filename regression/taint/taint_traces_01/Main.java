@@ -1,5 +1,18 @@
 public class Main {
 
+  public static void branches(int x) {
+    if (x > 100)
+      --x;
+    else
+      ++x;
+    
+    while (x > 0)
+      if (x < 50)
+       --x;
+      else
+        x = x - 2;
+  }
+
   public static void foo() {
     int x1 = Main.taint_source_X1_retval();
     x1 = Main.taint_sanitiser_X1_retval(x1);
