@@ -160,7 +160,7 @@ static void  initialise_domain(
     if (!is_pure_local(lvalue,ns) &&
         !is_return_value_auxiliary(lvalue,ns) &&
         !is_this(lvalue,ns) &&
-        !(lvalue.id()==ID_dynamic_object))
+        !(get_underlying_object(lvalue).id()==ID_dynamic_object))
     {
       entry_map.insert({lvalue, taint_make_symbol() });
       others_map.insert({lvalue, taint_make_bottom() });

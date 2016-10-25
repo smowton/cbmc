@@ -343,5 +343,9 @@ access_path_to_memoryt  scope_translation(
     namespacet const&  ns
     );
 
+const exprt& get_underlying_object(const exprt&);
+
 
 #endif
+
+

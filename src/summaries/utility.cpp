@@ -102,6 +102,14 @@ bool  is_member(access_path_to_memoryt const&  lvalue)
   return lvalue.id() == ID_member;
 }
 
+const exprt& get_underlying_object(const exprt& in)
+{
+  if(in.id()==ID_member)
+    return get_underlying_object(in.op0());
+  else
+    return in;
+}
+
 const access_path_to_memoryt&  get_member_accessor(
     access_path_to_memoryt const&  lvalue
     )
