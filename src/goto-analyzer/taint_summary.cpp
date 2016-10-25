@@ -813,6 +813,77 @@ exprt find_taint_expression(const exprt &expr)
     return expr;
 }
 
+static void handle_assignment(
+    const code_assignt& asgn,
+    taint_map_from_lvalues_to_svaluest const&  a,
+    taint_map_from_lvalues_to_svaluest& result,  
+    instruction_iteratort const& Iit,
+    local_value_set_analysist* lvsa,
+    namespacet const&  ns,
+    std::ostream* const  log)
+{
+
+  const auto& lhs_type=ns.follow(asgn.lhs().type());
+  if(lhs_type.id()==ID_struct)
+  {
+    // Process a struct assignment as multiple field assignments.
+    const auto& struct_type=to_struct_type(lhs_type);
+    for(const auto& c : struct_type.components())
+    {
+      code_assignt member_assign(member_exprt(asgn.lhs(),c.get_name(),c.type()),
+				 member_exprt(asgn.rhs(),c.get_name(),c.type()));
+      handle_assignment(member_assign,a,result,Iit,lvsa,ns,log);
+    }
+    return;
+  }
+  
+  if (log != nullptr)
+    {
+      *log << "<p>\nRecognised ASSIGN instruction. Left-hand-side "
+	"l-value is { ";
+      taint_dump_lvalue_in_html(normalise(asgn.lhs(),ns),ns,*log);
+      *log << " }. Right-hand-side l-values are { ";
+    }
+
+  taint_svaluet  rvalue = taint_make_bottom();
+  {
+    taint_lvalues_sett  rhs;
+    if(!lvsa)
+      collect_access_paths(asgn.rhs(),ns,rhs);
+    else
+      collect_lvsa_access_paths(asgn.rhs(),ns,rhs,*lvsa,Iit);
+    for (auto const&  lvalue : rhs)
+      {
+	auto const  it = a.find(lvalue);
+	if (it != a.cend())
+	  rvalue = join(rvalue,it->second);
+
+	if (log != nullptr)
+          {
+            taint_dump_lvalue_in_html(lvalue,ns,*log);
+            *log << ", ";
+          }
+      }
+  }
+
+  if (log != nullptr)
+    *log << "}.</p>\n";
+
+  if(!lvsa)
+    assign(result,normalise(asgn.lhs(),ns),rvalue);
+  else {
+    taint_lvalues_sett lhs;
+    collect_lvsa_access_paths(asgn.lhs(),ns,lhs,*lvsa,Iit);
+    for(const auto& path : lhs)
+      {
+	if(lhs.size()>1 || (lhs.size()==1 && !is_singular_object(path)))
+	  maybe_assign(result,normalise(path,ns),rvalue);
+	else
+	  assign(result,normalise(path,ns),rvalue);
+      }
+  }
+
+}
 
 taint_map_from_lvalues_to_svaluest  transform(
     taint_map_from_lvalues_to_svaluest const&  a,
@@ -832,52 +903,7 @@ taint_map_from_lvalues_to_svaluest  transform(
   case ASSIGN:
     {
       code_assignt const&  asgn = to_code_assign(I.code);
-
-      if (log != nullptr)
-      {
-        *log << "<p>\nRecognised ASSIGN instruction. Left-hand-side "
-                "l-value is { ";
-        taint_dump_lvalue_in_html(normalise(asgn.lhs(),ns),ns,*log);
-        *log << " }. Right-hand-side l-values are { ";
-      }
-
-      taint_svaluet  rvalue = taint_make_bottom();
-      {
-        taint_lvalues_sett  rhs;
-        if(!lvsa)
-          collect_access_paths(asgn.rhs(),ns,rhs);
-        else
-          collect_lvsa_access_paths(asgn.rhs(),ns,rhs,*lvsa,Iit);
-        for (auto const&  lvalue : rhs)
-        {
-          auto const  it = a.find(lvalue);
-          if (it != a.cend())
-            rvalue = join(rvalue,it->second);
-
-          if (log != nullptr)
-          {
-            taint_dump_lvalue_in_html(lvalue,ns,*log);
-            *log << ", ";
-          }
-        }
-      }
-
-      if (log != nullptr)
-        *log << "}.</p>\n";
-
-      if(!lvsa)
-        assign(result,normalise(asgn.lhs(),ns),rvalue);
-      else {
-        taint_lvalues_sett lhs;
-        collect_lvsa_access_paths(asgn.lhs(),ns,lhs,*lvsa,Iit);
-        for(const auto& path : lhs)
-        {
-          if(lhs.size()>1 || (lhs.size()==1 && !is_singular_object(path)))
-            maybe_assign(result,normalise(path,ns),rvalue);
-          else
-            assign(result,normalise(path,ns),rvalue);
-        }
-      }
+      handle_assignment(asgn,a,result,Iit,lvsa,ns,log);
     }
     break;
   case FUNCTION_CALL:
