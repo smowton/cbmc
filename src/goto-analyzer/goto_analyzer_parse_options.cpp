@@ -527,6 +527,8 @@ int goto_analyzer_parse_optionst::doit()
       get_inverted_topological_order(call_graph,goto_model.goto_functions,process_order);
       for(const auto& fname : process_order)
       {
+	if(fname=="_start")
+	  continue;
         debug() << "LVSA: analysing " << fname << eom;
         const auto& gf=goto_model.goto_functions.function_map.at(fname);
         if(!gf.body_available())

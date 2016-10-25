@@ -1177,6 +1177,8 @@ void  taint_summarise_all_functions(
                                  inverted_topological_order);
   for (auto const&  fn_name : inverted_topological_order)
   {
+    if(fn_name=="_start")
+      continue;
     goto_functionst::function_mapt  const  functions_map =
         instrumented_program.goto_functions.function_map;
     auto const  fn_it = functions_map.find(fn_name);
