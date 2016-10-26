@@ -32,8 +32,12 @@ void taint_dump_traces_in_html(
   ostr << "<h1>Error traces from the taint analysis</h1>\n"
           "<table>\n"
           "  <tr>\n"
-          "    <th>Trace name</th>\n"
-          "    <th>Link</th>\n"
+          "    <th>Source function</th>\n"
+          "    <th>Source location</th>\n"
+          "    <th>Sink function</th>\n"
+          "    <th>Sink location</th>\n"
+          "    <th>Length</th>\n"
+          "    <th>Trace</th>\n"
           "  </tr>\n"
           ;
   for (std::size_t  i = 0UL; i != traces.size(); ++i)
@@ -44,7 +48,17 @@ void taint_dump_traces_in_html(
           msgstream() << dump_root_directory << "/trace_" << i
           );
     ostr << "  <tr>\n"
-            "    <td>trace_" << i << "</td>\n"
+            "    <td>" << traces.at(i).front().get_name_of_function()
+         << "</td>\n"
+            "    <td>" << traces.at(i).front().get_instruction_iterator()
+                                              ->location_number
+         << "</td>\n"
+            "    <td>" << traces.at(i).back().get_name_of_function()
+         << "</td>\n"
+            "    <td>" << traces.at(i).back().get_instruction_iterator()
+                                             ->location_number
+         << "</td>\n"
+            "    <td>" << traces.at(i).size() << "</td>\n"
             "    <td><a href=\"./trace_" << i << "/index.html\">here</a></td>\n"
             "  </tr>\n"
             ;
@@ -65,6 +79,7 @@ void taint_trace_dump_in_html(
   ostr << "<h2>Error trace</h1>\n"
           "<table>"
           "  <tr>\n"
+          "    <th>#</th>\n"
           "    <th>Function</th>\n"
           "    <th>Location</th>\n"
           "    <th>Variables</th>\n"
@@ -75,10 +90,12 @@ void taint_trace_dump_in_html(
           "    <th>Comment</th>\n"
           "  </tr>\n"
           ;
+  std::size_t  elem_index = 0UL;
   namespacet const  ns(goto_model.symbol_table);
   for (taint_trace_elementt const&  element : trace)
   {
       ostr << "  <tr>\n"
+              "    <td>" << ++elem_index << "</td>\n"
               "    <td>"
            << to_html_text(element.get_name_of_function()) << "</td>\n"
               "    <td>"
@@ -100,10 +117,19 @@ void taint_trace_dump_in_html(
       ostr << "    </td>\n"
               "    <td>" << to_html_text(element.get_message())
            << "</td>\n"
-              "    <td>" << element.get_line()
-           << "</td>\n"
-              "    <td>" << to_html_text(element.get_file())
-           << "</td>\n"
+              "    <td>"
+              ;
+      if (element.get_line() != 0UL)
+        ostr << element.get_line();
+      else
+        ostr << "N/A";
+      ostr << "</td>\n"
+              "    <td>";
+      if (!element.get_file().empty())
+        ostr << to_html_text(element.get_file());
+      else
+        ostr << "N/A";
+      ostr << "</td>\n"
               "    <td>" << to_html_text(element.get_code_annotation())
            << "</td>\n"
               "  </tr>\n";
