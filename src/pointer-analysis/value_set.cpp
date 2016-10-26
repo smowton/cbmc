@@ -944,17 +944,21 @@ void value_sett::get_value_set_rec(
     const typet& field_type=type_from_suffix(expr.type(),suffix,ns);
     if(field_type.id()==ID_pointer)
     {
-    
+
+      std::string access_path_suffix=
+        suffix == "" ?
+        "[]" :
+        suffix;
       const auto& extinit=to_external_value_set(expr);
-      access_path_entry_exprt newentry(suffix,function,i2string(location_number));
+      access_path_entry_exprt newentry(access_path_suffix,function,i2string(location_number));
       external_value_set_exprt new_ext_set=extinit;
       new_ext_set.extend_access_path(newentry);
       new_ext_set.type()=field_type.subtype();
 
       std::string basename=new_ext_set.get_access_path_basename();
-      std::string entryname=basename+suffix;
+      std::string entryname=basename+access_path_suffix;
         
-      entryt entry(basename,suffix);
+      entryt entry(basename,access_path_suffix);
 
       // TODO: figure out how to do this sort of on-demand-insert
       // without such ugly const hacking:
@@ -1568,14 +1572,18 @@ void value_sett::assign_rec(
   {
     // Write through an opaque external value set.
     const auto& evsi=to_external_value_set(lhs);
-    access_path_entry_exprt newentry(suffix,function,i2string(location_number));
+    std::string access_path_suffix=
+      suffix == "" ?
+      "[]" :
+      suffix;
+    access_path_entry_exprt newentry(access_path_suffix,function,i2string(location_number));
     external_value_set_exprt new_ext_set=evsi;
     new_ext_set.extend_access_path(newentry);
     
     const std::string basename=new_ext_set.get_access_path_basename();
-    std::string entryname=basename+suffix;
+    std::string entryname=basename+access_path_suffix;
     
-    entryt entry(basename,suffix);
+    entryt entry(basename,access_path_suffix);
 
     auto insert_result=const_cast<valuest&>(values).
       insert(std::make_pair(irep_idt(entryname),entry));
