@@ -227,7 +227,7 @@ void lvsaa_single_external_set_summaryt::from_final_state(
   // they may be assigned.
   for(const auto& entry : final_state.values)
   {
-    const std::string prefix="external_objects.";
+    const std::string prefix="external_objects";
     const std::string entryname=id2string(entry.first);
     bool export_this_entry=false;
     if(has_prefix(entryname,prefix))
