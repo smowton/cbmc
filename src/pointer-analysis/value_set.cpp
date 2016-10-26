@@ -668,7 +668,21 @@ void value_sett::get_value_set_rec(
     if(op_type.id()==ID_pointer)
     {
       // pointer-to-pointer -- we just ignore these
-      get_value_set_rec(expr.op0(), dest, suffix, original_type, ns);
+      object_mapt tmp;
+      get_value_set_rec(expr.op0(), tmp, suffix, original_type, ns);
+      // ...except to fix up the types of external objects as they pass through:
+      for(const auto& num : tmp.read())
+      {
+        const auto& e=object_numbering[num.first];
+        if(e.id()=="external-value-set")
+        {
+          external_value_set_exprt evse_copy=to_external_value_set(e);
+          evse_copy.type()=expr.type().subtype();
+          insert(dest,evse_copy,num.second);
+        }
+        else
+          insert(dest,num.first,num.second);
+      }
     }
     else if(op_type.id()==ID_unsignedbv ||
             op_type.id()==ID_signedbv)

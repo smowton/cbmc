@@ -819,9 +819,6 @@ static void collect_lvsa_access_paths(
       assert(target.id()==ID_object_descriptor);
       result.insert(transform_external_objects(to_object_descriptor_expr(target).object()));
     }
-    std::cout << "Access paths for " << from_expr(ns,"",e) << ":\n";
-    for(const auto& target : referees)
-      std::cout << from_expr(ns,"",target) << "\n";
   }
   else
   {
