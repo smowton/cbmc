@@ -43,6 +43,8 @@ protected:
   const irep_idt id;
 };
 
+typedef taint_lvalues_sett written_expressionst;
+
 /*******************************************************************\
 
 Function:
@@ -62,6 +64,7 @@ static void  initialise_domain(
     namespacet const&  ns,
     database_of_summariest const&  database,
     taint_symmary_domaint&  domain,
+    written_expressionst& written,
     local_value_set_analysist* lvsa,
     std::ostream* const  log
     )
@@ -79,11 +82,14 @@ static void  initialise_domain(
         if(lvsa)
         {
           collect_lvsa_access_paths(asgn.lhs(),ns,environment,*lvsa,it);
+          collect_lvsa_access_paths(asgn.lhs(),ns,written,*lvsa,it);          
           collect_lvsa_access_paths(asgn.rhs(),ns,environment,*lvsa,it);
         }
         else
         {
-          environment.insert(normalise(asgn.lhs(),ns));          
+          exprt lhs=normalise(asgn.lhs(),ns);
+          environment.insert(lhs);
+          written.insert(lhs);
           collect_access_paths(asgn.rhs(),ns,environment);
         }
       }
@@ -522,6 +528,7 @@ Function:
 \*******************************************************************/
 static void  build_summary_from_computed_domain(
     taint_summary_domain_ptrt const  domain,
+    written_expressionst const& written,
     taint_map_from_lvalues_to_svaluest&  output,
     goto_functionst::function_mapt::const_iterator const  fn_iter,
     namespacet const&  ns,
@@ -539,7 +546,7 @@ static void  build_summary_from_computed_domain(
   taint_map_from_lvalues_to_svaluest const&  end_svalue =
       domain->at(std::prev(fn_iter->second.body.instructions.cend()));
   for (auto  it = end_svalue.cbegin(); it != end_svalue.cend(); ++it)
-    if (!is_pure_local(it->first,ns) && !is_parameter(it->first,ns))
+    if ((!is_pure_local(it->first,ns)) && (!is_parameter(it->first,ns)) && written.count(it->first))
     {
       output.insert(*it);
 
@@ -1260,6 +1267,8 @@ taint_summary_ptrt  taint_summarise_function(
   }
   
   taint_summary_domain_ptrt  domain = std::make_shared<taint_symmary_domaint>();
+  written_expressionst written_lvalues;
+  
   initialise_domain(
         function_id,
         fn_iter->second,
@@ -1267,6 +1276,7 @@ taint_summary_ptrt  taint_summarise_function(
         ns,
         database,
         *domain,
+        written_lvalues,
         lvsa,
         log
         );
@@ -1350,6 +1360,7 @@ taint_summary_ptrt  taint_summarise_function(
   taint_map_from_lvalues_to_svaluest  output;
   build_summary_from_computed_domain(
         domain,
+        written_lvalues,
         output,
         fn_iter,
         ns,
