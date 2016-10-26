@@ -55,6 +55,14 @@ public:
 
   /// Trace-related access/check methods
   bool  empty() const { return trace.empty(); }
+  std::size_t  count(
+      std::string const&  name_of_function,
+      std::size_t const  location_number
+      ) const;
+  std::size_t  count(
+      std::string const&  name_of_function,
+      goto_programt::const_targett const  instruction_iterator
+      ) const;
   std::size_t  count(taint_trace_elementt const&  element) const;
   void  push_back(taint_trace_elementt const&  element);
   taint_trace_elementt const&  back() const { return trace.back(); }
@@ -84,17 +92,34 @@ trace_under_constructiont::trace_under_constructiont(
 {}
 
 std::size_t  trace_under_constructiont::count(
-    taint_trace_elementt const&  element
+    std::string const&  name_of_function,
+    std::size_t const  location_number
     ) const
 {
-  auto const  fn_it = visited.find(element.get_name_of_function());
+  auto const  fn_it = visited.find(name_of_function);
   if (fn_it == visited.cend())
     return 0UL;
   auto const  loc_it =
-      fn_it->second.find(element.get_instruction_iterator()->location_number);
+      fn_it->second.find(location_number);
   if (loc_it == fn_it->second.cend())
     return 0UL;
   return 1UL;
+}
+
+std::size_t  trace_under_constructiont::count(
+    std::string const&  name_of_function,
+    goto_programt::const_targett const  instruction_iterator
+    ) const
+{
+  return count(name_of_function,instruction_iterator->location_number);
+}
+
+std::size_t  trace_under_constructiont::count(
+    taint_trace_elementt const&  element
+    ) const
+{
+  return count(element.get_name_of_function(),
+               element.get_instruction_iterator());
 }
 
 void trace_under_constructiont::push_back(
@@ -135,10 +160,12 @@ void  trace_under_constructiont::stack_pop()
 taint_trace_elementt::taint_trace_elementt(
     std::string const&  name_of_function_,
     goto_programt::const_targett  instruction_iterator_,
+    taint_map_from_lvalues_to_svaluest const&  from_lvalues_to_svalues_,
     std::string const&  message_
     )
   : name_of_function(name_of_function_)
   , instruction_iterator(instruction_iterator_)
+  , from_lvalues_to_svalues(from_lvalues_to_svalues_)
   , message(message_)
 {}
 
@@ -162,9 +189,10 @@ static void  taint_collect_successors_inside_function(
   goto_programt::const_targetst  succ_targets;
   fn.body.get_successors(elem.get_instruction_iterator(),succ_targets);
   for (goto_programt::const_targett  succ_target : succ_targets)
-    if (0UL == trace.count({elem.get_name_of_function(),succ_target,""}))
+    if (0UL == trace.count(elem.get_name_of_function(),succ_target))
     {
-      bool is_tainted = false;
+      taint_map_from_lvalues_to_svaluest  from_lvalues_to_svalues;
+      taint_svaluet::expressiont  symbols;
       {
         taint_summary_domain_ptrt const  domain =
             summaries.find<taint_summaryt>(
@@ -173,17 +201,18 @@ static void  taint_collect_successors_inside_function(
         assert(domain.operator bool());
         for (auto const&  lvalue_svalue : domain->at(succ_target))
         {
+          taint_svaluet::expressiont  symbols;
           for (auto const&  symbol : lvalue_svalue.second.expression())
             if (trace.stack_top().second.count(symbol) != 0UL)
-            {
-              is_tainted = true;
-              break;
-            }
-          if (is_tainted)
-            break;
+              symbols.insert(symbol);
+          if (!symbols.empty())
+            from_lvalues_to_svalues.insert({
+                lvalue_svalue.first,
+                { symbols, false, false}
+                });
         }
       }
-      if (is_tainted)
+      if (!from_lvalues_to_svalues.empty())
       {
         std::string  message;
         if (elem.get_name_of_function() == sink_function_name &&
@@ -193,6 +222,7 @@ static void  taint_collect_successors_inside_function(
         successors.push_back({
               elem.get_name_of_function(),
               succ_target,
+              from_lvalues_to_svalues,
               message
               });
       }
@@ -285,15 +315,34 @@ void taint_recognise_error_traces(
       return;
     }
 
+  namespacet const  ns(goto_model.symbol_table);
+
   std::deque<trace_under_constructiont>  processed_traces;
-  processed_traces.push_back(trace_under_constructiont{
-          {
-            source_function_name,
-            source_instruction,
-            msgstream() << "source(" << taint_name << ")" << msgstream::end()
-          },
-          {taint_name}
-      });
+  {
+    taint_map_from_lvalues_to_svaluest  from_lvalues_to_svalues;
+    {
+      taint_summary_domain_ptrt const  domain =
+          summaries.find<taint_summaryt>(
+              source_function_name
+              )->domain();
+      assert(domain.operator bool());
+      for (auto const&  lvalue_svalue : domain->at(source_instruction))
+        if (lvalue_svalue.second.expression().count(taint_name) != 0UL)
+          from_lvalues_to_svalues.insert({
+              lvalue_svalue.first,
+              { {taint_name}, false, false}
+              });
+    }
+    processed_traces.push_back(trace_under_constructiont{
+            {
+              source_function_name,
+              source_instruction,
+              from_lvalues_to_svalues,
+              msgstream() << "source(" << taint_name << ")" << msgstream::end()
+            },
+            {taint_name}
+        });
+  }
   while (!processed_traces.empty())
   {
     trace_under_constructiont&  trace = processed_traces.front();
@@ -312,6 +361,7 @@ void taint_recognise_error_traces(
                 "  <tr>\n"
                 "    <th>Function</th>\n"
                 "    <th>Location</th>\n"
+                "    <th>Variables</th>\n"
                 "    <th>Message</th>\n"
                 "  </tr>\n"
                 ;
@@ -323,7 +373,16 @@ void taint_recognise_error_traces(
                     "    <td>"
                  << element.get_instruction_iterator()->location_number
                  << "</td>\n"
-                    "    <td>" << to_html_text(element.get_message()) << "</td>\n"
+                    ;
+            *log << "    <td>\n";
+            taint_dump_lvalues_to_svalues_in_html(
+                  element.get_map_from_lvalues_to_svalues(),
+                  ns,
+                  *log
+                  );
+            *log << "    </td>\n"
+                    "    <td>" << to_html_text(element.get_message())
+                 << "</td>\n"
                     "  </tr>\n";
         }
         *log << "</table>";
@@ -338,6 +397,7 @@ void taint_recognise_error_traces(
         std::string const  callee_ident =
             as_string(to_symbol_expr(fn_call.function()).get_identifier());
 
+        taint_map_from_lvalues_to_svaluest  from_lvalues_to_svalues;
         std::unordered_set<std::string>  symbols;
         {
           taint_summary_domain_ptrt const  domain =
@@ -353,7 +413,16 @@ void taint_recognise_error_traces(
           taint_map_from_lvalues_to_svaluest const&  callee_symbol_map =
               summaries.find<taint_summaryt>(callee_ident)->input();
 
-          namespacet const  ns(goto_model.symbol_table);
+          for (auto const&  callee_lvalue_svalue : callee_symbol_map)
+            if (is_static(callee_lvalue_svalue.first,ns))
+            {
+              from_lvalues_to_svalues.insert(callee_lvalue_svalue);
+              symbols.insert(
+                  callee_lvalue_svalue.second.expression().cbegin(),
+                  callee_lvalue_svalue.second.expression().cend()
+                  );
+            }
+
           for (std::size_t  i = 0UL;
                i < std::min(fn_call.arguments().size(),
                             callee_type.parameters().size());
@@ -376,10 +445,13 @@ void taint_recognise_error_traces(
                       if (is_parameter(lvalue_svalue.first,ns)
                             && name_of_symbol_access_path(lvalue_svalue.first)
                                == param_name)
+                      {
+                        from_lvalues_to_svalues.insert(lvalue_svalue);
                         symbols.insert(
                             lvalue_svalue.second.expression().cbegin(),
                             lvalue_svalue.second.expression().cend()
                             );
+                      }
                   }
             }
           }
@@ -424,6 +496,7 @@ void taint_recognise_error_traces(
                           .body
                           .instructions
                           .cbegin(),
+                from_lvalues_to_svalues,
                 ""
                 });
         }

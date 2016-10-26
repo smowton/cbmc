@@ -24,6 +24,7 @@ Date: Octomber 2016
 #include <unordered_map>
 #include <vector>
 #include <string>
+#include <set>
 #include <sstream>
 
 
@@ -51,6 +52,7 @@ public:
   taint_trace_elementt(
       std::string const&  name_of_function_,
       goto_programt::const_targett  instruction_iterator_,
+      taint_map_from_lvalues_to_svaluest const&  from_lvalues_to_svalues_,
       std::string const&  message_
       );
 
@@ -60,12 +62,17 @@ public:
   goto_programt::const_targett get_instruction_iterator() const noexcept
   { return instruction_iterator; }
 
+  taint_map_from_lvalues_to_svaluest const&
+    get_map_from_lvalues_to_svalues() const noexcept
+    { return from_lvalues_to_svalues; }
+
   std::string const& get_message() const noexcept
   { return message; }
 
 private:
   std::string  name_of_function;
   goto_programt::const_targett  instruction_iterator;
+  taint_map_from_lvalues_to_svaluest  from_lvalues_to_svalues;
   std::string  message;
 };
 
