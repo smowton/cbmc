@@ -6,7 +6,8 @@ Author: Marek Trtik
 
 Date: Octomber 2016
 
-
+This module is responsible for computation of error traces from
+data stored in the databese of taint summaries.
 
 @ Copyright Diffblue, Ltd.
 
@@ -53,6 +54,7 @@ public:
       std::string const&  name_of_function_,
       goto_programt::const_targett  instruction_iterator_,
       taint_map_from_lvalues_to_svaluest const&  from_lvalues_to_svalues_,
+      taint_svaluet::expressiont const&  symbols_,
       std::string const&  message_
       );
 
@@ -66,6 +68,9 @@ public:
     get_map_from_lvalues_to_svalues() const noexcept
     { return from_lvalues_to_svalues; }
 
+  taint_svaluet::expressiont const&  get_symbols() const noexcept
+  { return symbols; }
+
   std::string  get_file() const;
   std::size_t  get_line() const;
   std::string  get_code_annotation() const;
@@ -77,6 +82,7 @@ private:
   std::string  name_of_function;
   goto_programt::const_targett  instruction_iterator;
   taint_map_from_lvalues_to_svaluest  from_lvalues_to_svalues;
+  taint_svaluet::expressiont  symbols;
   std::string  message;
 };
 

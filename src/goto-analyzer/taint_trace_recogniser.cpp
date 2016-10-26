@@ -6,7 +6,8 @@ Author: Marek Trtik
 
 Date: Octomber 2016
 
-
+This module is responsible for computation of error traces from
+data stored in the databese of taint summaries.
 
 @ Copyright Diffblue, Ltd.
 
@@ -19,6 +20,8 @@ Date: Octomber 2016
 #include <unordered_set>
 #include <deque>
 #include <limits>
+#include <algorithm>
+#include <iterator>
 #include <cassert>
 
 
@@ -161,11 +164,13 @@ taint_trace_elementt::taint_trace_elementt(
     std::string const&  name_of_function_,
     goto_programt::const_targett  instruction_iterator_,
     taint_map_from_lvalues_to_svaluest const&  from_lvalues_to_svalues_,
+    taint_svaluet::expressiont const&  symbols_,
     std::string const&  message_
     )
   : name_of_function(name_of_function_)
   , instruction_iterator(instruction_iterator_)
   , from_lvalues_to_svalues(from_lvalues_to_svalues_)
+  , symbols(symbols_)
   , message(message_)
 {}
 
@@ -233,19 +238,16 @@ static void  taint_collect_successors_inside_function(
         }
       }
       if (!from_lvalues_to_svalues.empty())
-      {
-        std::string  message;
-        if (elem.get_name_of_function() == sink_function_name &&
-            sink_instruction == succ_target)
-          message = msgstream() << "sink(" << taint_name << ")";
-
         successors.push_back({
               elem.get_name_of_function(),
               succ_target,
               from_lvalues_to_svalues,
-              message
+              taint_svaluet::expressiont(
+                  trace.stack_top().second.cbegin(),
+                  trace.stack_top().second.cend()
+                  ),
+              ""
               });
-      }
     }
 }
 
@@ -377,7 +379,8 @@ void taint_recognise_error_traces(
               source_function_name,
               source_instruction,
               from_lvalues_to_svalues,
-              msgstream() << "source(" << taint_name << ")" << msgstream::end()
+              { taint_name },
+              ""
             },
             {taint_name}
         });
@@ -425,6 +428,7 @@ void taint_recognise_error_traces(
                   "    <th>Function</th>\n"
                   "    <th>Location</th>\n"
                   "    <th>Variables</th>\n"
+                  "    <th>Symbols</th>\n"
                   "    <th>Message</th>\n"
                   "    <th>Line</th>\n"
                   "    <th>File</th>\n"
@@ -446,6 +450,12 @@ void taint_recognise_error_traces(
                     ns,
                     *log
                     );
+              *log << "    </td>\n"
+                      "    <td>\n";
+              taint_dump_svalue_in_html(
+                  {element.get_symbols(),false,false},
+                  *log
+                  );
               *log << "    </td>\n"
                       "    <td>" << to_html_text(element.get_message())
                    << "</td>\n"
@@ -497,11 +507,30 @@ void taint_recognise_error_traces(
           for (auto const&  callee_lvalue_svalue : callee_symbol_map)
             if (is_static(callee_lvalue_svalue.first,ns))
             {
-              from_lvalues_to_svalues.insert(callee_lvalue_svalue);
-              symbols.insert(
-                  callee_lvalue_svalue.second.expression().cbegin(),
-                  callee_lvalue_svalue.second.expression().cend()
-                  );
+              auto const it = lvalue_svalue.find(callee_lvalue_svalue.first);
+              if (it != lvalue_svalue.cend())
+              {
+                taint_svaluet::expressiont  symbols_intersection;
+                std::set_intersection(
+                      it->second.expression().cbegin(),
+                      it->second.expression().cend(),
+                      trace.stack_top().second.cbegin(),
+                      trace.stack_top().second.cend(),
+                      std::inserter(symbols_intersection,
+                                    symbols_intersection.begin())
+                      );
+                if (!symbols_intersection.empty())
+                {
+                  from_lvalues_to_svalues.insert({
+                        callee_lvalue_svalue.first,
+                        { symbols_intersection, false, false }
+                        });
+                  symbols.insert(
+                      callee_lvalue_svalue.second.expression().cbegin(),
+                      callee_lvalue_svalue.second.expression().cend()
+                      );
+                }
+              }
             }
 
           for (std::size_t  i = 0UL;
@@ -578,6 +607,10 @@ void taint_recognise_error_traces(
                           .instructions
                           .cbegin(),
                 from_lvalues_to_svalues,
+                taint_svaluet::expressiont(
+                    symbols.cbegin(),
+                    symbols.cend()
+                    ),
                 ""
                 });
         }
