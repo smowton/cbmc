@@ -478,10 +478,16 @@ int goto_analyzer_parse_optionst::doit()
           &log
           );
 
+        taint_dump_traces_in_json(
+          error_traces,
+          static_cast<goto_modelt const&>(goto_model),
+          "./dump_taint_traces_json"
+          );
+
         taint_dump_traces_in_html(
           error_traces,
           static_cast<goto_modelt const&>(goto_model),
-          "./dump_taint_traces"
+          "./dump_taint_traces_html"
           );
       }
       else

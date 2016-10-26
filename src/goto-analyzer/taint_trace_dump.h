@@ -33,5 +33,17 @@ void taint_trace_dump_in_html(
     std::string const&  dump_root_directory
     );
 
+void taint_dump_traces_in_json(
+    std::vector<taint_tracet> const&  traces,
+    goto_modelt const&  goto_model,
+    std::string const&  dump_root_directory
+    );
+
+void taint_trace_dump_in_json(
+    taint_tracet const&  trace,
+    goto_modelt const&  goto_model,
+    std::string const&  dump_file_name
+    );
+
 
 #endif

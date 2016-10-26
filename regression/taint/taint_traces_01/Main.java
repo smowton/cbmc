@@ -1,5 +1,5 @@
 public class Main {
-
+/*
   public static void branches(int x) {
     if (x > 100)
       --x;
@@ -22,26 +22,24 @@ public class Main {
     int yy = GG;
     GG = yy;
   }
-  
-  public static void ZZ(int zz) {
-  }
-
+*/  
   public static void foo() {
     int x1 = Main.taint_source_X1_retval();
 //    x1 = Main.taint_sanitiser_X1_retval(x1);
-    XX();
+    Other.XX();
     GG = x1;
-    YY();
+    Other.YY();
     Main.taint_sink_X1_arg_0(x1);
   }
 
   public static int bar() {
     int x1 = Main.taint_source_X1_retval();
-    x1 = baz0(x1);
-    bug(x1);
+    x1 = Other.baz0(x1);
+    Other.branches(x1);
+    Main.bug(x1);
     return x1;
   }
-
+/*
   public static int baz0(int a0) {
     return baz1(a0);
   }
@@ -49,7 +47,7 @@ public class Main {
   public static int baz1(int a0) {
     return a0;
   }
-
+*/
   public static void bug(int a0) {
     Main.taint_sink_X1_arg_0(a0);
   }
