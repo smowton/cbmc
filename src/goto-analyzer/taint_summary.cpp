@@ -766,18 +766,30 @@ static void collect_referee_access_paths(
   }
 }
 
-static exprt replace_member_of_external_objects(const exprt& e)
+static exprt transform_external_objects(const exprt& e)
 {
   if(e.id()==ID_member && e.op0().id()=="external-value-set")
   {
-    // Fold any member-of-external expression into the external value set within,
-    // to avoid using multiple distinct exprts to refer to the same alias set.
+    // Rewrite member(externals, "x") as externals("x"), to make subsequent processing easier
+    // Note this means we use externals("x") to mean "any x field" whereas LVSA uses it to mean
+    // deref(any x field)
     auto evs_copy=to_external_value_set(e.op0());
     access_path_entry_exprt new_entry("."+id2string(to_member_expr(e).get_component_name()),"","");
     evs_copy.extend_access_path(new_entry);
     evs_copy.label()=constant_exprt("external_objects",string_typet());
     evs_copy.type()=e.type();
     return evs_copy;
+  }
+  else if(e.id()=="external-value-set")
+  {
+    // Similarly, deref(any external), without a member operator, is assumed to be an array access,
+    // and is rewritten to (any array)
+    auto evs_copy=to_external_value_set(e);
+    access_path_entry_exprt new_entry("[]","","");
+    evs_copy.extend_access_path(new_entry);
+    evs_copy.label()=constant_exprt("external_objects",string_typet());
+    evs_copy.type()=e.type();
+    return evs_copy;    
   }
   else
     return e;
@@ -805,8 +817,11 @@ static void collect_lvsa_access_paths(
         continue;
       }
       assert(target.id()==ID_object_descriptor);
-      result.insert(replace_member_of_external_objects(to_object_descriptor_expr(target).object()));
+      result.insert(transform_external_objects(to_object_descriptor_expr(target).object()));
     }
+    std::cout << "Access paths for " << from_expr(ns,"",e) << ":\n";
+    for(const auto& target : referees)
+      std::cout << from_expr(ns,"",target) << "\n";
   }
   else
   {
