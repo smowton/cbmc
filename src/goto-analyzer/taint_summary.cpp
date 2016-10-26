@@ -126,6 +126,7 @@ static void  initialise_domain(
           taint_summary_ptrt const  summary =
               database.find<taint_summaryt>(callee_ident);
           if (summary.operator bool())
+          {
             for (auto const&  lvalue_svalue : summary->input())
             {
               if (is_parameter(lvalue_svalue.first,ns))
@@ -157,8 +158,9 @@ static void  initialise_domain(
                       );
              
             }
-          for(auto const&  lvalue_svalue : summary->output())
-            written.insert(lvalue_svalue.first);
+            for(auto const&  lvalue_svalue : summary->output())
+              written.insert(lvalue_svalue.first);            
+          }
         }
       }
   }
@@ -312,11 +314,11 @@ static void expand_external_objects(taint_lvalues_sett& lvalue_set,
         {
           assert(fieldname=="[]");
           // Return all array-typed objects we know about.
-          // In current taint domain with LVSA, that's anything without a member operator.
+          // In current taint domain with LVSA, that's anything dynamic without a member operator.
           for(const auto& keyval : all_keys)
           {
             const auto& key=keyval.first;
-            if(key.id()!=ID_member)
+            if(key.id()==ID_dynamic_object)
               new_keys.push_back(key);
           }
         }
