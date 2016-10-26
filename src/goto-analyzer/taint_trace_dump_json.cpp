@@ -34,7 +34,6 @@ void taint_dump_traces_in_json(
           goto_model,
           msgstream() << dump_root_directory << "/trace_" << i << ".json"
           );
-
 }
 
 void taint_trace_dump_in_json(
