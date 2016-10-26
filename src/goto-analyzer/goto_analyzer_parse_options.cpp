@@ -525,6 +525,8 @@ int goto_analyzer_parse_optionst::doit()
       call_grapht const call_graph(goto_model.goto_functions);
       std::vector<irep_idt> process_order;
       get_inverted_topological_order(call_graph,goto_model.goto_functions,process_order);
+      size_t total_funcs=process_order.size();
+      size_t processed=0;
       for(const auto& fname : process_order)
       {
 	if(fname=="_start")
@@ -537,7 +539,10 @@ int goto_analyzer_parse_optionst::doit()
           ns,gf.type,id2string(fname),summarydb,LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET);
         value_set_analysis.set_message_handler(get_message_handler());
         value_set_analysis(gf.body);
-        show_value_sets(get_ui(), gf.body, value_set_analysis);
+	if(ui_message_handler.get_verbosity()>=message_clientt::M_DEBUG)
+	  show_value_sets(get_ui(), gf.body, value_set_analysis);
+	else
+	  progress() << (++processed) << "/" << total_funcs << " functions analysed" << eom;
         if(dbpath.size()!=0)
           value_set_analysis.save_summary(gf.body);
       }
