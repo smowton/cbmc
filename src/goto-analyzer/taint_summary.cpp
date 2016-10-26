@@ -260,6 +260,9 @@ static void expand_external_objects(taint_lvalues_sett& lvalue_set,
   // Whenever a value like external_value_set("external_objects.x") occurs,
   // expand that to include the 'x' fields of all objects we know about,
   // as what is external to the callee might be local to us.
+  // For external_objects[], include all arrays. For now we assume that array-accessed
+  // and field-accessed objects are disjoint (true in Java, true for a subset of
+  // well-behaved C programs)
 
   // Leave the external-objects entry there, since it might refer to things that
   // are external to *us* as well.
@@ -279,18 +282,32 @@ static void expand_external_objects(taint_lvalues_sett& lvalue_set,
         assert(evse.access_path_size()==1);
         std::string fieldname=id2string(evse.access_path_back().label());
         assert(fieldname.size()>=2);
-        assert(fieldname[0]=='.');
-        fieldname=fieldname.substr(1);
-        // This represents a given field of all objects
-        // preceding entering this function.
-        // Return all known keys that match the field.
-        for(const auto& keyval : all_keys)
+        if(fieldname[0]=='.')
         {
-          const auto& key=keyval.first;
-          if(key.id()==ID_member)
+          fieldname=fieldname.substr(1);
+          // This represents a given field of all objects
+          // preceding entering this function.
+          // Return all known keys that match the field.
+          for(const auto& keyval : all_keys)
           {
-            auto key_field=to_member_expr(key).get_component_name();
-            if(key_field==fieldname)
+            const auto& key=keyval.first;
+            if(key.id()==ID_member)
+            {
+              auto key_field=to_member_expr(key).get_component_name();
+              if(key_field==fieldname)
+                new_keys.push_back(key);
+            }
+          }
+        }
+        else
+        {
+          assert(fieldname=="[]");
+          // Return all array-typed objects we know about.
+          // In current taint domain with LVSA, that's anything without a member operator.
+          for(const auto& keyval : all_keys)
+          {
+            const auto& key=keyval.first;
+            if(key.id()!=ID_member)
               new_keys.push_back(key);
           }
         }
