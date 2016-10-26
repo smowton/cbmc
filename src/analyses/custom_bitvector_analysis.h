@@ -87,6 +87,8 @@ public:
   bitst may_bits, must_bits;
   
   void assign_lhs(const exprt &, const vectorst &);
+  void assign(const exprt&, locationt, const vectorst&, const namespacet&, custom_bitvector_analysist&);
+  void merge_lhs(const exprt &, const vectorst &);  
   void assign_lhs(const irep_idt &, const vectorst &);
   vectorst get_rhs(const exprt &) const;
   vectorst get_rhs(const irep_idt &) const;
@@ -156,6 +158,12 @@ protected:
   local_may_alias_factoryt local_may_alias_factory;
   
   std::set<exprt> aliases(const exprt &, locationt loc);
+
+  // Override if you want to do something special with a stub function
+  // other than the may_set, must_sink etc intrinsics.
+  // Awkward declaring this here rather than on the domain, but not as awkward
+  // as trying to re-derive ait with a new domain type!
+  virtual void transform_function_call_stub(locationt,custom_bitvector_domaint&,const namespacet&) {}
 };
 
 #endif

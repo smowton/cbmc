@@ -32,11 +32,17 @@ class optionst;
   "(verbosity):(version)" \
   "(gcc)(arch):" \
   "(taint):(show-taint)" \
+  "(taint-use-summaries):" \
   "(show-local-may-alias)" \
   "(json):(xml):" \
   "(unreachable-instructions)" \
   "(intervals)(show-intervals)" \
-  "(non-null)(show-non-null)"
+  "(non-null)(show-non-null)" \
+  "(summary-only)" \
+  "(taint-analysis):" \
+  "(run-pointsto-temp-analyser)" \
+  "(lvsa-summary-directory):" \
+  "(local-value-set-analysis)(lvsa-function):"
 
 class goto_analyzer_parse_optionst:
   public parse_options_baset,

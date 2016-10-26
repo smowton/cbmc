@@ -1,6 +1,14 @@
 SRC = goto_analyzer_main.cpp goto_analyzer_parse_options.cpp \
       taint_parser.cpp taint_analysis.cpp static_analyzer.cpp \
-      unreachable_instructions.cpp
+      unreachable_instructions.cpp \
+      taint_summary.cpp \
+      taint_summary_dump.cpp taint_summary_json.cpp \
+      taint_planner.cpp \
+      taint_planner_dump.cpp \
+      pointsto_temp_analyser.cpp \
+      pointsto_temp_summary_dump.cpp \
+      taint_trace_recogniser.cpp \
+      taint_trace_dump.cpp
 
 OBJ += ../ansi-c/ansi-c$(LIBEXT) \
       ../cpp/cpp$(LIBEXT) \
@@ -12,7 +20,8 @@ OBJ += ../ansi-c/ansi-c$(LIBEXT) \
       ../langapi/langapi$(LIBEXT) \
       ../json/json$(LIBEXT) \
       ../assembler/assembler$(LIBEXT) \
-      ../util/util$(LIBEXT)
+      ../util/util$(LIBEXT) \
+      ../summaries/summary$(LIBEXT)
 
 INCLUDES= -I ..
 

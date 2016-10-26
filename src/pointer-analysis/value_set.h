@@ -13,6 +13,7 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <util/mp_arith.h>
 #include <util/reference_counting.h>
+#include <util/i2string.h>
 
 #include "object_numbering.h"
 #include "value_sets.h"
@@ -22,7 +23,7 @@ class namespacet;
 class value_sett
 {
 public:
-  value_sett():location_number(0)
+ value_sett():location_number(0)
   {
   }
 
@@ -32,7 +33,10 @@ public:
     const namespacet &);
 
   unsigned location_number;
+  irep_idt function;
   static object_numberingt object_numbering;
+  // TODO: figure out a less awful way to get configuration state into value-set.
+  static bool use_malloc_type;
 
   typedef irep_idt idt;
   
@@ -193,6 +197,12 @@ public:
     exprt &expr,
     const namespacet &ns) const;
 
+  void get_value_set(
+    const exprt &expr,
+    object_mapt &dest,
+    const namespacet &ns,
+    bool is_simplified) const;
+ 
 protected:
   void get_value_set_rec(
     const exprt &expr,
@@ -200,12 +210,6 @@ protected:
     const std::string &suffix,
     const typet &original_type,
     const namespacet &ns) const;
-
-  void get_value_set(
-    const exprt &expr,
-    object_mapt &dest,
-    const namespacet &ns,
-    bool is_simplified) const;
 
   void get_reference_set(
     const exprt &expr,

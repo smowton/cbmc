@@ -233,6 +233,10 @@ protected:
     const exprt::operandst &arguments,
     const namespacet &ns);
 
+  // Override if you want to handle some function calls in place
+  // instead of recursing into them.
+  virtual bool should_enter_function(const irep_idt&) { return true; }
+
   // abstract methods
     
   virtual bool merge(const statet &src, locationt from, locationt to)=0;

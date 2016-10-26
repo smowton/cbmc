@@ -1,0 +1,58 @@
+APPS AND BUGS
+~~~~~~~~~~~~~
+
+This is a list of Java web apps and C apps. Each app comes with a list
+of commits of interesting bug-fixes. It means that not all bug-fix commits 
+are listed (only those looking promissing for the demo evaluation).
+
+1. Java web apps
+
+Sakai (https://github.com/sakaiproject/sakai.git)
+  commits:
+    8550c168cdf16363e864bfdfdbeae96a1e8eac51 (XSS)
+    ee1a3dc98a5d1909ebcbdcfa9e735ea5b6279a08 (XSS)
+    bb4a2fcfe0fa63be3b4ad9c3ab7e69efc0146495 (XSS)
+    0635e98865fd3031a699a09ec9e37d9c0bb4c7c4 (XSS)
+    dbdf9e73b764de532fa555b59e3d83e9f815f95a (SQL injection)
+
+Teammates (https://github.com/TEAMMATES/teammates.git)
+  commits:
+    4073b3d0d1bc7b41d5915f8440b236c4819e496e (XSS)
+    157cd6f625b5079b48b95bcea1bad36a42defebe (XSS)
+    33410e24ef70d0a3d7f91bf0172f71edc5c39cde (XSS)
+    3b9b75eee33398c9c5e103b24a921261bbe535a6 (XSS)
+    c9fb2dd214bdd7eb90fee63b366f326da70a4876 (XSS)
+    91a9879124a09f324d5b0d3dd78184088e49e88a (XSS)
+    b544c643dc2ec5ee1873c94609e5b6d092d4d8d4 (XSS)
+
+Pebble (https://github.com/pebbleblog/pebble.git)
+  commits:
+    187674dd087bcfbdf1dd72a0c7a82bc2adf12875 (XSS in JSP)
+    d0d0115e954f7623c9e9861079666e9848608343 (XSS in JSP)
+    559fb3f3f1b0edd315093cb5a1c9e6d4dc14b325 (XSS in JSP)
+
+openuss (http://svn.code.sf.net/p/openuss/code/trunk)
+  commits:
+    2c7e7027b22c8b631b6fd6f8f8b31868dc0301c8 (XSS)
+
+pulse (http://svn.code.sf.net/p/pulse-java/code/trunk)
+  commits:
+    <TO-BE-INVESTIGATED>
+
+JForum3 (https://github.com/rafaelsteil/jforum3.git)
+  commits:
+    <EMPTY>
+
+java-blog-aggregator (https://github.com/jirkapinkas/java-blog-aggregator.git)
+  commits:
+    <EMPTY>
+
+Spring (https://github.com/spring-projects/spring-framework.git)
+  commits:
+    <EMPTY>
+
+
+2. C apps
+
+<TO-BE-ADDED>
+

@@ -1,7 +1,7 @@
 DIRS = ansi-c big-int cbmc cpp goto-cc goto-instrument goto-programs \
        goto-symex langapi pointer-analysis solvers util linking xmllang \
        assembler analyses java_bytecode aa-path-symex path-symex musketeer \
-       json cegis goto-analyzer jsil symex goto-diff test_gen
+       json cegis goto-analyzer jsil symex goto-diff test_gen summaries
 
 all: cbmc.dir goto-cc.dir goto-instrument.dir symex.dir goto-analyzer.dir goto-diff.dir
 
@@ -23,7 +23,7 @@ languages: util.dir langapi.dir \
 
 goto-instrument.dir: languages goto-programs.dir pointer-analysis.dir \
                      goto-symex.dir linking.dir analyses.dir solvers.dir \
-                     json.dir
+                     json.dir summaries.dir
 
 musketeer.dir: goto-instrument.dir
 
@@ -32,7 +32,7 @@ cbmc.dir: languages solvers.dir goto-symex.dir analyses.dir \
           goto-instrument.dir test_gen.dir
 
 goto-analyzer.dir: languages analyses.dir goto-programs.dir linking.dir \
-                   json.dir goto-instrument.dir
+                   json.dir goto-instrument.dir summaries.dir
 
 goto-diff.dir: languages goto-programs.dir pointer-analysis.dir \
                linking.dir analyses.dir solvers.dir json.dir

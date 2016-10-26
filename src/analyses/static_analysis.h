@@ -97,6 +97,7 @@ public:
     ns(_ns),
     initialized(false)
   {
+    ignore_recursion=get_ignore_recursion();
   }
   
   virtual void initialize(
@@ -243,6 +244,9 @@ protected:
     const exprt::operandst &arguments,
     statet &new_state);
 
+  virtual bool should_enter_function(const irep_idt&) { return true; }
+  virtual void transform_function_stub(const irep_idt&, statet& state, locationt l_call, locationt l_return) {}
+
   // abstract methods
     
   virtual void generate_state(locationt l)=0;
@@ -256,6 +260,10 @@ protected:
     locationt l,
     const exprt &expr,
     std::list<exprt> &dest)=0;
+
+  bool ignore_recursion;
+  virtual bool get_ignore_recursion() { return true; }
+  
 };
 
 // T is expected to be derived from domain_baset

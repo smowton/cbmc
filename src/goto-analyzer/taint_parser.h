@@ -45,10 +45,11 @@ public:
     irep_idt taint;
     unsigned parameter_number; // the frist one is '1'
     std::string message;
+    bool immediate;
     
     void output(std::ostream &) const;
     
-    inline rulet():parameter_number(0)
+    inline rulet():parameter_number(0),immediate(false)
     {
     }
   };

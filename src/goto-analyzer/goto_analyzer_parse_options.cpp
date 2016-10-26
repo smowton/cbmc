@@ -16,6 +16,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <java_bytecode/java_bytecode_language.h>
 #include <jsil/jsil_language.h>
 
+#include <json/json_parser.h>
+
 #include <goto-programs/set_properties.h>
 #include <goto-programs/remove_function_pointers.h>
 #include <goto-programs/remove_virtual_functions.h>
@@ -34,6 +36,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <analyses/goto_check.h>
 #include <analyses/local_may_alias.h>
 
+#include <pointer-analysis/show_value_sets.h>
+
 #include <langapi/mode.h>
 
 #include <util/language.h>
@@ -41,8 +45,22 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/config.h>
 #include <util/string2int.h>
 #include <util/unicode.h>
+#include <util/file_util.h>
+#include <util/msgstream.h>
+#include <util/prefix.h>
 
 #include <cbmc/version.h>
+
+#include <summaries/summary.h>
+#include <goto-analyzer/pointsto_temp_analyser.h>
+#include <goto-analyzer/pointsto_temp_summary_dump.h>
+#include <goto-analyzer/taint_summary.h>
+#include <goto-analyzer/taint_summary_dump.h>
+#include <goto-analyzer/taint_summary_json.h>
+#include <goto-analyzer/taint_planner.h>
+#include <goto-analyzer/taint_planner_dump.h>
+#include <goto-analyzer/taint_trace_recogniser.h>
+#include <goto-analyzer/taint_trace_dump.h>
 
 #include "goto_analyzer_parse_options.h"
 #include "taint_analysis.h"
@@ -221,6 +239,117 @@ void goto_analyzer_parse_optionst::get_command_line_options(optionst &options)
   #endif
 }
 
+
+int  run_pointsto_temp_analyser(
+  goto_modelt&  program,
+  message_handlert&  message_handler)
+{
+  try
+  {
+    std::stringstream  log;
+    const call_grapht call_graph(program.goto_functions);
+    database_of_summariest  summaries;
+
+    pointsto_temp_summarise_all_functions(
+          program,
+          summaries,
+          call_graph,
+          &log
+          );
+
+    dump_in_html(
+          summaries,
+          &pointsto_temp_summary_dump_in_html,
+          program,
+          call_graph,
+          "./dump_pointsto_temp_summaries",
+          &log
+          );
+  }
+  catch (const std::exception& e)
+  {
+    message_handler.print(message_clientt::M_ERROR,
+          msgstream() << "EXCEPTION: " << e.what()
+          );
+    return 0;
+  }
+
+  return 1;
+}
+
+
+/*******************************************************************\
+
+Function: do_taint_analysis
+
+  Inputs: The program to be analysed and the command line options.
+
+ Outputs: Status value of the result (1 success, 0 fail).
+
+ Purpose:
+
+It performs the whole taint analysis. The planner has already read the initial plan.
+
+\*******************************************************************/
+int  do_taint_analysis(
+  goto_modelt&  program,
+  jsont& plan,
+  message_handlert&  message_handler)
+{
+  try
+  {
+    taint_plannert planner(program,plan,message_handler);
+    
+    std::stringstream  log;
+    const call_grapht call_graph(program.goto_functions);
+
+    while (true)
+    {
+      auto const  old_num_precision_levels =
+          planner.get_precision_levels().size();
+
+      const std::string error_message =
+        planner.solve_top_precision_level(program,call_graph,&log);
+      if (!error_message.empty())
+      {
+        message_handler.print(message_clientt::M_ERROR,
+              msgstream() << "ERROR: " << error_message
+              );
+        return 0;
+      }
+
+      if (old_num_precision_levels == planner.get_precision_levels().size())
+        break;
+    }
+
+    taint_dump_taint_planner_in_html(
+          planner,
+          program,
+          namespacet(program.symbol_table),
+          "./dump_taint_planner"
+          );
+
+    dump_in_html(
+          *planner.get_top_precision_level()->get_summary_database(),
+          &taint_dump_in_html,
+          program,
+          call_graph,
+          "./dump_top_taint_summaries",
+          &log
+          );
+
+  }
+  catch (const std::exception& e)
+  {
+    message_handler.print(message_clientt::M_ERROR,
+          msgstream() << "EXCEPTION: " << e.what()
+          );
+    return 0;
+  }
+
+  return 1;
+}
+
 /*******************************************************************\
 
 Function: goto_analyzer_parse_optionst::doit
@@ -240,7 +369,7 @@ int goto_analyzer_parse_optionst::doit()
     std::cout << CBMC_VERSION << std::endl;
     return 0;
   }
-  
+
   //
   // command line options
   //
@@ -261,28 +390,165 @@ int goto_analyzer_parse_optionst::doit()
   
   goto_model.set_message_handler(get_message_handler());
 
+  // Hack for entry point set in a taint-analysis plan (must set 'main' before
+  // main frontend parsers are run)
+  jsont taint_analysis_plan;
+  if(cmdline.isset("taint-analysis"))
+  {
+    parse_json(cmdline.get_value("taint-analysis"), get_message_handler(), taint_analysis_plan);
+    auto entry_point=taint_plannert::get_unique_entry_point(taint_analysis_plan);
+    const std::string java_prefix="java::";
+    if(has_prefix(entry_point,java_prefix))
+      entry_point=entry_point.substr(java_prefix.size());
+    cmdline.set("function",entry_point);
+    config.main=entry_point;
+  }
+
   if(goto_model(cmdline.args))
     return 6;
     
   if(process_goto_program(options))
     return 6;
 
-  if(cmdline.isset("taint"))
+  if (cmdline.isset("run-pointsto-temp-analyser"))
+    return run_pointsto_temp_analyser(goto_model,get_message_handler());
+  else if (cmdline.isset("taint-analysis"))
+    return do_taint_analysis(goto_model,taint_analysis_plan,get_message_handler());
+  else if(cmdline.isset("taint"))
   {
     std::string taint_file=cmdline.get_value("taint");
+    std::string summary_directory=cmdline.get_value("taint-use-summaries");
 
     if(cmdline.isset("show-taint"))
     {
-      taint_analysis(goto_model, taint_file, get_message_handler(), true, "");
+      taint_analysis(goto_model, taint_file, get_message_handler(), true, "", summary_directory);
       return 0;
+    }
+    else if (cmdline.isset("summary-only"))
+    {
+      taint_sources_mapt  taint_sources;
+      taint_sinks_mapt  taint_sinks;
+
+      taint_analysis_instrument_knowledge(
+          goto_model,
+          taint_file,
+          get_message_handler(),
+          taint_sources,
+          taint_sinks
+          );
+      std::stringstream  log;
+      std::string json_directory=cmdline.get_value("json");
+      std::string lvsa_json_directory=cmdline.get_value("lvsa-summary-directory");
+      
+      summary_json_databaset<taint_summaryt> summaries(json_directory);
+      std::string fname=cmdline.get_value("function");
+      call_grapht const  call_graph(goto_model.goto_functions);
+     
+      if(fname=="")
+      {
+        taint_summarise_all_functions(goto_model,summaries,call_graph,
+                                      &log,lvsa_json_directory,get_message_handler());
+      }
+      else
+      {
+        auto ret=taint_summarise_function(fname,goto_model,summaries,
+                                          &log,lvsa_json_directory,get_message_handler());
+        summaries.insert(std::make_pair(fname,ret));
+      }
+
+
+      std::vector<taint_tracet>  error_traces;
+      taint_recognise_error_traces(
+            error_traces,
+            goto_model,
+            call_graph,
+            summaries,
+            taint_sources,
+            taint_sinks,
+            &log
+            );
+
+      if(json_directory=="")
+      {
+        dump_in_html(
+          summaries,
+          &taint_dump_in_html,
+          static_cast<goto_modelt const&>(goto_model),
+          call_graph,
+          "./dump_taint_summaries",
+          &log
+          );
+
+        taint_dump_traces_in_html(
+          error_traces,
+          static_cast<goto_modelt const&>(goto_model),
+          "./dump_taint_traces"
+          );
+      }
+      else
+      {
+        summaries.save_all();
+      }
     }
     else
     {
       std::string json_file=cmdline.get_value("json");
       bool result=
-        taint_analysis(goto_model, taint_file, get_message_handler(), false, json_file);
+        taint_analysis(goto_model, taint_file, get_message_handler(), false, json_file, summary_directory);
       return result?10:0;
     }
+  }
+
+  if(cmdline.isset("local-value-set-analysis"))
+  {
+    const auto& dbpath=cmdline.get_value("lvsa-summary-directory");
+    if(dbpath=="")
+    {
+      error() << "Must specify lvsa-summary-directory";
+      abort();
+    }
+    
+    local_value_set_analysist::dbt summarydb(dbpath);
+    namespacet ns(goto_model.symbol_table);
+    if(cmdline.isset("lvsa-function"))
+    {
+      const auto& fname=cmdline.get_value("lvsa-function");
+      const auto& gf=goto_model.goto_functions.function_map.at(fname);
+      local_value_set_analysist value_set_analysis(
+        ns,gf.type,fname,summarydb,LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET);
+      value_set_analysis.set_message_handler(get_message_handler());
+      value_set_analysis(gf.body);
+      show_value_sets(get_ui(), gf.body, value_set_analysis);
+      if(dbpath.size()!=0)
+        value_set_analysis.save_summary(gf.body);
+    }
+    else {
+      call_grapht const call_graph(goto_model.goto_functions);
+      std::vector<irep_idt> process_order;
+      get_inverted_topological_order(call_graph,goto_model.goto_functions,process_order);
+      size_t total_funcs=process_order.size();
+      size_t processed=0;
+      for(const auto& fname : process_order)
+      {
+	if(fname=="_start")
+	  continue;
+        debug() << "LVSA: analysing " << fname << eom;
+        const auto& gf=goto_model.goto_functions.function_map.at(fname);
+        if(!gf.body_available())
+          continue;
+        local_value_set_analysist value_set_analysis(
+          ns,gf.type,id2string(fname),summarydb,LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET);
+        value_set_analysis.set_message_handler(get_message_handler());
+        value_set_analysis(gf.body);
+	if(ui_message_handler.get_verbosity()>=message_clientt::M_DEBUG)
+	  show_value_sets(get_ui(), gf.body, value_set_analysis);
+	else
+	  progress() << (++processed) << "/" << total_funcs << " functions analysed" << eom;
+        if(dbpath.size()!=0)
+          value_set_analysis.save_summary(gf.body);
+      }
+    }
+    return 0;
   }
 
   if(cmdline.isset("unreachable-instructions"))

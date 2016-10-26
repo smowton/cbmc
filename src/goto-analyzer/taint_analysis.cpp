@@ -12,6 +12,9 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/prefix.h>
 #include <util/simplify_expr.h>
 #include <util/json.h>
+#include <util/file_util.h>
+#include <util/suffix.h>
+#include <json/json_parser.h>
 
 #include <ansi-c/string_constant.h>
 
@@ -19,8 +22,12 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <analyses/custom_bitvector_analysis.h>
 
+#include <summaries/summary.h>
+
 #include "taint_analysis.h"
 #include "taint_parser.h"
+#include "taint_summary.h"
+#include "taint_summary_json.h"
 
 /*******************************************************************\
 
@@ -42,14 +49,62 @@ public:
     const symbol_tablet &,
     goto_functionst &,
     bool show_full,
-    const std::string &json_file_name);
+    const std::string &json_file_name,
+    const std::string &summaries_directory);
 
+  bool operator()(
+    const symbol_tablet &,
+    goto_functionst &,
+    bool show_full,
+    const std::string &json_file_name,
+    const database_of_summaries_ptrt&);
+  
 protected:
   taint_parse_treet taint;
   class_hierarchyt class_hierarchy;
-  
-  void instrument(const namespacet &, goto_functionst &);
-  void instrument(const namespacet &, goto_functionst::goto_functiont &);
+
+  void instrument(const namespacet & ns, goto_functionst & fns)
+  {
+    taint_sources_mapt taint_sources;
+    taint_sinks_mapt taint_sinks;
+    instrument(ns,fns,taint_sources,taint_sinks);
+  }
+
+  void instrument(const namespacet &, goto_functionst &,
+                  taint_sources_mapt&  taint_sources,
+                  taint_sinks_mapt&  taint_sinks
+                  );
+  void instrument(const namespacet &, goto_functionst::goto_functiont &,
+                  const irep_idt &fn_name,
+                  taint_sources_mapt&  taint_sources,
+                  taint_sinks_mapt&  taint_sinks
+                  );
+};
+
+class bitvector_analysis_with_summariest:public custom_bitvector_analysist, public messaget
+{
+public:
+  bitvector_analysis_with_summariest(const database_of_summaries_ptrt _db)
+    : summarydb(_db)
+  {}
+
+protected:
+  database_of_summaries_ptrt summarydb;
+
+  virtual bool should_enter_function(const irep_idt& id)
+  { return summarydb->count(id2string(id)) == 0UL; }
+
+  virtual void transform_function_call_stub(
+      locationt,
+      custom_bitvector_domaint&, const namespacet&
+      );
+
+  taint_summary_ptrt get_summary(const irep_idt& identifier);
+
+  typedef custom_bitvector_domaint::bit_vectort bit_vectort;  
+  typedef custom_bitvector_domaint::vectorst vectorst;
+  vectorst substitute_taint(const taint_svaluet& in,
+                            const std::map<std::string,vectorst>& subs);
 };
 
 /*******************************************************************\
@@ -66,10 +121,13 @@ Function: taint_analysist::instrument
 
 void taint_analysist::instrument(
   const namespacet &ns,
-  goto_functionst &goto_functions)
+  goto_functionst &goto_functions,
+  taint_sources_mapt&  taint_sources,
+  taint_sinks_mapt&  taint_sinks
+  )
 {
   for(auto & function : goto_functions.function_map)
-    instrument(ns, function.second);
+    instrument(ns, function.second, function.first,taint_sources,taint_sinks);
 }
 
 /*******************************************************************\
@@ -86,7 +144,11 @@ Function: taint_analysist::instrument
 
 void taint_analysist::instrument(
   const namespacet &ns,
-  goto_functionst::goto_functiont &goto_function)
+  goto_functionst::goto_functiont &goto_function,
+  const irep_idt &fn_name,
+  taint_sources_mapt&  taint_sources,
+  taint_sinks_mapt&  taint_sinks
+  )
 {
   for(goto_programt::instructionst::iterator
       it=goto_function.body.instructions.begin();
@@ -179,6 +241,9 @@ void taint_analysist::instrument(
                 }
                 break;
               }
+
+              if(where!=nil_exprt() && !rule.immediate)
+                where=dereference_exprt(where);
               
               switch(rule.kind)
               {
@@ -191,6 +256,9 @@ void taint_analysist::instrument(
                   goto_programt::targett t=tmp.add_instruction();
                   t->make_other(code_set_may);
                   t->source_location=instruction.source_location;
+
+                  taint_sources[as_string(rule.taint)][as_string(fn_name)]
+                      .push_back(t);
                 }
                 break;
               
@@ -204,6 +272,9 @@ void taint_analysist::instrument(
                   t->source_location=instruction.source_location;
                   t->source_location.set_property_class("taint rule "+id2string(rule.id));
                   t->source_location.set_comment(rule.message);
+
+                  taint_sinks[as_string(rule.taint)][as_string(fn_name)]
+                      .push_back(t);
                 }
                 break;
               
@@ -238,6 +309,109 @@ void taint_analysist::instrument(
   }
 }
 
+taint_summary_ptrt bitvector_analysis_with_summariest::get_summary(
+    const irep_idt& identifier
+    )
+{
+  return summarydb->find<taint_summaryt>(id2string(identifier));
+}
+
+custom_bitvector_domaint::vectorst bitvector_analysis_with_summariest::substitute_taint(
+  const taint_svaluet& in,
+  const std::map<std::string,vectorst>& subs)
+{
+  if(in.is_top())
+    return vectorst();
+
+  if(in.is_bottom())
+  {
+    vectorst ret;
+    // Set 'may' for all possible taints.
+    ret.may_bits=(bit_vectort)-1;
+    return ret;
+  }
+
+  // Otherwise merge all taint sources given:
+  vectorst ret;
+  for(const auto& taint : in.expression())
+  {
+    auto findit=subs.find(taint);
+    vectorst vec;
+    if(findit==subs.end())
+    {
+      // This function introduces new taint -- it's a source.
+      string_constantt taint_expr(taint);
+      unsigned bit_nr=
+        get_bit_nr(taint_expr);
+      vec.may_bits|=(1ll<<bit_nr);
+    }
+    else
+    {
+      // This taint symbol matches some input taint.
+      vec=findit->second;
+    }
+    ret=custom_bitvector_domaint::merge(vec,ret);
+  }
+  return ret;  
+}
+
+static std::string taint_expression_to_string(const taint_svaluet& in)
+{
+  if(in.is_top()) return "TOP";
+  else if(in.is_bottom()) return "BOTTOM";
+  else
+  {
+    std::ostringstream str;
+    bool first = true;
+    for(const auto& t : in.expression())
+    {
+      if(!first)
+        str << ", ";
+      str << t;
+      first=false;
+    }
+    return str.str();
+  }
+}
+
+void bitvector_analysis_with_summariest::transform_function_call_stub(
+  locationt loc, custom_bitvector_domaint& domain, const namespacet& ns)
+{
+ 
+  const goto_programt::instructiont &instruction=*loc;
+  const code_function_callt &code_function_call=to_code_function_call(instruction.code);
+  const exprt &function=code_function_call.function();
+  if(function.id()!=ID_symbol)
+    throw "transform_function_call_stub with non-symbol argument";
+  
+  const irep_idt &identifier=to_symbol_expr(function).get_identifier();
+  const auto summary=get_summary(identifier);
+
+  // The summary should declare a symbol like "Tn" giving a symbolic taint name for each param.
+  // Build a map from such symbolic names to actual taint vectors:
+  
+  std::map<std::string,vectorst> actual_input_taint;
+  for(const auto& input : summary->input())
+  {
+    auto param_taint_object=input.second;
+    auto param_taints=domain.get_rhs(input.first);
+    assert(param_taint_object.expression().size()==1);
+    auto taint_symbol=*(param_taint_object.expression().begin());
+    actual_input_taint[taint_symbol]=param_taints;
+    debug() << "Taint symbol " << taint_symbol << " <- " << from_expr(ns,"",input.first) << eom;
+  }
+
+  // Now the summary maps symbolic taints onto actual expressions. Assign actual
+  // taint to each given target.
+  for(const auto& output : summary->output())
+  {
+    auto actual_output_taint=substitute_taint(output.second,actual_input_taint);
+    debug() << "Expression " << from_expr(ns,"",output.first) << " <- " << taint_expression_to_string(output.second) << eom;
+    domain.assign(output.first,loc,actual_output_taint,ns,*this);
+  }
+  
+}
+
 /*******************************************************************\
 
 Function: taint_analysist::operator()
@@ -250,27 +424,49 @@ Function: taint_analysist::operator()
 
 \*******************************************************************/
 
+// Entry point with serialised inputs:
 bool taint_analysist::operator()(
   const std::string &taint_file_name,
   const symbol_tablet &symbol_table,
   goto_functionst &goto_functions,
   bool show_full,
-  const std::string &json_file_name)
+  const std::string &json_file_name,
+  const std::string &summaries_directory)
+{
+  status() << "Reading taint file `" << taint_file_name
+           << "'" << eom;
+
+  if(taint_parser(taint_file_name, taint, get_message_handler()))
+  {
+    error() << "Failed to read taint definition file" << eom;
+    return true;
+  }
+
+  database_of_summaries_ptrt summarydb;
+  if(summaries_directory!="")
+  {
+    auto jsdb=std::make_shared<summary_json_databaset<taint_summaryt> >(summaries_directory);
+    jsdb->load_all();
+    summarydb=jsdb;
+  }
+  else
+    summarydb=std::make_shared<database_of_summariest>();
+  return (*this)(symbol_table,goto_functions,show_full,json_file_name,summarydb);
+}
+
+// Entry point with inputs already prepared by the taint planner super-pass:
+bool taint_analysist::operator()(
+  const symbol_tablet &symbol_table,
+  goto_functionst &goto_functions,
+  bool show_full,
+  const std::string &json_file_name,
+  const database_of_summaries_ptrt& summarydb)
 {
   try
   {
     json_arrayt json_result;
     bool use_json=!json_file_name.empty();
   
-    status() << "Reading taint file `" << taint_file_name
-             << "'" << eom;
-
-    if(taint_parser(taint_file_name, taint, get_message_handler()))
-    {
-      error() << "Failed to read taint definition file" << eom;
-      return true;
-    }
-
     status() << "Got " << taint.rules.size()
              << " taint definitions" << eom;
 
@@ -330,7 +526,8 @@ bool taint_analysist::operator()(
 
     status() << "Data-flow analysis" << eom;
 
-    custom_bitvector_analysist custom_bitvector_analysis;
+    bitvector_analysis_with_summariest custom_bitvector_analysis(summarydb);
+    custom_bitvector_analysis.set_message_handler(get_message_handler());
     custom_bitvector_analysis(goto_functions, ns);
     
     if(show_full)
@@ -445,11 +642,67 @@ bool taint_analysis(
   const std::string &taint_file_name,
   message_handlert &message_handler,
   bool show_full,
-  const std::string &json_file_name)
+  const std::string &json_file_name,
+  const std::string &summaries_directory)
 {
   taint_analysist taint_analysis;
   taint_analysis.set_message_handler(message_handler);
   return taint_analysis(
-    taint_file_name, goto_model.symbol_table, goto_model.goto_functions, show_full, json_file_name);
+    taint_file_name, goto_model.symbol_table, goto_model.goto_functions,
+    show_full, json_file_name, summaries_directory);
 }
 
+/*******************************************************************\
+
+Function: taint_analysis
+
+  Inputs:
+
+ Outputs:
+
+ Purpose: Entry point from taint_planner.cpp
+
+\*******************************************************************/
+
+bool taint_analysis(
+  goto_modelt &goto_model,
+  message_handlert &message_handler,
+  bool show_full,
+  const std::string &json_file_name,
+  const database_of_summaries_ptrt& summarydb
+  )
+{
+  taint_analysist taint_analysis;
+  taint_analysis.set_message_handler(message_handler);
+  return taint_analysis(goto_model.symbol_table, goto_model.goto_functions,
+                        show_full, json_file_name, summarydb);
+}
+
+std::string  taint_analysis_instrument_knowledge(
+  goto_modelt&  model,
+  std::string const&  taint_file_name,
+  message_handlert&  logger,
+  taint_sources_mapt&  taint_sources,
+  taint_sinks_mapt&  taint_sinks
+  )
+{
+  struct taint_analysis_accessor_t : public taint_analysist {
+    taint_parse_treet& get_taint() { return taint; }
+    class_hierarchyt& get_class_hierarchy() { return class_hierarchy; }
+    void instrument(namespacet const&  ns, goto_functionst& fns,
+                    taint_sources_mapt&  taint_sources,
+                    taint_sinks_mapt&  taint_sinks
+                    ) {
+      taint_analysist::instrument(ns,fns,taint_sources,taint_sinks);
+    }
+  };
+  taint_analysis_accessor_t  analysis;
+  analysis.set_message_handler(logger);
+  if (taint_parser(taint_file_name, analysis.get_taint(), logger) == true)
+    return "Failed to read taint definition file";
+  analysis.get_class_hierarchy()(model.symbol_table);
+  analysis.instrument(namespacet(model.symbol_table), model.goto_functions,
+                      taint_sources,taint_sinks);
+  model.goto_functions.update();
+  return ""; // Success
+}

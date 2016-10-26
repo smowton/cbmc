@@ -25,6 +25,14 @@ src/util/irep_ids.inc
 regression/ansi-c/tests.log
 regression/cbmc-java/tests.log
 regression/cbmc/tests.log
+regression/taint/*/*.class
+regression/taint/*/dump*
+regression/taint/*/class/*.class
+regression/taint/*/class/dump*
+regression/pointsto/*/*.class
+regression/pointsto/*/dump*
+regression/pointsto/*/class/*.class
+regression/pointsto/*/class/dump*
 src/big-int/test-bigint
 src/big-int/test-bigint.exe
 
@@ -55,6 +63,7 @@ src/xmllang/xml_lex.yy.cpp
 src/xmllang/xml_y.output
 src/xmllang/xml_y.tab.cpp
 src/xmllang/xml_y.tab.h
+src/cbmc.creator.user
 
 # binaries
 src/cbmc/cbmc

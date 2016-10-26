@@ -1,0 +1,33 @@
+<project name="xss" basedir="." default="compile">
+
+  <property name="root.dir"      value="./"/>
+  <property name="src.dir"       value="${root.dir}/src/xss"/>
+  <property name="classes.dir"   value="${root.dir}/classes"/>
+  <property name="serverlib.dir" value="${root.dir}/../../../lib"/>
+
+  <path id="server.lib">
+    <fileset dir="${serverlib.dir}">
+      <include name="servlet*.jar"/>
+    </fileset>
+  </path>
+        
+  <target name="help">
+    <java classname="org.apache.tools.ant.Main">
+      <arg value="-projecthelp" />
+      <arg value="-buildfile" />
+      <arg value="${ant.file}" />
+    </java>
+  </target>
+  
+  <target name="clean">
+    <delete dir="${classes.dir}"/>
+  </target>
+    
+  <target name="compile">
+    <mkdir dir="${classes.dir}"/>
+    <javac srcdir="${src.dir}" destdir="${classes.dir}" includeantruntime="false">
+      <classpath refid="server.lib"/>
+    </javac>
+  </target>
+
+</project>
