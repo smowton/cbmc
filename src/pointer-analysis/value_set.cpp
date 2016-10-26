@@ -1586,6 +1586,7 @@ void value_sett::assign_rec(
   {
     // Write through an opaque external value set.
     const auto& evsi=to_external_value_set(lhs);
+    const typet& field_type=type_from_suffix(lhs.type(),suffix,ns);
     std::string access_path_suffix=
       suffix == "" ?
       "[]" :
@@ -1604,8 +1605,11 @@ void value_sett::assign_rec(
 
     auto& lhs_entry=insert_result.first->second;
     
-    if(insert_result.second)
+    if(insert_result.second && field_type.id()==ID_pointer)
+    {
+      new_ext_set.type()=field_type.subtype();
       insert(lhs_entry.object_map,new_ext_set);
+    }
 
     // Special case: if an ext-val-set with modified=false is written,
     // set modified=true before inserting, to represent the fact that
