@@ -155,7 +155,10 @@ static void  initialise_domain(
                           ns
                           )
                       );
+             
             }
+          for(auto const&  lvalue_svalue : summary->output())
+            written.insert(lvalue_svalue.first);
         }
       }
   }
@@ -1081,6 +1084,14 @@ taint_map_from_lvalues_to_svaluest  transform(
           }
         }
       }
+    }
+    else if(I.code.get_statement()==ID_array_set)
+    {
+      // Handle array zero-init like assigning bottom:
+      code_assignt fake_assignment;
+      fake_assignment.lhs()=dereference_exprt(I.code.op0(),I.code.op0().type().subtype());
+      fake_assignment.rhs()=constant_exprt("0",I.code.op0().type().subtype());
+      handle_assignment(fake_assignment,a,result,Iit,lvsa,ns,log);
     }
     else
       if (log != nullptr)
