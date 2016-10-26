@@ -169,6 +169,26 @@ taint_trace_elementt::taint_trace_elementt(
   , message(message_)
 {}
 
+std::string  taint_trace_elementt::get_file() const
+{
+  return instruction_iterator->source_location.is_nil() ? "" :
+              as_string(instruction_iterator->source_location.get_file());
+}
+
+std::size_t  taint_trace_elementt::get_line() const
+{
+  return instruction_iterator->source_location.is_nil() ? 0UL :
+              std::atol(
+                  as_string(instruction_iterator->source_location.get_line())
+                      .c_str()
+                  );
+}
+
+std::string  taint_trace_elementt::get_code_annotation() const
+{
+  return as_string(instruction_iterator->source_location.get_comment());
+}
+
 
 static void  taint_collect_successors_inside_function(
     goto_modelt const&  goto_model,
@@ -227,6 +247,25 @@ static void  taint_collect_successors_inside_function(
               });
       }
     }
+}
+
+static exprt taint_find_expression_of_rule(exprt const&  expr)
+{
+  if(expr.id() == "get_may")
+  {
+    if (expr.operands().size() != 2UL)
+      return exprt(ID_empty);
+    return find_taint_expression(expr.op0());
+  }
+  for(exprt::operandst::const_iterator it = expr.operands().begin();
+      it != expr.operands().end();
+      ++it)
+  {
+    exprt const  retval = taint_find_expression_of_rule(*it);
+    if (retval != exprt(ID_empty))
+      return retval;
+  }
+  return exprt(ID_empty);
 }
 
 
@@ -351,41 +390,83 @@ void taint_recognise_error_traces(
     if (elem.get_name_of_function() == sink_function_name &&
         elem.get_instruction_iterator() == sink_instruction)
     {
-      output_traces.push_back(trace.get_trace());
-      processed_traces.pop_front();
-
-      if (log != nullptr)
+      bool  is_taint_expression_tainted = false;
       {
-        *log << "<p>Added the following trace into the output:</p>\n"
-                "<table>"
-                "  <tr>\n"
-                "    <th>Function</th>\n"
-                "    <th>Location</th>\n"
-                "    <th>Variables</th>\n"
-                "    <th>Message</th>\n"
-                "  </tr>\n"
-                ;
-        for (taint_trace_elementt const&  element : output_traces.back())
+        exprt const  taint_expr =
+            taint_find_expression_of_rule(sink_instruction->guard);
+        taint_summary_domain_ptrt const  domain =
+            summaries.find<taint_summaryt>(
+                elem.get_name_of_function()
+                )->domain();
+        assert(domain.operator bool());
+        taint_map_from_lvalues_to_svaluest const&  lvalue_svalue =
+            domain->at(elem.get_instruction_iterator());
+        auto const it = lvalue_svalue.find(taint_expr);
+        if (it != lvalue_svalue.cend())
         {
-            *log << "  <tr>\n"
-                    "    <td>"
-                 << to_html_text(element.get_name_of_function()) << "</td>\n"
-                    "    <td>"
-                 << element.get_instruction_iterator()->location_number
-                 << "</td>\n"
-                    ;
-            *log << "    <td>\n";
-            taint_dump_lvalues_to_svalues_in_html(
-                  element.get_map_from_lvalues_to_svalues(),
-                  ns,
-                  *log
-                  );
-            *log << "    </td>\n"
-                    "    <td>" << to_html_text(element.get_message())
-                 << "</td>\n"
-                    "  </tr>\n";
+          for (auto const&  symbol : it->second.expression())
+            if (trace.stack_top().second.count(symbol) != 0UL)
+            {
+              is_taint_expression_tainted = true;
+              break;
+            }
         }
-        *log << "</table>";
+      }
+      if (is_taint_expression_tainted)
+      {
+        output_traces.push_back(trace.get_trace());
+        processed_traces.pop_front();
+
+        if (log != nullptr)
+        {
+          *log << "<p>There is added the following trace into the output:</p>\n"
+                  "<table>"
+                  "  <tr>\n"
+                  "    <th>Function</th>\n"
+                  "    <th>Location</th>\n"
+                  "    <th>Variables</th>\n"
+                  "    <th>Message</th>\n"
+                  "    <th>Line</th>\n"
+                  "    <th>File</th>\n"
+                  "    <th>Comment</th>\n"
+                  "  </tr>\n"
+                  ;
+          for (taint_trace_elementt const&  element : output_traces.back())
+          {
+              *log << "  <tr>\n"
+                      "    <td>"
+                   << to_html_text(element.get_name_of_function()) << "</td>\n"
+                      "    <td>"
+                   << element.get_instruction_iterator()->location_number
+                   << "</td>\n"
+                      ;
+              *log << "    <td>\n";
+              taint_dump_lvalues_to_svalues_in_html(
+                    element.get_map_from_lvalues_to_svalues(),
+                    ns,
+                    *log
+                    );
+              *log << "    </td>\n"
+                      "    <td>" << to_html_text(element.get_message())
+                   << "</td>\n"
+                      "    <td>" << element.get_line()
+                   << "</td>\n"
+                      "    <td>" << to_html_text(element.get_file())
+                   << "</td>\n"
+                      "    <td>" << to_html_text(element.get_code_annotation())
+                   << "</td>\n"
+                      "  </tr>\n";
+          }
+          *log << "</table>";
+        }
+      }
+      else
+      {
+        processed_traces.pop_front();
+
+        if (log != nullptr)
+          *log << "<p>No trace is generates as the taint symbol '"
+               << taint_name << "' did not reach the sink.</p>\n";
       }
     }
     else if (elem.get_instruction_iterator()->type == FUNCTION_CALL)

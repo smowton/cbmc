@@ -66,6 +66,10 @@ public:
     get_map_from_lvalues_to_svalues() const noexcept
     { return from_lvalues_to_svalues; }
 
+  std::string  get_file() const;
+  std::size_t  get_line() const;
+  std::string  get_code_annotation() const;
+
   std::string const& get_message() const noexcept
   { return message; }
 
