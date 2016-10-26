@@ -201,6 +201,7 @@ bool  is_pure_local(access_path_to_memoryt const&  lvalue,
 {
   return lvalue.id() != ID_member &&
          lvalue.id() != "external-value-set" &&
+         lvalue.id() != ID_dynamic_object &&
          !is_parameter(lvalue,ns) &&
          !is_static(lvalue,ns)
          ;
