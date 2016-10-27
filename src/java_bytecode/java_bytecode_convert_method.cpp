@@ -889,7 +889,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
       if(return_type.id()!=ID_empty)
       {
         results.resize(1);
-        results[0]=nil_exprt();
+        results[0]=gen_zero(return_type);
       }
     }
     else if(statement=="invokeinterface" ||
