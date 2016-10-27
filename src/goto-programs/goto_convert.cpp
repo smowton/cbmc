@@ -121,6 +121,7 @@ void goto_convertt::finish_gotos(goto_programt &dest)
       // appropriate for however many automatic variables leave scope.
       // We don't currently handle variables *entering* scope, which is illegal
       // for C++ non-pod types and impossible in Java in any case.
+      /*
       auto goto_stack=it.second;
       const auto& label_stack=l_it->second.second;
       bool stack_is_prefix=true;
@@ -148,6 +149,7 @@ void goto_convertt::finish_gotos(goto_programt &dest)
           // is std::list.
         }
       }
+      */
     }
     else
     {
@@ -231,21 +233,21 @@ Function: goto_convertt::finish_guarded_gotos
 
 void goto_convertt::finish_guarded_gotos(goto_programt &dest)
 {
-  std::map<goto_programt::targett, int> itertoint;
-
-  int i=0;
-  for(goto_programt::targett it = dest.instructions.begin(), itend=dest.instructions.end();
-      it!=itend; ++it,++i)
-    itertoint[it]=i;
-  
   for(auto& gg : guarded_gotos)
   {
     // Check if any destructor code has been inserted:
     bool destructor_present=false;
     for(auto it=gg.ifiter; it!=gg.gotoiter && !destructor_present; ++it)
     {
-      if(!(it->is_goto() || it->is_skip()))
-        destructor_present=true;
+      switch(it->type)
+      {
+      case GOTO:
+      case SKIP:
+	continue;
+      default:
+	destructor_present=true;
+	break;
+      }
     }
 
     // If so, can't simplify.
@@ -299,7 +301,7 @@ void goto_convertt::goto_convert_rec(
 
   finish_gotos(dest);
   finish_computed_gotos(dest);
-  finish_guarded_gotos(dest);
+  //finish_guarded_gotos(dest);
 }
 
 /*******************************************************************\
@@ -2265,7 +2267,9 @@ void goto_convertt::generate_ifthenelse(
     // if(some) { label: goto somewhere; }
     // Don't perform the transformation here, as code might get inserted into
     // the true case to perform destructors. This will be attempted in finish_guarded_gotos.
-    is_guarded_goto=true;
+    //is_guarded_goto=true;
+    true_case.instructions.back().guard=guard;
+    dest.destructive_append(true_case);
   }
   
   // similarly, do guarded assertions directly
