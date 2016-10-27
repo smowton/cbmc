@@ -676,6 +676,9 @@ codet java_bytecode_convert_methodt::convert_instructions(
   address_mapt address_map;
   std::set<unsigned> targets;
 
+  std::vector<unsigned> jsr_ret_targets;
+  std::vector<instructionst::const_iterator> ret_instructions;
+
   for(instructionst::const_iterator
       i_it=instructions.begin();
       i_it!=instructions.end();
@@ -693,7 +696,10 @@ codet java_bytecode_convert_methodt::convert_instructions(
     if(i_it->statement!="goto" &&
        i_it->statement!="return" &&
        !(i_it->statement==patternt("?return")) &&
-       i_it->statement!="athrow")
+       i_it->statement!="athrow" &&
+       i_it->statement!="jsr" &&
+       i_it->statement!="jsr_w" &&
+       i_it->statement!="ret")
     {
       instructionst::const_iterator next=i_it;
       if(++next!=instructions.end())
@@ -704,7 +710,9 @@ codet java_bytecode_convert_methodt::convert_instructions(
        i_it->statement==patternt("if_?cmp??") ||
        i_it->statement==patternt("if??") ||
        i_it->statement=="ifnonnull" ||
-       i_it->statement=="ifnull")
+       i_it->statement=="ifnull" ||
+       i_it->statement=="jsr" ||
+       i_it->statement=="jsr_w")
     {
       assert(!i_it->args.empty());
 
@@ -713,6 +721,14 @@ codet java_bytecode_convert_methodt::convert_instructions(
       targets.insert(target);
 
       a_entry.first->second.successors.push_back(target);
+
+      if(i_it->statement=="jsr" ||
+	 i_it->statement=="jsr_w")
+      {
+	instructionst::const_iterator next=i_it;
+	assert(++next!=instructions.end() && "jsr without valid return address?");
+	jsr_ret_targets.push_back(next->address);
+      }
     }
     else if(i_it->statement=="tableswitch" ||
             i_it->statement=="lookupswitch")
@@ -732,6 +748,22 @@ codet java_bytecode_convert_methodt::convert_instructions(
         }
       }
     }
+    else if(i_it->statement=="ret")
+    {
+      // Finish these later, once we've seen all jsr instructions.
+      ret_instructions.push_back(i_it);
+    }
+  }
+
+  // Draw edges from every `ret` to every `jsr` successor.
+  // Could do better with flow analysis to distinguish multiple subroutines within
+  // the same function.
+  for(const auto retinst : ret_instructions)
+  {
+    auto& a_entry=address_map.at(retinst->address);
+    a_entry.successors.insert(a_entry.successors.end(),
+			      jsr_ret_targets.begin(),
+			      jsr_ret_targets.end());
   }
 
   for(address_mapt::iterator
@@ -1113,6 +1145,46 @@ codet java_bytecode_convert_methodt::convert_instructions(
       irep_idt number=to_constant_expr(arg0).get_value();
       code_gotot code_goto(label(number));
       c=code_goto;
+    }
+    else if(statement=="jsr" || statement=="jsr_w")
+    {
+      // As 'goto', except we must also push the subroutine return address:
+      assert(op.empty() && results.size()==1);
+      irep_idt number=to_constant_expr(arg0).get_value();
+      code_gotot code_goto(label(number));
+      c=code_goto;
+      results[0]=as_number(std::next(i_it)->address,pointer_typet(void_typet(),64));
+    }
+    else if(statement=="ret")
+    {
+      // Since we have a bounded target set, make life easier on our analyses
+      // and write something like if(retaddr==5) goto 5; else if(retaddr==10) goto 10; ...
+      assert(op.empty() && results.empty());
+      code_blockt branches;
+      auto retvar=variable(arg0, 'a', i_it->address);
+      assert(!jsr_ret_targets.empty());
+      for(size_t idx=0, idxlim=jsr_ret_targets.size(); idx!=idxlim; ++idx)
+      {
+	irep_idt number=i2string(jsr_ret_targets[idx]);
+	code_gotot g(label(number));
+	g.add_source_location()=i_it->source_location;
+	g.add_source_location().set_function(method_id);	
+	if(idx==idxlim-1)
+	  branches.move_to_operands(g);
+	else
+        {
+	  code_ifthenelset branch;
+	  auto address_ptr=as_number(jsr_ret_targets[idx],pointer_typet(void_typet(),64));	  
+	  branch.cond()=equal_exprt(retvar,address_ptr);
+	  branch.cond().add_source_location()=i_it->source_location;
+	  branch.cond().add_source_location().set_function(method_id);
+	  branch.then_case()=g;
+	  branch.add_source_location()=i_it->source_location;
+	  branch.add_source_location().set_function(method_id);
+	  branches.move_to_operands(branch);
+	}
+      }
+      c=std::move(branches);
     }
     else if(statement=="iconst_m1")
     {
@@ -1747,8 +1819,18 @@ codet java_bytecode_convert_methodt::convert_instructions(
         else
         {
           c.make_block();
-          forall_operands(o_it, more_code)
-            c.copy_to_operands(*o_it);
+	  auto& last_statement=to_code_block(c).find_last_statement();
+	  if(last_statement.get_statement()==ID_goto)
+	  {
+	    // Insert stack twiddling before branch:
+	    last_statement.make_block();
+	    last_statement.operands().insert(last_statement.operands().begin(),
+					     more_code.operands().begin(),
+					     more_code.operands().end());
+	  }
+	  else
+	    forall_operands(o_it, more_code)
+	      c.copy_to_operands(*o_it);
         }
       }
 
@@ -1807,6 +1889,8 @@ codet java_bytecode_convert_methodt::convert_instructions(
       start_new_block=targets.find(address)!=targets.end();
     if(!start_new_block)
       start_new_block=it.second.predecessors.size()>1;
+    if((!start_new_block) && it.second.predecessors.size()==1)
+      start_new_block=*(it.second.predecessors.begin())!=std::prev(ait)->first;
 
     if(start_new_block)
     {
