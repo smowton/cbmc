@@ -609,6 +609,7 @@ std::string  dump_in_html(
 std::string  to_file_name(std::string  result)
 {
   std::replace( result.begin(),result.end(), '#', '_');
+  std::replace( result.begin(),result.end(), '$', '_');
   std::replace( result.begin(),result.end(), ':', '.');
   std::replace( result.begin(),result.end(), '/', '.');
   std::replace( result.begin(),result.end(), '<', '[');
