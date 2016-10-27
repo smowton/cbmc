@@ -530,6 +530,7 @@ int goto_analyzer_parse_optionst::doit()
       size_t processed=0;
       for(const auto& fname : process_order)
       {
+	++processed;
 	if(fname=="_start")
 	  continue;
         debug() << "LVSA: analysing " << fname << eom;
@@ -543,7 +544,7 @@ int goto_analyzer_parse_optionst::doit()
 	if(ui_message_handler.get_verbosity()>=message_clientt::M_DEBUG)
 	  show_value_sets(get_ui(), gf.body, value_set_analysis);
 	else
-	  progress() << (++processed) << "/" << total_funcs << " functions analysed" << eom;
+	  progress() << processed << "/" << total_funcs << " functions analysed" << eom;
         if(dbpath.size()!=0)
           value_set_analysis.save_summary(gf.body);
       }
