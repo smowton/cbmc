@@ -613,6 +613,8 @@ std::string  to_file_name(std::string  result)
   std::replace( result.begin(),result.end(), '/', '.');
   std::replace( result.begin(),result.end(), '<', '[');
   std::replace( result.begin(),result.end(), '>', ']');
+  if(result.size()>240)
+    result.resize(240); // Leave a reasonable amount of space for a suffix
   return result;
 }
 

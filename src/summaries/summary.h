@@ -262,7 +262,10 @@ class summary_json_databaset : public database_of_summariest, public messaget {
     std::string filename=index.object.at(functionname).value;
     json_objectt as_json=
       static_cast<const json_serialisable_summaryt*>((*this)[functionname].get())->to_json();
-    std::ofstream ostr(database_dirname+"/"+filename);
+    std::string full_filename=database_dirname+"/"+filename;
+    std::ofstream ostr(full_filename);
+    if(!ostr)
+      throw "Failed to open " + full_filename;
     ostr << as_json;
   }
 
