@@ -24,6 +24,8 @@ data stored in the databese of taint summaries.
 #include <iterator>
 #include <cassert>
 
+#include <iostream>
+
 
 class trace_under_constructiont
 {
@@ -213,8 +215,11 @@ static void  taint_collect_successors_inside_function(
           );
   goto_programt::const_targetst  succ_targets;
   fn.body.get_successors(elem.get_instruction_iterator(),succ_targets);
+  std::unordered_set<std::size_t>  processed_locations;
   for (goto_programt::const_targett  succ_target : succ_targets)
-    if (0UL == trace.count(elem.get_name_of_function(),succ_target))
+  {
+    if (0UL == trace.count(elem.get_name_of_function(),succ_target) &&
+        0UL == processed_locations.count(succ_target->location_number))
     {
       taint_map_from_lvalues_to_svaluest  from_lvalues_to_svalues;
       taint_svaluet::expressiont  symbols;
@@ -249,6 +254,8 @@ static void  taint_collect_successors_inside_function(
               ""
               });
     }
+    processed_locations.insert(succ_target->location_number);
+  }
 }
 
 static exprt taint_find_expression_of_rule(exprt const&  expr)
@@ -687,6 +694,17 @@ void taint_recognise_error_traces(
         processed_traces.pop_front();
       else
       {
+if (successors.size() > 1UL)
+{
+  std::cout << "************************************\n";
+  for (std::size_t  i = 0UL; i < successors.size(); ++i)
+  {
+    std::cout << i << ":\n";
+    std::cout << "function: " << successors.at(i).get_name_of_function() << "\n";
+    std::cout << "location: " << successors.at(i).get_instruction_iterator()->location_number << "\n";
+  }
+  std::cout.flush();
+}
         for (std::size_t  i = 1UL; i < successors.size(); ++i)
         {
           processed_traces.push_back(processed_traces.front());
