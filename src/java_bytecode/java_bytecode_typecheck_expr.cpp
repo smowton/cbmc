@@ -109,6 +109,9 @@ Function: java_bytecode_typecheckt::typecheck_expr_java_string_literal
 
 \*******************************************************************/
 
+static std::map<irep_idt,irep_idt> string_literal_to_symbol_name;
+static std::map<irep_idt,size_t> escaped_string_literal_count;
+
 void java_bytecode_typecheckt::typecheck_expr_java_string_literal(exprt &expr)
 { 
   const irep_idt value=expr.get(ID_value);
@@ -122,16 +125,21 @@ void java_bytecode_typecheckt::typecheck_expr_java_string_literal(exprt &expr)
   }
     
   // Create a new symbol:
-  std::ostringstream identifier_str;
-  std::string escaped=id2string(value);
-  escape_non_alnum(escaped);
-  identifier_str << "java::java.lang.String.Literal." << escaped;
-  // Avoid naming clashes by virtue of escaping:
-  size_t unique_num=++(escaped_string_literal_count[identifier_str.str()]);
-  if(unique_num!=1)
-    identifier_str << unique_num;
+  irep_idt identifier_id;
 
-  irep_idt identifier_id=identifier_str.str();
+  do
+  {
+    std::ostringstream identifier_str;
+    std::string escaped=id2string(value);
+    escape_non_alnum(escaped);
+    identifier_str << "java::java.lang.String.Literal." << escaped;
+    // Avoid naming clashes by virtue of escaping:
+    size_t unique_num=++(escaped_string_literal_count[identifier_str.str()]);
+    if(unique_num!=1)
+      identifier_str << '_' << unique_num;
+    identifier_id=identifier_str.str();
+  } while(symbol_table.has_symbol(identifier_id));
+    
   string_literal_to_symbol_name.insert(std::make_pair(value,identifier_id));
 
   symbolt new_symbol;
