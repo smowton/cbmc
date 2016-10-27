@@ -3,6 +3,8 @@
 
 #include <util/prefix.h>
 #include <util/json_irep.h>
+#include <util/suffix.h>
+#include <goto-programs/remove_returns.h>
 
 #include <algorithm>
 
@@ -12,7 +14,8 @@ static void gather_external_symbols(
   if(e.id()==ID_symbol)
   {
     auto& symexpr=to_symbol_expr(e);
-    if(ns.lookup(symexpr.get_identifier()).is_static_lifetime)
+    if(ns.lookup(symexpr.get_identifier()).is_static_lifetime &&
+       !has_suffix(id2string(symexpr.get_identifier()),RETURN_VALUE_SUFFIX))
       result.push_back(symexpr);
   }
   else
@@ -195,7 +198,7 @@ void local_value_set_analysist::transform_function_stub(
   const irep_idt& fname, statet& state, locationt l_call, locationt l_return)
 {
   // Execute a summary description for function fname.
-  if(!summarydb.load(id2string(fname)))
+  if(!summarydb.load(id2string(fname),/*quiet=*/true))
     return;
   switch(mode)
   {

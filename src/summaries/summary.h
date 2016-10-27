@@ -190,7 +190,7 @@ class summary_json_databaset : public database_of_summariest, public messaget {
     }
   }
 
-  bool load(const std::string& functionname)
+  bool load(const std::string& functionname,bool quiet)
   {
     // Already loaded?
     if(m_cache.count(functionname))
@@ -199,7 +199,7 @@ class summary_json_databaset : public database_of_summariest, public messaget {
     const auto& findit=index.object.find(id2string(functionname));
     if(findit==index.object.end())
     {
-      warning() << "No summary available for " << functionname << eom;
+      (quiet ? debug() : warning()) << "No summary available for " << functionname << eom;
       return false;
     }
   
