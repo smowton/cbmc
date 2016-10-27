@@ -60,8 +60,20 @@ Purpose: removes complex data type
 
 \*******************************************************************/
 
+static bool contains_complex(const exprt& e)
+{
+  if(e.type().id()==ID_complex)
+    return true;
+  forall_operands(it,e)
+    if(contains_complex(*it))
+      return true;
+  return false;
+}
+
 void remove_complex(exprt &expr)
 {
+  if(!contains_complex(expr))
+    return;
   if(expr.id()==ID_typecast)
   {
     assert(expr.operands().size()==1);
@@ -200,8 +212,38 @@ Purpose: removes complex data type
 
 \*******************************************************************/
 
+static bool contains_complex(const typet& type)
+{
+  if(type.id()==ID_struct || type.id()==ID_union)
+  {
+    const struct_union_typet &struct_union_type=
+      to_struct_union_type(type);
+    for(struct_union_typet::componentst::const_iterator
+	it=struct_union_type.components().begin();
+        it!=struct_union_type.components().end();
+        it++)
+    {
+      if(contains_complex(it->type()))
+	return true;
+    }
+  }
+  else if(type.id()==ID_pointer ||
+          type.id()==ID_vector ||
+          type.id()==ID_array)
+  {
+    if(contains_complex(type.subtype()))
+      return true;
+  }
+  else if(type.id()==ID_complex)
+    return true;
+
+  return false;
+}
+
 void remove_complex(typet &type)
 {
+  if(!contains_complex(type))
+    return;
   if(type.id()==ID_struct || type.id()==ID_union)
   {
     struct_union_typet &struct_union_type=
