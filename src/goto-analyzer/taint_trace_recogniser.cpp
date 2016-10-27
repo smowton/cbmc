@@ -24,8 +24,6 @@ data stored in the databese of taint summaries.
 #include <iterator>
 #include <cassert>
 
-#include <iostream>
-
 
 class trace_under_constructiont
 {
@@ -694,17 +692,6 @@ void taint_recognise_error_traces(
         processed_traces.pop_front();
       else
       {
-if (successors.size() > 1UL)
-{
-  std::cout << "************************************\n";
-  for (std::size_t  i = 0UL; i < successors.size(); ++i)
-  {
-    std::cout << i << ":\n";
-    std::cout << "function: " << successors.at(i).get_name_of_function() << "\n";
-    std::cout << "location: " << successors.at(i).get_instruction_iterator()->location_number << "\n";
-  }
-  std::cout.flush();
-}
         for (std::size_t  i = 1UL; i < successors.size(); ++i)
         {
           processed_traces.push_back(processed_traces.front());
