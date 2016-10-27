@@ -42,54 +42,51 @@ void taint_trace_dump_in_json(
     std::string const&  dump_file_name
     )
 {
-  json_objectt  json;
+  json_arrayt  records;
   {
-    json_arrayt  records;
-    {
-      namespacet ns(goto_model.symbol_table);
-      for (taint_trace_elementt const&  elem : trace)
+    namespacet ns(goto_model.symbol_table);
+    for (taint_trace_elementt const&  elem : trace)
+      for (auto const lvalue_svalue : elem.get_map_from_lvalues_to_svalues())
       {
         json_objectt  record;
         {
           record["mode"] = json_stringt("java");
           record["thread"] = json_numbert(msgstream() << 0);
-          record["hidden"] = json_stringt("false");
+          record["hidden"] = json_falset();
           record["stepType"] = json_stringt("assignment");
+          record["assignmentType"] = json_stringt("variable");
+          record["location"] = json_numbert(
+                msgstream() << elem.get_instruction_iterator()->location_number
+                );
+          record["lhs"] =
+              json_stringt(from_expr(ns, "",lvalue_svalue.first));
           json_objectt  location;
           {
             location["dir"] = json_stringt("./");
             location["file"] = json_stringt(elem.get_file());
-            location["line"] = json_numbert(msgstream() << elem.get_line());
+            location["line"] = json_stringt(msgstream() << elem.get_line());
             location["function"] = json_stringt(elem.get_name_of_function());
           }
           record["sourceLocation"] = location;
-          json_arrayt  values;
+          json_objectt  value;
           {
-            for (auto const lvalue_svalue :
-                 elem.get_map_from_lvalues_to_svalues())
+            value["name"] = json_stringt("pointer");
+            msgstream  data;
             {
-              json_objectt  value;
-              value["name"] = json_stringt(from_expr(ns, "",lvalue_svalue.first));
-              msgstream  data;
+              bool first = true;
+              for (auto const&  symbol : lvalue_svalue.second.expression())
               {
-                bool first = true;
-                for (auto const&  symbol : lvalue_svalue.second.expression())
-                {
-                   data << (first ? "" : ", ") << symbol;
-                   first = false;
-                }
+                 data << (first ? "" : ", ") << symbol;
+                 first = false;
               }
-              value["data"] = json_stringt(data);
-              values.push_back(value);
             }
+            value["data"] = json_stringt(data);
           }
-          record["values"] = values;
+          record["value"] = value;
         }
         records.push_back(record);
       }
-    }
-    json["trace"] = records;
   }
   std::ofstream  ostr(dump_file_name);
-  ostr << json;
+  ostr << records;
 }
