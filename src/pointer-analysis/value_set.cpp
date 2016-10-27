@@ -1949,6 +1949,9 @@ void value_sett::apply_code(
   else if(statement==ID_fence)
   {
   }
+  else if(statement=="set_may" || statement=="get_may" || statement=="clear_may")
+  {
+  }
   else
   {
     //std::cerr << code.pretty() << std::endl;

@@ -1224,11 +1224,17 @@ void  taint_summarise_all_functions(
   get_inverted_topological_order(call_graph,
                                  instrumented_program.goto_functions,
                                  inverted_topological_order);
+
+  size_t processed=0;
+  size_t total_funcs=inverted_topological_order.size();
+  messaget msgout;
+  msgout.set_message_handler(msg);
   for (auto const&  fn_name : inverted_topological_order)
   {
+    ++processed;
     if(fn_name=="_start")
       continue;
-    goto_functionst::function_mapt  const  functions_map =
+    const goto_functionst::function_mapt& functions_map =
         instrumented_program.goto_functions.function_map;
     auto const  fn_it = functions_map.find(fn_name);
     if (fn_it != functions_map.cend() && fn_it->second.body_available())
@@ -1243,6 +1249,7 @@ void  taint_summarise_all_functions(
               msg
               ),
           });
+    msgout.progress() << processed << "/" << total_funcs << " functions analysed" << messaget::eom;
   }
 }
 
