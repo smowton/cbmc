@@ -447,7 +447,7 @@ int goto_analyzer_parse_optionst::doit()
       if(fname=="")
       {
         taint_summarise_all_functions(goto_model,summaries,call_graph,
-                                      &log,lvsa_json_directory,get_message_handler());
+                                      nullptr,lvsa_json_directory,get_message_handler());
       }
       else
       {
