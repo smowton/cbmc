@@ -102,6 +102,14 @@ bool  is_member(access_path_to_memoryt const&  lvalue)
   return lvalue.id() == ID_member;
 }
 
+const exprt& get_underlying_object(const exprt& in)
+{
+  if(in.id()==ID_member)
+    return get_underlying_object(in.op0());
+  else
+    return in;
+}
+
 const access_path_to_memoryt&  get_member_accessor(
     access_path_to_memoryt const&  lvalue
     )
@@ -193,6 +201,7 @@ bool  is_pure_local(access_path_to_memoryt const&  lvalue,
 {
   return lvalue.id() != ID_member &&
          lvalue.id() != "external-value-set" &&
+         lvalue.id() != ID_dynamic_object &&
          !is_parameter(lvalue,ns) &&
          !is_static(lvalue,ns)
          ;
@@ -286,4 +295,16 @@ access_path_to_memoryt  scope_translation(
   }
 
   return source_path;
+}
+
+// Returns true if an expression refers to a unique dynamic lvalue,
+// as opposed to e.g. a dynamic object expression, which refers to the general
+// case of objects allocated [at a particular program point]
+bool is_singular_object(const exprt& e)
+{
+  const auto& obj=get_underlying_object(e);
+  if(obj.id()==ID_symbol)
+    return true;
+  else
+    return false;
 }

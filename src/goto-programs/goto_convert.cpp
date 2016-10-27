@@ -58,11 +58,11 @@ Function: goto_convertt::finish_gotos
 
 \*******************************************************************/
 
-void goto_convertt::finish_gotos()
+void goto_convertt::finish_gotos(goto_programt &dest)
 {
   for(const auto & it : targets.gotos)
   {
-    goto_programt::instructiont &i=*it;
+    goto_programt::instructiont &i=*(it.first);
     
     if(i.code.get_statement()=="non-deterministic-goto")
     {
@@ -82,7 +82,7 @@ void goto_convertt::finish_gotos()
           throw 0;
         }
           
-        i.targets.push_back(l_it->second);
+        i.targets.push_back(l_it->second.first);
       }
     }
     else if(i.is_start_thread())
@@ -99,7 +99,7 @@ void goto_convertt::finish_gotos()
         throw 0;
       }
 
-      i.targets.push_back(l_it->second);
+      i.targets.push_back(l_it->second.first);
     }
     else if(i.code.get_statement()==ID_goto)
     {
@@ -115,7 +115,39 @@ void goto_convertt::finish_gotos()
       }
 
       i.targets.clear();
-      i.targets.push_back(l_it->second);
+      i.targets.push_back(l_it->second.first);
+
+      // If the goto recorded a destructor stack, execute as much as is
+      // appropriate for however many automatic variables leave scope.
+      // We don't currently handle variables *entering* scope, which is illegal
+      // for C++ non-pod types and impossible in Java in any case.
+      auto goto_stack=it.second;
+      const auto& label_stack=l_it->second.second;
+      bool stack_is_prefix=true;
+      if(label_stack.size() > goto_stack.size())
+        stack_is_prefix=false;
+      for(unsigned i=0,ilim=label_stack.size(); i!=ilim && stack_is_prefix; ++i)
+        if(goto_stack[i]!=label_stack[i])
+          stack_is_prefix=false;
+
+      if(!stack_is_prefix)
+      {
+        warning() << "Encountered goto (" << goto_label << ") that enters one or more lexical blocks; omitting constructors and destructors." << eom;
+      }
+      else
+      {
+        auto unwind_to_size=label_stack.size();
+        if(unwind_to_size < goto_stack.size())
+        {
+          status() << "Adding goto-destructor code on jump to " << goto_label << eom;
+          goto_programt destructor_code;
+          unwind_destructor_stack(i.code.add_source_location(),unwind_to_size,
+                                  destructor_code,goto_stack);
+          dest.destructive_insert(it.first,destructor_code);
+          // This should leave iterators intact, as long as goto_programt::instructionst
+          // is std::list.
+        }
+      }
     }
     else
     {
@@ -173,13 +205,61 @@ void goto_convertt::finish_computed_gotos(goto_programt &goto_program)
       goto_programt::targett t=
         goto_program.insert_after(g_it);
 
-      t->make_goto(l_it->second);
+      t->make_goto(l_it->second.first);
       t->source_location=i.source_location;
       t->guard=guard;
     }
   }
   
   targets.computed_gotos.clear();
+}
+
+/*******************************************************************\
+
+Function: goto_convertt::finish_guarded_gotos
+
+  Inputs: Destination goto program
+
+ Outputs:
+
+ Purpose: For each if(x) goto z; goto y; z: emitted,
+          see if any destructor statements were inserted
+          between goto z and z, and if not, simplify into
+          if(!x) goto y;
+
+\*******************************************************************/
+
+void goto_convertt::finish_guarded_gotos(goto_programt &dest)
+{
+  std::map<goto_programt::targett, int> itertoint;
+
+  int i=0;
+  for(goto_programt::targett it = dest.instructions.begin(), itend=dest.instructions.end();
+      it!=itend; ++it,++i)
+    itertoint[it]=i;
+  
+  for(auto& gg : guarded_gotos)
+  {
+    // Check if any destructor code has been inserted:
+    bool destructor_present=false;
+    for(auto it=gg.ifiter; it!=gg.gotoiter && !destructor_present; ++it)
+    {
+      if(!(it->is_goto() || it->is_skip()))
+        destructor_present=true;
+    }
+
+    // If so, can't simplify.
+    if(destructor_present)
+      continue;
+
+    // Simplify: remove whatever code was generated for the condition
+    // and attach the original guard to the goto instruction.
+    gg.gotoiter->guard=gg.guard;
+    // goto_programt doesn't provide an erase operation, perhaps for a good reason,
+    // so let's be cautious and just flatten the un-needed instructions into skips.
+    for(auto it=gg.ifiter, itend=gg.gotoiter; it!=itend; ++it)
+      it->make_skip();
+  }
 }
 
 /*******************************************************************\
@@ -217,8 +297,9 @@ void goto_convertt::goto_convert_rec(
 {
   convert(code, dest);
 
-  finish_gotos();
+  finish_gotos(dest);
   finish_computed_gotos(dest);
+  finish_guarded_gotos(dest);
 }
 
 /*******************************************************************\
@@ -286,8 +367,8 @@ void goto_convertt::convert_label(
   goto_programt::targett target=tmp.instructions.begin();
   dest.destructive_append(tmp);
 
-  targets.labels.insert(std::pair<irep_idt, goto_programt::targett>
-                        (label, target));
+  targets.labels.insert(std::make_pair(label,
+                                       std::make_pair(target, targets.destructor_stack)));
   target->labels.push_front(label);
 }
 
@@ -1632,7 +1713,7 @@ void goto_convertt::convert_goto(
   t->code=code;
 
   // remember it to do target later
-  targets.gotos.push_back(t);
+  targets.gotos.push_back(std::make_pair(t,targets.destructor_stack));
 }
 
 /*******************************************************************\
@@ -2132,6 +2213,12 @@ void goto_convertt::collect_operands(
   }
 }
 
+static inline bool is_size_one(const goto_programt &g)
+{
+  return (!g.instructions.empty()) &&
+    ++g.instructions.begin()==g.instructions.end();
+}
+ 
 /*******************************************************************\
 
 Function: goto_convertt::generate_ifthenelse
@@ -2165,24 +2252,24 @@ void goto_convertt::generate_ifthenelse(
     return;
   }
 
+  bool is_guarded_goto;
+
   // do guarded gotos directly
   if(is_empty(false_case) &&
-     // true_case.instructions.size()==1 optimised
-     !true_case.instructions.empty() &&
-     ++true_case.instructions.begin()==true_case.instructions.end() &&
+     is_size_one(true_case) &&
      true_case.instructions.back().is_goto() &&
      true_case.instructions.back().guard.is_true() &&
      true_case.instructions.back().labels.empty())
   {
     // The above conjunction deliberately excludes the instance
     // if(some) { label: goto somewhere; }
-    true_case.instructions.back().guard=guard;
-    dest.destructive_append(true_case);
-    return;
+    // Don't perform the transformation here, as code might get inserted into
+    // the true case to perform destructors. This will be attempted in finish_guarded_gotos.
+    is_guarded_goto=true;
   }
   
   // similarly, do guarded assertions directly
-  if(true_case.instructions.size()==1 &&
+  if(is_size_one(true_case) &&
      true_case.instructions.back().is_assert() &&
      true_case.instructions.back().guard.is_false() &&
      true_case.instructions.back().labels.empty())
@@ -2195,7 +2282,7 @@ void goto_convertt::generate_ifthenelse(
   }
 
   // similarly, do guarded assertions directly
-  if(false_case.instructions.size()==1 &&
+  if(is_size_one(false_case) &&
      false_case.instructions.back().is_assert() &&
      false_case.instructions.back().guard.is_false() &&
      false_case.instructions.back().labels.empty())
@@ -2261,6 +2348,14 @@ void goto_convertt::generate_ifthenelse(
   x->make_goto(z);
   assert(!tmp_w.instructions.empty());
   x->source_location=tmp_w.instructions.back().source_location;
+
+  // See if we can simplify this guarded goto later.
+  // Note this depends on the fact that `instructions` is a std::list
+  // and so goto-program-destructive-append preserves iterator validity.
+  if(is_guarded_goto)
+    guarded_gotos.push_back({tmp_v.instructions.begin(),
+                             tmp_w.instructions.begin(),
+                             guard});
 
   dest.destructive_append(tmp_v);
   dest.destructive_append(tmp_w);

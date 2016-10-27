@@ -732,6 +732,8 @@ verilog_array
 low
 high
 bswap
+C_cformat
+java_bytecode_index
 pointsto_access_paths_definition_symbolic
 pointsto_access_paths_definition_concrete
 pointsto_access_paths_definition_shifted
@@ -741,3 +743,4 @@ pointsto_access_paths_dereference
 pointsto_access_paths_subtract
 pointsto_access_paths_union
 pointsto_access_paths_conditional
+

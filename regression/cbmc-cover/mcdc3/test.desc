@@ -3,10 +3,16 @@ main.c
 --cover mcdc
 ^EXIT=0$
 ^SIGNAL=0$
-^\[main.coverage.1\] file main.c line 8 function main MC/DC independence condition `!(x > (unsigned int)3) && !(y < (unsigned int)5).*: SATISFIED$
-^\[main.coverage.2\] file main.c line 8 function main MC/DC independence condition `y < (unsigned int)5 && !(x > (unsigned int)3).*: SATISFIED$
-^\[main.coverage.3\] file main.c line 8 function main MC/DC independence condition `y < (unsigned int)5 && x > (unsigned int)3.*: SATISFIED$
-^\*\* .* of .* covered (100.0%)$
+^\[coverage.1\] file main.c line 8 MC/DC independence condition .*: SATISFIED$
+^\[coverage.2\] file main.c line 8 MC/DC independence condition .*: SATISFIED$
+^\[coverage.3\] file main.c line 8 MC/DC independence condition .*: SATISFIED$
+^\[coverage.4\] file main.c line 8 decision .* false: SATISFIED$
+^\[coverage.5\] file main.c line 8 decision .* true: SATISFIED$
+^\[coverage.6\] file main.c line 8 condition .* false: SATISFIED$
+^\[coverage.7\] file main.c line 8 condition .* true: SATISFIED$
+^\[main.coverage.1\] file main.c line 8 function main condition .* false: SATISFIED$
+^\[main.coverage.2\] file main.c line 8 function main condition .* true: SATISFIED$
+^\*\* 9 of 9 covered (100.0%)$
 ^\*\* Used 4 iterations$
 --
 ^warning: ignoring

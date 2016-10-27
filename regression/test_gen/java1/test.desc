@@ -1,0 +1,22 @@
+CORE
+TestGenTest.class
+--gen-java-test-case --stop-on-fail --function TestGenTest.f
+^EXIT=0$
+^SIGNAL=0$
+^ *B tmp_object_factory[$].*=[(]B[)] com.diffblue.java_testcase.Reflector.forceInstance[(]"B"[)];$
+^ *com.diffblue.java_testcase.Reflector.setInstanceField[(]tmp_object_factory[$].*,"a_field_0",495[)];$
+^ *com.diffblue.java_testcase.Reflector.setInstanceField[(]tmp_object_factory[$].*,"a_field_1",494[)];$
+^ *com.diffblue.java_testcase.Reflector.setInstanceField[(]tmp_object_factory[$].*,"b_field_0",493[)];$
+^ *C tmp_object_factory[$].*=[(]C[)] com.diffblue.java_testcase.Reflector.forceInstance[(]"C"[)];$
+^ *com.diffblue.java_testcase.Reflector.setInstanceField[(]tmp_object_factory[$].*,"c_field_0",496[)];$
+^ *com.diffblue.java_testcase.Reflector.setInstanceField[(]tmp_object_factory[$].*,"c_field_1",tmp_object_factory[$].*[)];$
+^ *B tmp_object_factory[$].*=[(]B[)] com.diffblue.java_testcase.Reflector.forceInstance[(]"B"[)];$
+^ *com.diffblue.java_testcase.Reflector.setInstanceField[(]tmp_object_factory[$].*,"a_field_0",499[)];$
+^ *com.diffblue.java_testcase.Reflector.setInstanceField[(]tmp_object_factory[$].*,"a_field_1",498[)];$
+^ *com.diffblue.java_testcase.Reflector.setInstanceField[(]tmp_object_factory[$].*,"b_field_0",497[)];$
+^ *B arg0a=tmp_object_factory[$].*;$
+^ *C arg1a=tmp_object_factory[$].*;$
+^ *int arg2i=492;$
+^ *TestGenTest.f[(]arg0a, arg1a, arg2i[)];$
+--
+^warning: ignoring

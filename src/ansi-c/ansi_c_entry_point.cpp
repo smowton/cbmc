@@ -109,9 +109,6 @@ void record_function_outputs(
   code_blockt &init_code,
   symbol_tablet &symbol_table)
 {
-  //const code_typet::parameterst &parameters=
-  //  to_code_type(function.type).parameters();
-
   bool has_return_value=
     to_code_type(function.type).return_type()!=empty_typet();
 
@@ -133,7 +130,9 @@ void record_function_outputs(
     init_code.move_to_operands(output);
   }
 
-  #if 0
+  const code_typet::parameterst &parameters=
+    to_code_type(function.type).parameters();
+
   std::size_t i=0;
 
   for(const auto & p : parameters)
@@ -159,7 +158,6 @@ void record_function_outputs(
 
     i++;
   }
-  #endif
 }
 
 /*******************************************************************\
@@ -495,6 +493,7 @@ bool ansi_c_entry_point(
   init_code.move_to_operands(call_main);
 
   // TODO: add read/modified (recursively in call graph) globals as INPUT/OUTPUT
+  // TODO: add side effects and return values of functions without body 
 
   record_function_outputs(symbol, init_code, symbol_table);
 

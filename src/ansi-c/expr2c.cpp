@@ -4335,7 +4335,7 @@ std::string expr2ct::convert(
 
   else if(src.id()==ID_popcount)
   {
-    if(config.ansi_c.mode==configt::ansi_ct::flavourt::MODE_VISUAL_STUDIO_C_CPP)
+    if(config.ansi_c.mode==configt::ansi_ct::flavourt::VISUAL_STUDIO)
       return convert_function(src, "__popcnt", precedence=16);
     else
       return convert_function(src, "__builtin_popcount", precedence=16);
@@ -4483,10 +4483,9 @@ std::string expr2ct::convert(
       return convert(to_index_expr(src.op0()).array());
     else if(src.type().subtype().id()==ID_code)
       return convert_unary(src, "", precedence=15);
-    else
+    else 
       return convert_unary(src, "&", precedence=15);
   }
-
   else if(src.id()==ID_dereference)
   {
     if(src.operands().size()!=1)

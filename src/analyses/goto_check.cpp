@@ -33,8 +33,17 @@ public:
     ns(_ns),
     local_bitvector_analysis(0)
   {
+    const symbolt *init_symbol;
+    if(!ns.lookup(CPROVER_PREFIX "initialize", init_symbol))
+      mode=init_symbol->mode;
+
+    // for Java pointer-check is enabled by default
+    if(mode==ID_java && !_options.get_bool_option("disable-runtime-check"))
+      enable_pointer_check=true;
+    else 
+      enable_pointer_check=_options.get_bool_option("pointer-check");
+
     enable_bounds_check=_options.get_bool_option("bounds-check");
-    enable_pointer_check=_options.get_bool_option("pointer-check");
     enable_memory_leak_check=_options.get_bool_option("memory-leak-check");
     enable_div_by_zero_check=_options.get_bool_option("div-by-zero-check");
     enable_signed_overflow_check=_options.get_bool_option("signed-overflow-check");
@@ -899,6 +908,9 @@ void goto_checkt::pointer_overflow_check(
   const guardt &guard)
 {
   if(!enable_pointer_check)
+    return;
+
+  if(mode==ID_java)
     return;
 
   if(expr.id()==ID_plus ||

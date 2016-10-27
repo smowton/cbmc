@@ -280,6 +280,15 @@ bool value_set_dereferencet::dereference_type_compare(
          to_struct_type(ot_base)))
       return true; // ok, dt is a prefix of ot
   }
+
+#if 0
+  if(ot_base.id()==ID_struct)
+  {
+    const auto& otcomp = to_struct_type(ot_base).components();
+    if(otcomp.size()!=0 && dereference_type_compare(otcomp[0].type(),dereference_type))
+      return true; // dt is a prefix (specifically the first field) of ot
+  }
+#endif
   
   // we are generous about code pointers
   if(dereference_type.id()==ID_code &&
@@ -454,6 +463,12 @@ value_set_dereferencet::valuet value_set_dereferencet::build_reference_to(
     // This is stuff like *((char *)5).
     // This is turned into an access to __CPROVER_memory[...].
 
+    if(language_mode==ID_java)
+    {
+      result.value=nil_exprt();
+      return result;
+    }
+    
     const symbolt &memory_symbol=ns.lookup(CPROVER_PREFIX "memory");    
     exprt symbol_expr=symbol_exprt(memory_symbol.name, memory_symbol.type);
 

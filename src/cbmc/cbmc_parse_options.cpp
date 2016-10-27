@@ -24,6 +24,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-programs/goto_convert_functions.h>
 #include <goto-programs/remove_function_pointers.h>
 #include <goto-programs/remove_virtual_functions.h>
+#include <goto-programs/remove_instanceof.h>
 #include <goto-programs/remove_returns.h>
 #include <goto-programs/remove_vector.h>
 #include <goto-programs/remove_complex.h>
@@ -45,6 +46,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-instrument/cover.h>
 
 #include <pointer-analysis/add_failed_symbols.h>
+
+#include <test_gen/java_test_case_generator.h>
 
 #include <analyses/goto_check.h>
 
@@ -262,6 +265,12 @@ void cbmc_parse_optionst::get_command_line_options(optionst &options)
   else
     options.set_option("pointer-check", false);
 
+  // disable runtime checks
+  if(cmdline.isset("disable-runtime-check"))
+    options.set_option("disable-runtime-check", true);
+  else
+    options.set_option("disable-runtime-check", false);
+
   // check for memory leaks
   if(cmdline.isset("memory-leak-check"))
     options.set_option("memory-leak-check", true);
@@ -458,6 +467,36 @@ void cbmc_parse_optionst::get_command_line_options(optionst &options)
 
   if(cmdline.isset("graphml-cex"))
     options.set_option("graphml-cex", cmdline.get_value("graphml-cex"));
+
+  if(cmdline.isset("existing-coverage"))
+    options.set_option("existing-coverage", cmdline.get_value("existing-coverage"));
+
+  if(cmdline.isset("gen-java-test-case"))
+    options.set_option("gen-java-test-case", true);
+
+  if(cmdline.isset("disable-testsuite-minimisation"))
+    options.set_option("disable-testsuite-minimisation", true);
+
+  if(cmdline.isset("java-max-vla-length"))
+    options.set_option("java-max-vla-length", cmdline.get_value("java-max-vla-length"));
+
+  if(cmdline.isset("cover-function-only"))
+    options.set_option("cover-function-only", true);
+
+  if(cmdline.isset("assertions-as-assumptions"))
+    options.set_option("assertions-as-assumptions", true);
+
+  if(cmdline.isset("java-disable-mocks"))
+    options.set_option("java-disable-mocks", true);
+
+  if(cmdline.isset("java-verify-mocks"))
+    options.set_option("java-verify-mocks", true);
+
+  if(cmdline.isset("java-mock-class"))
+    options.set_option("java-mock-class", cmdline.get_values("java-mock-class"));
+
+  if(cmdline.isset("java-no-mock-class"))
+    options.set_option("java-no-mock-class", cmdline.get_values("java-no-mock-class"));  
 }
 
 /*******************************************************************\
@@ -573,6 +612,27 @@ int cbmc_parse_optionst::doit()
 
   if(set_properties(goto_functions))
     return 7;
+
+  if(options.get_bool_option("gen-java-test-case"))
+    {
+      bmc.set_ui(get_ui());
+      java_test_case_generatort gen(ui_message_handler);
+      java_test_case_generatort::test_case_statust test_gen_retval =
+        gen.generate_java_test_case(options, symbol_table, goto_functions, bmc);
+      // we currently ignore the return value here, as success for test cases
+      // means somethin different than success for `do_bmc'
+      switch(test_gen_retval)
+      {
+        // Return 0 in case of test case generation. This differs from do_bmc
+        // which returns 0 in case of a valid property
+      case java_test_case_generatort::SUCCESS:
+        return 0;
+      case java_test_case_generatort::FAIL:
+      case java_test_case_generatort::ERROR:
+      default:
+        return 10;
+      }
+    }
 
   // do actual BMC
   return do_bmc(bmc, goto_functions);
@@ -899,6 +959,8 @@ bool cbmc_parse_optionst::process_goto_program(
     remove_function_pointers(symbol_table, goto_functions,
       cmdline.isset("pointer-check"));
     remove_virtual_functions(symbol_table, goto_functions);
+    // Similar removal of RTTI inspection:
+    remove_instanceof(symbol_table, goto_functions);
 
     // full slice?
     if(cmdline.isset("full-slice"))
@@ -936,6 +998,20 @@ bool cbmc_parse_optionst::process_goto_program(
         get_message_handler(), goto_functions);
     }
 
+    if(cmdline.isset("assertions-as-assumptions"))
+    {
+      // turn assertions (from generic checks) into assumptions
+      Forall_goto_functions(f_it, goto_functions)
+      {
+        goto_programt &body=f_it->second.body;
+        Forall_goto_program_instructions(i_it, body)
+        {
+          if(i_it->is_assert())
+  	    i_it->type= goto_program_instruction_typet::ASSUME;
+	}
+      }
+    }
+
     // add failed symbols
     // needs to be done before pointer analysis
     add_failed_symbols(symbol_table);
@@ -945,7 +1021,7 @@ bool cbmc_parse_optionst::process_goto_program(
     
     // add loop ids
     goto_functions.compute_loop_numbers();
-    
+
     // instrument cover goals
     
     if(cmdline.isset("cover"))
@@ -975,9 +1051,25 @@ bool cbmc_parse_optionst::process_goto_program(
         error() << "unknown coverage criterion" << eom;
         return true;
       }
-          
+
+
+      // check existing test goals
+      coverage_goalst goals;
+      if(cmdline.isset("existing-coverage"))
+      {
+        status() << "Check existing coverage goals" << eom;
+        //get file with covered test goals
+        const std::string coverage=cmdline.get_value("existing-coverage");
+        //get a coverage_goalst object
+        goals = coverage_goalst::get_coverage_goals(coverage,
+                                                    get_message_handler());;
+      }
+
       status() << "Instrumenting coverage goals" << eom;
-      instrument_cover_goals(symbol_table, goto_functions, c);
+      instrument_cover_goals(symbol_table,goto_functions,c,
+					   goals,
+					   cmdline.isset("cover-function-only"),
+					   cmdline.isset("no-trivial-tests"));
       goto_functions.update();
     }
 
@@ -1140,11 +1232,25 @@ void cbmc_parse_optionst::help()
     " --no-assumptions             ignore user assumptions\n"
     " --error-label label          check that label is unreachable\n"
     " --cover CC                   create test-suite with coverage criterion CC\n"
+    " --existing-coverage file     instrument non-covered test goals\n"
+    " --no-trivial-tests           exclude trivial coverage test goals\n"
     " --mm MM                      memory consistency model for concurrent programs\n"
     "\n"
-    "Java Bytecode frontend options:\n"
+    "Java Bytecode options:\n"
     " --classpath dir/jar          set the classpath\n"
     " --main-class class-name      set the name of the main class\n"
+    " --disable-runtime-check      disable runtime checks\n"
+    " --gen-java-test-case         generate test case\n" 
+    " --disable-testsuite-minimisation   do not minimise testsuite\n"
+    " --cover-function-only        add coverage instrumentation only to the entry function\n"
+    " --assertions-as-assumptions  convert assertions from generic checks into assumptions\n"
+    " --java-assume-inputs-non-null   never generate tests where direct or indirect parameters are null\n"
+    " --java-disable-mocks         disable use of Mockito to model opaque functions\n"
+    " --java-verify-mocks          check that runtime mock object interactions match expectations\n"
+    " --java-mock-class            force mocking of given class (wildcards supported)\n"
+    " --java-no-mock-class         disable mocking of given class (wildcards supported; default java.*)\n"
+    " --java-max-input-array-length   limit the length of nondeterministic arrays (default 5)\n"
+    " --java-max-vla-length        limit the length of user-code-created arrays\n"
     "\n"
     "Semantic transformations:\n"
     " --nondet-static              add nondeterministic initialization of variables with static lifetime\n"

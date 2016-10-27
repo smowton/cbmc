@@ -26,9 +26,13 @@ class java_bytecode_convert_classt:public messaget
 public:
   java_bytecode_convert_classt(
     symbol_tablet &_symbol_table,
-    message_handlert &_message_handler):
+    message_handlert &_message_handler,
+    const bool &_disable_runtime_checks,
+    int _max_array_length):
     messaget(_message_handler),
-    symbol_table(_symbol_table)
+    symbol_table(_symbol_table),
+    disable_runtime_checks(_disable_runtime_checks),
+    max_array_length(_max_array_length)
   {
   }
 
@@ -47,6 +51,8 @@ public:
 
 protected:
   symbol_tablet &symbol_table;
+  const bool &disable_runtime_checks;
+  int max_array_length;
 
   // conversion
   void convert(const classt &c);
@@ -130,7 +136,8 @@ void java_bytecode_convert_classt::convert(const classt &c)
   // now do methods
   for(const auto & it : c.methods)
     java_bytecode_convert_method(
-      *class_symbol, it, symbol_table, get_message_handler());
+      *class_symbol, it, symbol_table, get_message_handler(), 
+      disable_runtime_checks, max_array_length);
 
   // is this a root class?
   if(c.extends.empty())
@@ -216,6 +223,11 @@ void java_bytecode_convert_classt::convert(
     new_symbol.is_type=false;  
     new_symbol.value=gen_zero(field_type);
 
+    // Do we have the static field symbol already?
+    const auto s_it=symbol_table.symbols.find(new_symbol.name);
+    if(s_it!=symbol_table.symbols.end())
+      symbol_table.symbols.erase(s_it); // erase, we stubbed it
+    
     if(symbol_table.add(new_symbol))
     {
       error() << "failed to add static field symbol" << eom;
@@ -272,8 +284,10 @@ void java_bytecode_convert_classt::add_array_types()
     struct_type.components()[0].set_name("@java.lang.Object");
     struct_type.components()[0].type()=symbol_typet("java::java.lang.Object");
     struct_type.components()[1].set_name("length");
+    struct_type.components()[1].set_pretty_name("length");
     struct_type.components()[1].type()=java_int_type();
     struct_type.components()[2].set_name("data");
+    struct_type.components()[2].set_pretty_name("data");
     struct_type.components()[2].type()=
       pointer_typet(java_type_from_char(letters[i]));
 
@@ -300,11 +314,16 @@ Function: java_bytecode_convert_class
 
 bool java_bytecode_convert_class(
   const java_bytecode_parse_treet &parse_tree,
+  const bool &disable_runtime_checks,
   symbol_tablet &symbol_table,
-  message_handlert &message_handler)
+  message_handlert &message_handler,
+  int max_array_length)
 {
   java_bytecode_convert_classt java_bytecode_convert_class(
-    symbol_table, message_handler);
+			       symbol_table, 
+			       message_handler, 
+			       disable_runtime_checks,
+			       max_array_length);
 
   try
   {

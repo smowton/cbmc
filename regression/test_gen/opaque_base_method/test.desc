@@ -1,0 +1,7 @@
+CORE
+TestGenTest.class
+--stop-on-fail --gen-java-test-case --function TestGenTest.test
+^EXIT=0$
+^SIGNAL=0$
+mock(Known.class)
+Known_x_answer_list\.add(1)

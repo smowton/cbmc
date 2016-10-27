@@ -28,7 +28,7 @@ class optionst;
   "D:I:(c89)(c99)(c11)(cpp89)(cpp99)(cpp11)" \
   "(classpath):(cp):(main-class):" \
   "(depth):(partial-loops)(no-unwinding-assertions)(unwinding-assertions)" \
-  "(bounds-check)(pointer-check)(div-by-zero-check)(memory-leak-check)" \
+  "(bounds-check)(pointer-check)(disable-runtime-check)(div-by-zero-check)(memory-leak-check)" \
   "(signed-overflow-check)(unsigned-overflow-check)(float-overflow-check)(nan-check)" \
   "(no-assertions)(no-assumptions)" \
   "(xml-ui)(xml-interface)(json-ui)" \
@@ -45,7 +45,8 @@ class optionst;
   "(stop-on-fail)(trace)" \
   "(error-label):(verbosity):(no-library)" \
   "(version)" \
-  "(cover):" \
+  "(assertions-as-assumptions)" \
+  "(cover):(cover-function-only)" \
   "(mm):" \
   "(i386-linux)(i386-macos)(i386-win32)(win32)(winx64)(gcc)" \
   "(ppc-macos)(unsigned-char)" \
@@ -53,7 +54,13 @@ class optionst;
   "(string-abstraction)(no-arch)(arch):" \
   "(round-to-nearest)(round-to-plus-inf)(round-to-minus-inf)(round-to-zero)" \
   "(graphml-cex):" \
+  "(gen-java-test-case)(disable-testsuite-minimisation)"\
+  "(java-assume-inputs-non-null)(java-disable-mocks)"\
+  "(java-verify-mocks)" \
+  "(java-max-input-array-length):(java-mock-class):(java-no-mock-class):"\
+  "(java-max-vla-length):"\
   "(localize-faults)(localize-faults-method):" \
+  "(no-trivial-tests)(existing-coverage):" \
   "(floatbv)(all-claims)(all-properties)" // legacy, and will eventually disappear
 
 class cbmc_parse_optionst:

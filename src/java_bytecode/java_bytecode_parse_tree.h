@@ -19,6 +19,11 @@ Author: Daniel Kroening, kroening@kroening.com
 class java_bytecode_parse_treet
 {
 public:
+  typedef unsigned char u1;
+  typedef unsigned short u2;
+  typedef unsigned int u4;
+  typedef unsigned long long u8;
+
   class annotationt
   {
   public:
@@ -72,6 +77,7 @@ public:
   public:
     irep_idt base_name;
     bool is_native, is_abstract, is_synchronized;
+    source_locationt source_location;
 
     typedef std::vector<instructiont> instructionst;
     instructionst instructions;
@@ -84,6 +90,11 @@ public:
     
     class exceptiont
     {
+    public:
+      std::size_t start_pc;
+      std::size_t end_pc;
+      std::size_t handler_pc;
+      symbol_typet catch_type;
     };
     
     typedef std::vector<exceptiont> exception_tablet;

@@ -8,6 +8,9 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <iostream>
 
+#include <vector>
+#include <algorithm>    
+
 #include <util/time_stopping.h>
 #include <util/xml.h>
 #include <util/xml_expr.h>
@@ -20,6 +23,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-symex/build_goto_trace.h>
 #include <goto-programs/xml_goto_trace.h>
 #include <goto-programs/json_goto_trace.h>
+
+#include <test_gen/java_test_case_generator.h>
 
 #include "bmc.h"
 #include "bv_cbmc.h"
@@ -108,7 +113,9 @@ public:
   struct testt
   {
     goto_tracet goto_trace;
-    std::vector<irep_idt> covered_goals;
+    std::set<irep_idt> covered_goals;
+    std::string source_code;
+    std::string test_function_name;
   };
   
   inline irep_idt id(goto_programt::const_targett loc)
@@ -120,6 +127,83 @@ public:
   goal_mapt goal_map;
   typedef std::vector<testt> testst;
   testst tests;
+
+  static void print_testsuite(const testst &tests) 
+  {
+    int i=1;
+    for(auto &test : tests)
+    {
+      std::cout << "Goals in test " << i << " : " << std::endl;
+      for (auto &goal : test.covered_goals)
+        std::cout << id2string(goal) << ";";
+
+      std::cout << std::endl;
+      i++;
+    }
+  }
+  
+  static void copy_testsuite(const testst &from, testst &to) 
+  {
+    to.clear();
+    for(testst::const_iterator it=from.begin(); it!=from.end(); it++) 
+    {
+      to.push_back(*it);
+    }
+  }
+
+// compute covered goals set difference
+  static void goals_diff(std::set<irep_idt> &goals1, std::set<irep_idt> &goals2) 
+  {
+    std::set<irep_idt>::iterator it1=goals1.begin();
+    std::set<irep_idt>::iterator it2=goals2.begin();
+    while (it1!=goals1.end() && it2!=goals2.end()) 
+    {
+      if (*it1<*it2) ++it1;
+      else if (*it2<*it1) ++it2;
+      else 
+      {
+        ++it2;
+        it1=goals1.erase(it1);
+      }
+    }
+  }
+  
+  static bool compare_tests(testt x,testt y) { return x.covered_goals.size()>y.covered_goals.size(); }
+
+// greedy n^2 algorithm by descending ordering
+  void minimise_testsuite(testst& tsi, testst& tso, const unsigned no_goals) 
+  {
+    testst tss;
+    unsigned no_covered=0;
+    std::vector<irep_idt> goals;
+    goals.clear();
+
+    //print_testsuite(tsi);
+    copy_testsuite(tsi,tss);
+
+    while(!tss.empty()) 
+    {
+      std::sort(tss.begin(), tss.end(), compare_tests); // descending order of remaining test cases
+      testt tc=*tss.begin(); // pick the first test 
+      if(tc.covered_goals.empty()) break; // break if it does not contribute (and so do the remaining ones)
+      tss.erase(tss.begin()); // remove test case on top
+      tso.push_back(tc); // add it to the output suite
+      no_covered+=tc.covered_goals.size();
+      if(no_covered==no_goals)
+        break; // we've covered all the goals
+      for(auto &it : tss)
+      {
+        if(it.covered_goals.empty()) break; // break if remaining test cases will not contribute anyway
+        goals_diff(it.covered_goals,tc.covered_goals); // remove goals that are covered by the picked one
+      }    
+    }
+
+    status() << "Reduced from " << tsi.size() << " to " 
+	     << tso.size() << " test cases " <<messaget::eom;
+
+    //std::cout << "After minimisation:" << std::endl;
+    //print_testsuite(tso);
+  }
   
   std::string get_test(const goto_tracet &goto_trace) const
   {
@@ -170,9 +254,13 @@ void bmc_covert::satisfying_assignment()
   {
     goalt &g=g_it.second;
     
+#if 0 // removed the filtering of already covered goals as we need the list
+    // of all covered goals for subsequent testsuite minimisation.
+
     // covered already?
     if(g.satisfied) continue;
-  
+#endif 
+ 
     // check whether satisfied
     for(const auto &c_it : g.instances)
     {
@@ -182,7 +270,7 @@ void bmc_covert::satisfying_assignment()
       {
         status() << "Covered " << g.description << messaget::eom;
         g.satisfied=true;
-        test.covered_goals.push_back(g_it.first);
+        test.covered_goals.insert(g_it.first);
         break;
       }
     }
@@ -214,6 +302,9 @@ void bmc_covert::satisfying_assignment()
   show_goto_trace(std::cout, bmc.ns, test.goto_trace);
   #endif
 }
+
+
+
 
 /*******************************************************************\
 
@@ -302,13 +393,43 @@ bool bmc_covert::operator()()
     status() << "Runtime decision procedure: "
              << (sat_stop-sat_start) << "s" << eom;
   }
-  
+
+  // should we minimise testsuite?
+  if(!bmc.options.get_bool_option("disable-testsuite-minimisation"))
+  {
+    testst tests_min;
+    minimise_testsuite(tests, tests_min, goal_map.size());
+    copy_testsuite(tests_min, tests);
+  }
+
   // report
   unsigned goals_covered=0;
   
   for(const auto & it : goal_map)
     if(it.second.satisfied) goals_covered++;
-  
+
+  if (bmc.options.get_bool_option("gen-java-test-case"))
+  {
+    size_t test_case_no=0;
+    for(auto& test : tests)
+    {
+      java_test_case_generatort gen(get_message_handler());
+      std::vector<std::string> goal_names;
+      for(const auto& goalid : test.covered_goals)
+        goal_names.push_back(
+                             as_string(goal_map.at(goalid).description)
+                             + "\n *  "
+                             + id2string(goal_map.at(goalid).source_location.get_file())
+                             + ":"
+                             + id2string(goal_map.at(goalid).source_location.get_line()));
+      test.test_function_name=gen.generate_test_func_name(bmc.ns.get_symbol_table(),
+                                                          goto_functions, test_case_no);
+      test.source_code=gen.generate_java_test_case(bmc.options,bmc.ns.get_symbol_table(),
+                                                   goto_functions,test.goto_trace,
+                                                   ++test_case_no,goal_names);
+    }
+  }
+
   switch(bmc.ui)
   {
     case ui_message_handlert::PLAIN:
@@ -328,10 +449,13 @@ bool bmc_covert::operator()()
 
         status() << ": " << (goal.satisfied?"SATISFIED":"FAILED")
                  << eom;
+
       }
-
-      status() << '\n';
-
+      for(const auto& it : tests)
+      {
+        if(it.source_code.length()!=0)
+          status() << it.source_code << '\n';
+      }
       break;
     }
 
@@ -431,6 +555,11 @@ bool bmc_covert::operator()()
             }
           }
         }
+        if(test.source_code.length()!=0)
+        {
+          result["name"]=json_stringt(test.test_function_name);
+          result["test"]=json_stringt(test.source_code);
+        }
         json_arrayt &goal_refs=result["coveredGoals"].make_array();
         for(const auto & goal_id : test.covered_goals)
         {
@@ -460,7 +589,7 @@ bool bmc_covert::operator()()
     for(const auto & test : tests)
       std::cout << get_test(test.goto_trace) << '\n';
   }
-  
+
   return false;
 }
 

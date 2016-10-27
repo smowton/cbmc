@@ -21,6 +21,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-programs/set_properties.h>
 #include <goto-programs/remove_function_pointers.h>
 #include <goto-programs/remove_virtual_functions.h>
+#include <goto-programs/remove_instanceof.h>
 #include <goto-programs/remove_returns.h>
 #include <goto-programs/remove_vector.h>
 #include <goto-programs/remove_complex.h>
@@ -531,8 +532,12 @@ int goto_analyzer_parse_optionst::doit()
       call_grapht const call_graph(goto_model.goto_functions);
       std::vector<irep_idt> process_order;
       get_inverted_topological_order(call_graph,goto_model.goto_functions,process_order);
+      size_t total_funcs=process_order.size();
+      size_t processed=0;
       for(const auto& fname : process_order)
       {
+	if(fname=="_start")
+	  continue;
         debug() << "LVSA: analysing " << fname << eom;
         const auto& gf=goto_model.goto_functions.function_map.at(fname);
         if(!gf.body_available())
@@ -541,7 +546,10 @@ int goto_analyzer_parse_optionst::doit()
           ns,gf.type,id2string(fname),summarydb,LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET);
         value_set_analysis.set_message_handler(get_message_handler());
         value_set_analysis(gf.body);
-        show_value_sets(get_ui(), gf.body, value_set_analysis);
+	if(ui_message_handler.get_verbosity()>=message_clientt::M_DEBUG)
+	  show_value_sets(get_ui(), gf.body, value_set_analysis);
+	else
+	  progress() << (++processed) << "/" << total_funcs << " functions analysed" << eom;
         if(dbpath.size()!=0)
           value_set_analysis.save_summary(gf.body);
       }
@@ -695,6 +703,8 @@ bool goto_analyzer_parse_optionst::process_goto_program(
     status() << "Removing function pointers and virtual functions" << eom;
     remove_function_pointers(goto_model, cmdline.isset("pointer-check"));
     remove_virtual_functions(goto_model);
+    // remove rtti
+    remove_instanceof(goto_model);
 
     // do partial inlining
     status() << "Partial Inlining" << eom;

@@ -1,9 +1,12 @@
+CONFIGDIR := $(dir $(lastword $(MAKEFILE_LIST)))
+
 # Build platform (use one of AUTO, Unix, OSX_Universal, MSVC, Cygwin, MinGW)
 BUILD_ENV = AUTO
 
 # Variables you may want to override
 #CXXFLAGS = -Wall -O0 -g -Werror -Wno-long-long -Wno-sign-compare -Wno-parentheses -Wno-strict-aliasing -pedantic
 #CXXFLAGS = -std=c++11
+#CXXFLAGS = -ggdb3
 
 CXXFLAGS = -std=c++11 -Wall -O0 -g
 
@@ -26,3 +29,5 @@ LIBZIPINC = ../../libzip/lib
 # Signing identity for MacOS Gatekeeper
 
 OSX_IDENTITY="3rd Party Mac Developer Application: Daniel Kroening"
+
+-include $(CONFIGDIR)/config.local

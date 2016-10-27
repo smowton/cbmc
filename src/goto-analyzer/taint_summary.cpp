@@ -43,6 +43,8 @@ protected:
   const irep_idt id;
 };
 
+typedef taint_lvalues_sett written_expressionst;
+
 /*******************************************************************\
 
 Function:
@@ -62,6 +64,7 @@ static void  initialise_domain(
     namespacet const&  ns,
     database_of_summariest const&  database,
     taint_symmary_domaint&  domain,
+    written_expressionst& written,
     local_value_set_analysist* lvsa,
     std::ostream* const  log
     )
@@ -79,11 +82,14 @@ static void  initialise_domain(
         if(lvsa)
         {
           collect_lvsa_access_paths(asgn.lhs(),ns,environment,*lvsa,it);
+          collect_lvsa_access_paths(asgn.lhs(),ns,written,*lvsa,it);          
           collect_lvsa_access_paths(asgn.rhs(),ns,environment,*lvsa,it);
         }
         else
         {
-          environment.insert(normalise(asgn.lhs(),ns));          
+          exprt lhs=normalise(asgn.lhs(),ns);
+          environment.insert(lhs);
+          written.insert(lhs);
           collect_access_paths(asgn.rhs(),ns,environment);
         }
       }
@@ -120,6 +126,7 @@ static void  initialise_domain(
           taint_summary_ptrt const  summary =
               database.find<taint_summaryt>(callee_ident);
           if (summary.operator bool())
+          {
             for (auto const&  lvalue_svalue : summary->input())
             {
               if (is_parameter(lvalue_svalue.first,ns))
@@ -149,7 +156,11 @@ static void  initialise_domain(
                           ns
                           )
                       );
+             
             }
+            for(auto const&  lvalue_svalue : summary->output())
+              written.insert(lvalue_svalue.first);            
+          }
         }
       }
   }
@@ -160,7 +171,7 @@ static void  initialise_domain(
     if (!is_pure_local(lvalue,ns) &&
         !is_return_value_auxiliary(lvalue,ns) &&
         !is_this(lvalue,ns) &&
-        !(lvalue.id()==ID_dynamic_object))
+        !(get_underlying_object(lvalue).id()==ID_dynamic_object))
     {
       entry_map.insert({lvalue, taint_make_symbol() });
       others_map.insert({lvalue, taint_make_bottom() });
@@ -260,6 +271,9 @@ static void expand_external_objects(taint_lvalues_sett& lvalue_set,
   // Whenever a value like external_value_set("external_objects.x") occurs,
   // expand that to include the 'x' fields of all objects we know about,
   // as what is external to the callee might be local to us.
+  // For external_objects[], include all arrays. For now we assume that array-accessed
+  // and field-accessed objects are disjoint (true in Java, true for a subset of
+  // well-behaved C programs)
 
   // Leave the external-objects entry there, since it might refer to things that
   // are external to *us* as well.
@@ -279,18 +293,32 @@ static void expand_external_objects(taint_lvalues_sett& lvalue_set,
         assert(evse.access_path_size()==1);
         std::string fieldname=id2string(evse.access_path_back().label());
         assert(fieldname.size()>=2);
-        assert(fieldname[0]=='.');
-        fieldname=fieldname.substr(1);
-        // This represents a given field of all objects
-        // preceding entering this function.
-        // Return all known keys that match the field.
-        for(const auto& keyval : all_keys)
+        if(fieldname[0]=='.')
         {
-          const auto& key=keyval.first;
-          if(key.id()==ID_member)
+          fieldname=fieldname.substr(1);
+          // This represents a given field of all objects
+          // preceding entering this function.
+          // Return all known keys that match the field.
+          for(const auto& keyval : all_keys)
           {
-            auto key_field=to_member_expr(key).get_component_name();
-            if(key_field==fieldname)
+            const auto& key=keyval.first;
+            if(key.id()==ID_member)
+            {
+              auto key_field=to_member_expr(key).get_component_name();
+              if(key_field==fieldname)
+                new_keys.push_back(key);
+            }
+          }
+        }
+        else
+        {
+          assert(fieldname=="[]");
+          // Return all array-typed objects we know about.
+          // In current taint domain with LVSA, that's anything dynamic without a member operator.
+          for(const auto& keyval : all_keys)
+          {
+            const auto& key=keyval.first;
+            if(key.id()==ID_dynamic_object)
               new_keys.push_back(key);
           }
         }
@@ -437,6 +465,7 @@ static void  build_substituted_summary(
     taint_map_from_lvalues_to_svaluest const&  original_summary,
     std::unordered_map<taint_svaluet::taint_symbolt,taint_svaluet> const&
         symbols_substitution,
+    taint_map_from_lvalues_to_svaluest const& local_lvalues,
     irep_idt const&  caller_ident,
     irep_idt const&  callee_ident,
     code_function_callt const&  fn_call,
@@ -457,21 +486,27 @@ static void  build_substituted_summary(
           );
     if (!is_empty(translated_lvalue))
     {
-      if (lvalue_svalue.second.is_bottom() || lvalue_svalue.second.is_top())
-        substituted_summary.insert({translated_lvalue,lvalue_svalue.second});
-      else
+      taint_lvalues_sett lhs_set;
+      lhs_set.insert(translated_lvalue);
+      expand_external_objects(lhs_set,local_lvalues);
+      for(const auto& lhs : lhs_set)
       {
-        taint_svaluet  substituted_svalue = taint_make_bottom();
-        for (auto const&  symbol : lvalue_svalue.second.expression())
-        {
-          auto const  it = symbols_substitution.find(symbol);
-          if (it != symbols_substitution.cend())
-            substituted_svalue = join(substituted_svalue,it->second);
-          else
-            substituted_svalue =
-                join(substituted_svalue,{{symbol},false,false});
-        }
-        substituted_summary.insert({translated_lvalue,substituted_svalue});
+	if (lvalue_svalue.second.is_bottom() || lvalue_svalue.second.is_top())
+	  substituted_summary.insert({lhs,lvalue_svalue.second});
+	else
+	{
+	  taint_svaluet  substituted_svalue = taint_make_bottom();
+	  for (auto const&  symbol : lvalue_svalue.second.expression())
+	  {
+	    auto const  it = symbols_substitution.find(symbol);
+	    if (it != symbols_substitution.cend())
+	      substituted_svalue = join(substituted_svalue,it->second);
+	    else
+	      substituted_svalue =
+		join(substituted_svalue,{{symbol},false,false});
+	  }
+	  substituted_summary.insert({lhs,substituted_svalue});
+	}
       }
     }
   }
@@ -498,6 +533,7 @@ Function:
 \*******************************************************************/
 static void  build_summary_from_computed_domain(
     taint_summary_domain_ptrt const  domain,
+    written_expressionst const& written,
     taint_map_from_lvalues_to_svaluest&  output,
     goto_functionst::function_mapt::const_iterator const  fn_iter,
     namespacet const&  ns,
@@ -515,7 +551,7 @@ static void  build_summary_from_computed_domain(
   taint_map_from_lvalues_to_svaluest const&  end_svalue =
       domain->at(std::prev(fn_iter->second.body.instructions.cend()));
   for (auto  it = end_svalue.cbegin(); it != end_svalue.cend(); ++it)
-    if (!is_pure_local(it->first,ns) && !is_parameter(it->first,ns))
+    if ((!is_pure_local(it->first,ns)) && (!is_parameter(it->first,ns)) && written.count(it->first))
     {
       output.insert(*it);
 
@@ -742,18 +778,30 @@ static void collect_referee_access_paths(
   }
 }
 
-static exprt replace_member_of_external_objects(const exprt& e)
+static exprt transform_external_objects(const exprt& e)
 {
   if(e.id()==ID_member && e.op0().id()=="external-value-set")
   {
-    // Fold any member-of-external expression into the external value set within,
-    // to avoid using multiple distinct exprts to refer to the same alias set.
+    // Rewrite member(externals, "x") as externals("x"), to make subsequent processing easier
+    // Note this means we use externals("x") to mean "any x field" whereas LVSA uses it to mean
+    // deref(any x field)
     auto evs_copy=to_external_value_set(e.op0());
     access_path_entry_exprt new_entry("."+id2string(to_member_expr(e).get_component_name()),"","");
     evs_copy.extend_access_path(new_entry);
     evs_copy.label()=constant_exprt("external_objects",string_typet());
     evs_copy.type()=e.type();
     return evs_copy;
+  }
+  else if(e.id()=="external-value-set")
+  {
+    // Similarly, deref(any external), without a member operator, is assumed to be an array access,
+    // and is rewritten to (any array)
+    auto evs_copy=to_external_value_set(e);
+    access_path_entry_exprt new_entry("[]","","");
+    evs_copy.extend_access_path(new_entry);
+    evs_copy.label()=constant_exprt("external_objects",string_typet());
+    evs_copy.type()=e.type();
+    return evs_copy;    
   }
   else
     return e;
@@ -781,7 +829,7 @@ static void collect_lvsa_access_paths(
         continue;
       }
       assert(target.id()==ID_object_descriptor);
-      result.insert(replace_member_of_external_objects(to_object_descriptor_expr(target).object()));
+      result.insert(transform_external_objects(to_object_descriptor_expr(target).object()));
     }
   }
   else
@@ -813,6 +861,77 @@ exprt find_taint_expression(const exprt &expr)
     return expr;
 }
 
+static void handle_assignment(
+    const code_assignt& asgn,
+    taint_map_from_lvalues_to_svaluest const&  a,
+    taint_map_from_lvalues_to_svaluest& result,  
+    instruction_iteratort const& Iit,
+    local_value_set_analysist* lvsa,
+    namespacet const&  ns,
+    std::ostream* const  log)
+{
+
+  const auto& lhs_type=ns.follow(asgn.lhs().type());
+  if(lhs_type.id()==ID_struct)
+  {
+    // Process a struct assignment as multiple field assignments.
+    const auto& struct_type=to_struct_type(lhs_type);
+    for(const auto& c : struct_type.components())
+    {
+      code_assignt member_assign(member_exprt(asgn.lhs(),c.get_name(),c.type()),
+				 member_exprt(asgn.rhs(),c.get_name(),c.type()));
+      handle_assignment(member_assign,a,result,Iit,lvsa,ns,log);
+    }
+    return;
+  }
+  
+  if (log != nullptr)
+    {
+      *log << "<p>\nRecognised ASSIGN instruction. Left-hand-side "
+	"l-value is { ";
+      taint_dump_lvalue_in_html(normalise(asgn.lhs(),ns),ns,*log);
+      *log << " }. Right-hand-side l-values are { ";
+    }
+
+  taint_svaluet  rvalue = taint_make_bottom();
+  {
+    taint_lvalues_sett  rhs;
+    if(!lvsa)
+      collect_access_paths(asgn.rhs(),ns,rhs);
+    else
+      collect_lvsa_access_paths(asgn.rhs(),ns,rhs,*lvsa,Iit);
+    for (auto const&  lvalue : rhs)
+      {
+	auto const  it = a.find(lvalue);
+	if (it != a.cend())
+	  rvalue = join(rvalue,it->second);
+
+	if (log != nullptr)
+          {
+            taint_dump_lvalue_in_html(lvalue,ns,*log);
+            *log << ", ";
+          }
+      }
+  }
+
+  if (log != nullptr)
+    *log << "}.</p>\n";
+
+  if(!lvsa)
+    assign(result,normalise(asgn.lhs(),ns),rvalue);
+  else {
+    taint_lvalues_sett lhs;
+    collect_lvsa_access_paths(asgn.lhs(),ns,lhs,*lvsa,Iit);
+    for(const auto& path : lhs)
+      {
+	if(lhs.size()>1 || (lhs.size()==1 && !is_singular_object(path)))
+	  maybe_assign(result,normalise(path,ns),rvalue);
+	else
+	  assign(result,normalise(path,ns),rvalue);
+      }
+  }
+
+}
 
 taint_map_from_lvalues_to_svaluest  transform(
     taint_map_from_lvalues_to_svaluest const&  a,
@@ -832,52 +951,7 @@ taint_map_from_lvalues_to_svaluest  transform(
   case ASSIGN:
     {
       code_assignt const&  asgn = to_code_assign(I.code);
-
-      if (log != nullptr)
-      {
-        *log << "<p>\nRecognised ASSIGN instruction. Left-hand-side "
-                "l-value is { ";
-        taint_dump_lvalue_in_html(normalise(asgn.lhs(),ns),ns,*log);
-        *log << " }. Right-hand-side l-values are { ";
-      }
-
-      taint_svaluet  rvalue = taint_make_bottom();
-      {
-        taint_lvalues_sett  rhs;
-        if(!lvsa)
-          collect_access_paths(asgn.rhs(),ns,rhs);
-        else
-          collect_lvsa_access_paths(asgn.rhs(),ns,rhs,*lvsa,Iit);
-        for (auto const&  lvalue : rhs)
-        {
-          auto const  it = a.find(lvalue);
-          if (it != a.cend())
-            rvalue = join(rvalue,it->second);
-
-          if (log != nullptr)
-          {
-            taint_dump_lvalue_in_html(lvalue,ns,*log);
-            *log << ", ";
-          }
-        }
-      }
-
-      if (log != nullptr)
-        *log << "}.</p>\n";
-
-      if(!lvsa)
-        assign(result,normalise(asgn.lhs(),ns),rvalue);
-      else {
-        taint_lvalues_sett lhs;
-        collect_lvsa_access_paths(asgn.lhs(),ns,lhs,*lvsa,Iit);
-        for(const auto& path : lhs)
-        {
-          if(lhs.size()>1)
-            maybe_assign(result,normalise(path,ns),rvalue);
-          else
-            assign(result,normalise(path,ns),rvalue);
-        }
-      }
+      handle_assignment(asgn,a,result,Iit,lvsa,ns,log);
     }
     break;
   case FUNCTION_CALL:
@@ -917,6 +991,7 @@ taint_map_from_lvalues_to_svaluest  transform(
                   substituted_summary,
                   summary->output(),
                   symbols_substitution,
+		  a,
                   caller_ident,
                   callee_ident,
                   fn_call,
@@ -1011,6 +1086,14 @@ taint_map_from_lvalues_to_svaluest  transform(
           }
         }
       }
+    }
+    else if(I.code.get_statement()==ID_array_set)
+    {
+      // Handle array zero-init like assigning bottom:
+      code_assignt fake_assignment;
+      fake_assignment.lhs()=dereference_exprt(I.code.op0(),I.code.op0().type().subtype());
+      fake_assignment.rhs()=constant_exprt("0",I.code.op0().type().subtype());
+      handle_assignment(fake_assignment,a,result,Iit,lvsa,ns,log);
     }
     else
       if (log != nullptr)
@@ -1143,6 +1226,8 @@ void  taint_summarise_all_functions(
                                  inverted_topological_order);
   for (auto const&  fn_name : inverted_topological_order)
   {
+    if(fn_name=="_start")
+      continue;
     goto_functionst::function_mapt  const  functions_map =
         instrumented_program.goto_functions.function_map;
     auto const  fn_it = functions_map.find(fn_name);
@@ -1195,6 +1280,8 @@ taint_summary_ptrt  taint_summarise_function(
   }
   
   taint_summary_domain_ptrt  domain = std::make_shared<taint_symmary_domaint>();
+  written_expressionst written_lvalues;
+  
   initialise_domain(
         function_id,
         fn_iter->second,
@@ -1202,6 +1289,7 @@ taint_summary_ptrt  taint_summarise_function(
         ns,
         database,
         *domain,
+        written_lvalues,
         lvsa,
         log
         );
@@ -1285,6 +1373,7 @@ taint_summary_ptrt  taint_summarise_function(
   taint_map_from_lvalues_to_svaluest  output;
   build_summary_from_computed_domain(
         domain,
+        written_lvalues,
         output,
         fn_iter,
         ns,

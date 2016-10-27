@@ -69,6 +69,17 @@ static void build_ssa_identifier_rec(
     assert(false);
 }
 
+bool ssa_exprt::can_build_identifier(const exprt &expr)
+{
+  if(expr.id()==ID_symbol)
+    return true;
+  else if(expr.id()==ID_member ||
+          expr.id()==ID_index)
+    return can_build_identifier(expr.op0());
+  else
+    return false;
+}
+
 /*******************************************************************\
 
 Function: ssa_exprt::build_identifier
@@ -93,4 +104,6 @@ irep_idt ssa_exprt::build_identifier(
 
   return oss.str();
 }
+
+
 

@@ -1,0 +1,9 @@
+CORE
+TestGenTest.class
+--stop-on-fail --gen-java-test-case --function TestGenTest.test
+^EXIT=0$
+^SIGNAL=0$
+^.*100l.*$
+^.*setInstanceField.*3.*$
+^.*setInstanceField.*4.*$
+^.*1, 2.*$

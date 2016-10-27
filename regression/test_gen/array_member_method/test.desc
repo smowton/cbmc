@@ -1,0 +1,13 @@
+CORE
+TestGenTest.class
+--stop-on-fail --gen-java-test-case --function TestGenTest.test
+^EXIT=0$
+^SIGNAL=0$
+{ 10, 20 }
+B_get_answer_list.add(30);
+B_get_answer_list.add(40);
+B_get_answer_list.add(50);
+B_get_answer_list.add(60);
+{ dynamic_object., dynamic_object. };
+.*setInstanceField(.*"arr1".*);
+.*setInstanceField(.*"arr2".*);

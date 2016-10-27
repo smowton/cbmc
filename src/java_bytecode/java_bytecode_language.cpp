@@ -9,16 +9,41 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/symbol_table.h>
 #include <util/suffix.h>
 #include <util/config.h>
+#include <util/cmdline.h>
+#include <util/string2int.h>
 
 #include "java_bytecode_language.h"
 #include "java_bytecode_convert_class.h"
 #include "java_bytecode_internal_additions.h"
 #include "java_bytecode_typecheck.h"
 #include "java_entry_point.h"
+#include "java_opaque_method_stubs.h"
 #include "java_bytecode_parser.h"
 #include "java_class_loader.h"
 
 #include "expr2java.h"
+
+/*******************************************************************\
+
+Function: java_bytecode_languaget::get_language_options
+
+  Inputs: Command-line options
+
+ Outputs: None
+
+ Purpose: Consume options that are java bytecode specific.
+
+\*******************************************************************/
+
+void java_bytecode_languaget::get_language_options(const cmdlinet& cmd)
+{
+  disable_runtime_checks=cmd.isset("disable-runtime-check");
+  assume_inputs_non_null=cmd.isset("java-assume-inputs-non-null");
+  if(cmd.isset("java-max-input-array-length"))
+    max_nondet_array_length=safe_string2int(cmd.get_value("java-max-input-array-length"));
+  if(cmd.isset("java-max-vla-length"))
+    max_user_array_length=safe_string2int(cmd.get_value("java-max-vla-length"));
+}
 
 /*******************************************************************\
 
@@ -172,7 +197,11 @@ bool java_bytecode_languaget::typecheck(
     debug() << "Converting class " << c_it->first << eom;
 
     if(java_bytecode_convert_class(
-         c_it->second, symbol_table, get_message_handler()))
+         c_it->second, 
+	 disable_runtime_checks,
+	 symbol_table, 
+	 get_message_handler(),
+	 max_user_array_length))
       return true;
   }
 
@@ -203,7 +232,18 @@ bool java_bytecode_languaget::final(symbol_tablet &symbol_table)
   */
   java_internal_additions(symbol_table);
 
-  if(java_entry_point(symbol_table, main_class, get_message_handler()))
+
+  std::tuple<symbolt, bool, bool> t = get_main_symbol(symbol_table, main_class, get_message_handler());
+  if(std::get<2>(t))
+    return std::get<1>(t);
+
+  symbolt entry = std::get<0>(t);
+
+  java_generate_opaque_method_stubs(symbol_table,assume_inputs_non_null,
+				    max_nondet_array_length, entry.location);
+
+  if(java_entry_point(symbol_table,main_class,get_message_handler(),
+		      assume_inputs_non_null,max_nondet_array_length))
     return true;
   
   return false;

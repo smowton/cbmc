@@ -4,6 +4,7 @@
 #include <cegis/cegis-util/program_helper.h>
 #include <cegis/control/value/control_vars.h>
 #include <cegis/control/simplify/remove_unused_elements.h>
+#include <cegis/control/preprocessing/propagate_controller_sizes.h>
 #include <cegis/control/preprocessing/control_preprocessing.h>
 
 control_preprocessingt::control_preprocessingt(const symbol_tablet &st,
@@ -14,10 +15,11 @@ control_preprocessingt::control_preprocessingt(const symbol_tablet &st,
 
 namespace
 {
-const char * const excluded_functions[]={
-    "verify_stability_closedloop_using_dslib", "check_stability_closedloop",
-    "fxp_double_to_fxp", "fxp_to_double", "ft_closedloop_series", "poly_mult",
-    "poly_sum", "internal_pow", "fxp_check", "fxp_control_floatt_to_fxp" };
+const char * const excluded_functions[]=
+    { "verify_stability_closedloop_using_dslib", "check_stability_closedloop",
+        "fxp_double_to_fxp", "fxp_to_double", "ft_closedloop_series",
+        "poly_mult", "poly_sum", "internal_pow", "fxp_check",
+        "fxp_control_floatt_to_fxp", "main", "validation" };
 
 bool is_meta(const goto_programt::const_targett pos)
 {
@@ -43,6 +45,7 @@ void control_preprocessingt::operator ()()
   goto_programt::targetst &locs=control_program.counterexample_locations;
   goto_programt &body=get_entry_body(gf);
   collect_counterexample_locations(locs, body, is_meta);
+  propagate_controller_sizes(st, gf);
 }
 
 void control_preprocessingt::operator ()(const size_t max_length) const

@@ -668,7 +668,21 @@ void value_sett::get_value_set_rec(
     if(op_type.id()==ID_pointer)
     {
       // pointer-to-pointer -- we just ignore these
-      get_value_set_rec(expr.op0(), dest, suffix, original_type, ns);
+      object_mapt tmp;
+      get_value_set_rec(expr.op0(), tmp, suffix, original_type, ns);
+      // ...except to fix up the types of external objects as they pass through:
+      for(const auto& num : tmp.read())
+      {
+        const auto& e=object_numbering[num.first];
+        if(e.id()=="external-value-set")
+        {
+          external_value_set_exprt evse_copy=to_external_value_set(e);
+          evse_copy.type()=expr.type().subtype();
+          insert(dest,evse_copy,num.second);
+        }
+        else
+          insert(dest,num.first,num.second);
+      }
     }
     else if(op_type.id()==ID_unsignedbv ||
             op_type.id()==ID_signedbv)
@@ -944,17 +958,21 @@ void value_sett::get_value_set_rec(
     const typet& field_type=type_from_suffix(expr.type(),suffix,ns);
     if(field_type.id()==ID_pointer)
     {
-    
+
+      std::string access_path_suffix=
+        suffix == "" ?
+        "[]" :
+        suffix;
       const auto& extinit=to_external_value_set(expr);
-      access_path_entry_exprt newentry(suffix,function,i2string(location_number));
+      access_path_entry_exprt newentry(access_path_suffix,function,i2string(location_number));
       external_value_set_exprt new_ext_set=extinit;
       new_ext_set.extend_access_path(newentry);
       new_ext_set.type()=field_type.subtype();
 
       std::string basename=new_ext_set.get_access_path_basename();
-      std::string entryname=basename+suffix;
+      std::string entryname=basename+access_path_suffix;
         
-      entryt entry(basename,suffix);
+      entryt entry(basename,access_path_suffix);
 
       // TODO: figure out how to do this sort of on-demand-insert
       // without such ugly const hacking:
@@ -1568,22 +1586,30 @@ void value_sett::assign_rec(
   {
     // Write through an opaque external value set.
     const auto& evsi=to_external_value_set(lhs);
-    access_path_entry_exprt newentry(suffix,function,i2string(location_number));
+    const typet& field_type=type_from_suffix(lhs.type(),suffix,ns);
+    std::string access_path_suffix=
+      suffix == "" ?
+      "[]" :
+      suffix;
+    access_path_entry_exprt newentry(access_path_suffix,function,i2string(location_number));
     external_value_set_exprt new_ext_set=evsi;
     new_ext_set.extend_access_path(newentry);
     
     const std::string basename=new_ext_set.get_access_path_basename();
-    std::string entryname=basename+suffix;
+    std::string entryname=basename+access_path_suffix;
     
-    entryt entry(basename,suffix);
+    entryt entry(basename,access_path_suffix);
 
     auto insert_result=const_cast<valuest&>(values).
       insert(std::make_pair(irep_idt(entryname),entry));
 
     auto& lhs_entry=insert_result.first->second;
     
-    if(insert_result.second)
+    if(insert_result.second && field_type.id()==ID_pointer)
+    {
+      new_ext_set.type()=field_type.subtype();
       insert(lhs_entry.object_map,new_ext_set);
+    }
 
     // Special case: if an ext-val-set with modified=false is written,
     // set modified=true before inserting, to represent the fact that
