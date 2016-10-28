@@ -894,8 +894,22 @@ static void collect_lvsa_access_paths(
         //std::cerr << "Warning: ignoring unknown value-set entry for now.\n";
         continue;
       }
+
       assert(target.id()==ID_object_descriptor);
-      result.insert(transform_external_objects(to_object_descriptor_expr(target).object()));
+      exprt const transformed_object =
+          transform_external_objects(
+              to_object_descriptor_expr(target).object()
+              );
+
+      if (transformed_object.id()==ID_symbol)
+      {
+        std::string const&  ident =
+            as_string(transformed_object.get(ID_identifier));
+        if (ident.find(".String.Literal.") != std::string::npos)
+          continue;
+      }
+
+      result.insert(transformed_object);
     }
   }
   else
