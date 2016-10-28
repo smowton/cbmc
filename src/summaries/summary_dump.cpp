@@ -320,10 +320,12 @@ static std::string  dump_callgraph_in_svg(
     call_graph.output_dot(functions,ostr);
   }
 
+  /*
   std::string const  command =
       msgstream() << "dot -Tsvg \"" << dot_filename
                   << "\" -o \"" << svg_file_pathname << "\"";
   std::system(command.c_str());
+  */
 
   return ""; // No error.
 }
@@ -609,6 +611,7 @@ std::string  dump_in_html(
 std::string  to_file_name(std::string  result)
 {
   std::replace( result.begin(),result.end(), '#', '_');
+  std::replace( result.begin(),result.end(), '$', '_');
   std::replace( result.begin(),result.end(), ':', '.');
   std::replace( result.begin(),result.end(), '/', '.');
   std::replace( result.begin(),result.end(), '<', '[');

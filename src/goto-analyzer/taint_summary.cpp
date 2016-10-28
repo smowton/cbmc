@@ -1216,7 +1216,7 @@ void  taint_summarise_all_functions(
     database_of_summariest&  summaries_to_compute,
     call_grapht const&  call_graph,
     std::ostream* const  log,
-    const std::string& lvsa_directory,
+    local_value_set_analysist::dbt* lvsa_database,
     message_handlert& msg
     )
 {
@@ -1245,7 +1245,7 @@ void  taint_summarise_all_functions(
               instrumented_program,
               summaries_to_compute,
               log,
-              lvsa_directory,
+              lvsa_database,
               msg
               ),
           });
@@ -1258,7 +1258,7 @@ taint_summary_ptrt  taint_summarise_function(
     goto_modelt const&  instrumented_program,
     database_of_summariest const&  database,
     std::ostream* const  log,
-    const std::string& lvsa_directory,
+    local_value_set_analysist::dbt* lvsa_database,
     message_handlert& msg
     )
 {
@@ -1276,14 +1276,17 @@ taint_summary_ptrt  taint_summarise_function(
   assert(fn_iter != functions.cend());
   assert(fn_iter->second.body_available());
 
-  local_value_set_analysist::dbt lvsa_db(lvsa_directory);
+  local_value_set_analysist::dbt emptydb("");
+  auto& use_database=lvsa_database ? *lvsa_database : emptydb;
   local_value_set_analysist lvsainst(ns,fn_iter->second.type,id2string(function_id),
-                                     lvsa_db,LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET);
-  local_value_set_analysist* lvsa=lvsa_directory=="" ? NULL : &lvsainst;
+                                     use_database,LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET);
+  local_value_set_analysist* lvsa=lvsa_database ? &lvsainst : nullptr;
   if(lvsa)
   {
     lvsainst.set_message_handler(msg);
     lvsainst(fn_iter->second.body);
+    // Retain this summary for use analysing callers.
+    lvsainst.save_summary(fn_iter->second.body);
   }
   
   taint_summary_domain_ptrt  domain = std::make_shared<taint_symmary_domaint>();
@@ -1386,5 +1389,6 @@ taint_summary_ptrt  taint_summarise_function(
         ns,
         log
         );
+
   return std::make_shared<taint_summaryt>(input,output,domain);
 }
