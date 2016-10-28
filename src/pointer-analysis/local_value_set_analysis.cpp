@@ -88,6 +88,8 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
   const irep_idt& fname, statet& state, locationt l_call, locationt l_return)
 {
 
+  ++nstubs;
+  
   const symbolt& function_symbol=ns.lookup(fname);
   const code_function_callt& fcall=to_code_function_call(l_call->code);
   
@@ -104,6 +106,7 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
 
   for(const auto& assignment : call_summary.field_assignments)
   {
+    ++nstub_assignments;
     const auto& rhs_expr=assignment.second;
     if(pre_call_rhs_value_sets.count(rhs_expr))
       continue;

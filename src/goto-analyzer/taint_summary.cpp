@@ -26,6 +26,7 @@ This module defines interfaces and functionality for taint summaries.
 #include <cstdint>
 #include <cassert>
 #include <stdexcept>
+#include <chrono>
 
 #include <iostream>
 
@@ -1270,6 +1271,9 @@ taint_summary_ptrt  taint_summarise_function(
     message_handlert& msg
     )
 {
+  messaget m;
+  m.set_message_handler(msg);
+ 
   if (log != nullptr)
     *log << "<h2>Called sumfn::taint::taint_summarise_function( "
          << to_html_text(as_string(function_id)) << " )</h2>\n"
@@ -1292,10 +1296,26 @@ taint_summary_ptrt  taint_summarise_function(
   if(lvsa)
   {
     lvsainst.set_message_handler(msg);
+
+    auto start_time = std::chrono::high_resolution_clock::now();
+    
     lvsainst(fn_iter->second.body);
     // Retain this summary for use analysing callers.
     lvsainst.save_summary(fn_iter->second.body);
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration =
+      std::chrono::duration_cast<std::chrono::microseconds>(end_time-start_time).count();
+    
+    m.progress() << "LVSA: " << function_id <<
+      " -- steps " << lvsainst.nsteps <<
+      " stubs " << lvsainst.nstubs <<
+      " stub_assigns " << lvsainst.nstub_assignments <<
+      " time " << duration / 1000 << "ms" <<
+      messaget::eom;
   }
+
+  auto start_time = std::chrono::high_resolution_clock::now();
   
   taint_summary_domain_ptrt  domain = std::make_shared<taint_symmary_domaint>();
   written_expressionst written_lvalues;
@@ -1408,10 +1428,12 @@ taint_summary_ptrt  taint_summarise_function(
         log
         );
 
+  auto end_time = std::chrono::high_resolution_clock::now();
+  auto duration =
+    std::chrono::duration_cast<std::chrono::microseconds>(end_time-start_time).count();
+  
   size_t this_summary_size=output.size();
 
-  messaget m;
-  m.set_message_handler(msg);
   m.progress() << "TA: " << function_id <<
     " insts " << fn_iter->second.body.instructions.size() <<
     " steps " << steps <<    
@@ -1419,7 +1441,9 @@ taint_summary_ptrt  taint_summarise_function(
     " outdomsize " << this_summary_size <<
     " summary_uses " << nsummary_uses <<
     " unique_summary_uses " << children_with_summaries.size() <<
-    " child_summary_inputs " << ndistinct_summary_inputs << messaget::eom;
+    " child_summary_inputs " << ndistinct_summary_inputs <<
+    " time " << duration / 1000 << "ms" <<
+    messaget::eom;
 
   return std::make_shared<taint_summaryt>(input,output,domain);
 }

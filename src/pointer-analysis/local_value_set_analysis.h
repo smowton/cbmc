@@ -36,6 +36,8 @@ class local_value_set_analysist : public value_set_analysist, public messaget {
                            dbt& summarydb,
                            local_value_set_analysis_modet m) :
   value_set_analysist(ns),
+    nstubs(0),
+    nstub_assignments(0),
     function_type(ftype),
     function_name(fname),
     mode(m),
@@ -54,6 +56,9 @@ class local_value_set_analysist : public value_set_analysist, public messaget {
 
   void load_summaries();
   void save_summary(const goto_programt&);
+
+  size_t nstubs;
+  size_t nstub_assignments;
 
  protected:
 
