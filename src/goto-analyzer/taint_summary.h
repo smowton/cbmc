@@ -53,6 +53,13 @@ public:
       bool  is_top
       );
 
+  taint_svaluet(
+      expressiont const&  expression,
+      expressiont const&  suppression,
+      bool  is_bottom,
+      bool  is_top
+      );
+
   taint_svaluet(taint_svaluet const&  other);
   taint_svaluet(taint_svaluet&&  other);
 
@@ -62,12 +69,14 @@ public:
   bool  is_top() const noexcept { return m_is_top; }
   bool  is_bottom() const noexcept { return m_is_bottom; }
   expressiont const&  expression() const noexcept { return m_expression; }
+  expressiont const&  suppression() const noexcept { return m_suppression; }
 
   bool  is_symbol() const noexcept
   { return !is_top() && !is_bottom() && expression().size() == 1UL; }
 
 private:
   expressiont  m_expression;
+  expressiont  m_suppression;
   bool  m_is_bottom;
   bool  m_is_top;
 };
@@ -161,6 +170,24 @@ Function:
 
 \*******************************************************************/
 taint_svaluet  join(taint_svaluet const&  a, taint_svaluet const&  b);
+
+
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
+taint_svaluet  suppression(
+    taint_svaluet const&  a,
+    taint_svaluet::expressiont const&  sub
+    );
 
 
 /*******************************************************************\

@@ -44,7 +44,15 @@ void  taint_dump_svalue_in_html(
     bool first = true;
     for (auto const&  symbol : svalue.expression())
     {
-       ostr << (first ? "" : " &#x2210; ") << symbol;
+       ostr << (first ? "" : " <b>&#x2210;</b> ") << symbol;
+       first = false;
+    }
+    if (!svalue.suppression().empty())
+      ostr << " <b>\\</b> ";
+    first = true;
+    for (auto const&  symbol : svalue.suppression())
+    {
+       ostr << (first ? "" : " <b>&#x2210;</b> ") << symbol;
        first = false;
     }
   }

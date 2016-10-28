@@ -491,22 +491,25 @@ static void  build_substituted_summary(
       expand_external_objects(lhs_set,local_lvalues);
       for(const auto& lhs : lhs_set)
       {
-	if (lvalue_svalue.second.is_bottom() || lvalue_svalue.second.is_top())
-	  substituted_summary.insert({lhs,lvalue_svalue.second});
-	else
-	{
-	  taint_svaluet  substituted_svalue = taint_make_bottom();
-	  for (auto const&  symbol : lvalue_svalue.second.expression())
-	  {
-	    auto const  it = symbols_substitution.find(symbol);
-	    if (it != symbols_substitution.cend())
-	      substituted_svalue = join(substituted_svalue,it->second);
-	    else
-	      substituted_svalue =
-		join(substituted_svalue,{{symbol},false,false});
-	  }
-	  substituted_summary.insert({lhs,substituted_svalue});
-	}
+        if (lvalue_svalue.second.is_bottom() || lvalue_svalue.second.is_top())
+          substituted_summary.insert({lhs,lvalue_svalue.second});
+        else
+        {
+          taint_svaluet  substituted_svalue = taint_make_bottom();
+          for (auto const&  symbol : lvalue_svalue.second.expression())
+          {
+            auto const  it = symbols_substitution.find(symbol);
+            if (it != symbols_substitution.cend())
+              substituted_svalue = join(substituted_svalue,it->second);
+            else
+              substituted_svalue =
+          join(substituted_svalue,{{symbol},false,false});
+          }
+          substituted_summary.insert({
+              lhs,
+              suppression(substituted_svalue,lvalue_svalue.second.suppression())
+              });
+        }
       }
     }
   }
@@ -631,33 +634,60 @@ taint_svaluet::taint_svaluet(
     bool  is_bottom,
     bool  is_top
     )
+  : taint_svaluet(expression,{},is_bottom,is_top)
+{}
+
+taint_svaluet::taint_svaluet(
+    expressiont const&  expression,
+    expressiont const&  suppression,
+    bool  is_bottom,
+    bool  is_top
+    )
   : m_expression(expression)
+  , m_suppression(suppression)
   , m_is_bottom(is_bottom)
   , m_is_top(is_top)
 {
   assert((m_is_bottom && m_is_top) == false);
   assert(m_is_bottom || m_is_top || !m_expression.empty());
   assert(!(m_is_bottom || m_is_top) || m_expression.empty());
+  assert(
+      [](expressiont const&  A, expressiont const&  B){
+        expressiont X;
+        std::set_intersection(
+            A.cbegin(),A.cend(),
+            B.cbegin(),B.cend(),
+            std::inserter(X,X.end())
+            );
+        return X.empty();
+      }(m_expression,m_suppression)
+      );
 }
 
 
 taint_svaluet::taint_svaluet(taint_svaluet const&  other)
   : m_expression(other.m_expression)
+  , m_suppression(other.m_suppression)
   , m_is_bottom(other.m_is_bottom)
   , m_is_top(other.m_is_top)
 {}
 
 
 taint_svaluet::taint_svaluet(taint_svaluet&&  other)
-  : m_expression(other.m_expression)
+  : m_expression()
+  , m_suppression()
   , m_is_bottom(other.m_is_bottom)
   , m_is_top(other.m_is_top)
-{}
+{
+  m_expression.swap(other.m_expression);
+  m_suppression.swap(other.m_suppression);
+}
 
 
 taint_svaluet&  taint_svaluet::operator=(taint_svaluet const&  other)
 {
   m_expression = other.m_expression;
+  m_suppression = other.m_suppression;
   m_is_bottom = other.m_is_bottom;
   m_is_top = other.m_is_top;
   return *this;
@@ -667,6 +697,7 @@ taint_svaluet&  taint_svaluet::operator=(taint_svaluet const&  other)
 taint_svaluet&  taint_svaluet::operator=(taint_svaluet&&  other)
 {
   m_expression.swap(other.m_expression);
+  m_suppression.swap(other.m_suppression);
   m_is_bottom = other.m_is_bottom;
   m_is_top = other.m_is_top;
   return *this;
@@ -677,7 +708,8 @@ bool  operator==(taint_svaluet const&  a, taint_svaluet const&  b)
 {
   return a.is_top() == b.is_top() &&
          a.is_bottom() == b.is_bottom() &&
-         a.expression() == b.expression()
+         a.expression() == b.expression() &&
+         a.suppression() == b.suppression()
          ;
 }
 
@@ -705,7 +737,40 @@ taint_svaluet  join(taint_svaluet const&  a, taint_svaluet const&  b)
     return b;
   taint_svaluet::expressiont  result_set = a.expression();
   result_set.insert(b.expression().cbegin(),b.expression().cend());
-  return {result_set,false,false};
+  taint_svaluet::expressiont  result_suppression;
+  std::set_intersection(
+      a.suppression().cbegin(),a.suppression().cend(),
+      b.suppression().cbegin(),b.suppression().cend(),
+      std::inserter(result_suppression,result_suppression.end())
+      );
+  return {result_set,result_suppression,false,false};
+}
+
+taint_svaluet  suppression(
+    taint_svaluet const&  a,
+    taint_svaluet::expressiont const&  sub)
+{
+  if (a.is_bottom() || a.is_top() || sub.empty())
+    return a;
+
+  taint_svaluet::expressiont  result_set;
+  std::set_difference(
+      a.expression().cbegin(),a.expression().cend(),
+      sub.cbegin(),sub.cend(),
+      std::inserter(result_set,result_set.end())
+      );
+
+  if (result_set.empty())
+    return taint_make_bottom();
+
+  taint_svaluet::expressiont  result_suppression;
+  std::set_union(
+      a.suppression().cbegin(),a.suppression().cend(),
+      sub.cbegin(),sub.cend(),
+      std::inserter(result_suppression,result_suppression.end())
+      );
+
+  return {result_set,result_suppression,false,false};
 }
 
 
@@ -1060,7 +1125,7 @@ taint_map_from_lvalues_to_svaluest  transform(
               taint_svaluet::expressiont symbols = it->second.expression();
               symbols.erase(taint_name);
               if (!symbols.empty())
-                rvalue = taint_svaluet(symbols,false,false);
+                rvalue = taint_svaluet(symbols,{taint_name},false,false);
             }
           }
           assign(result,normalise(lvalue,ns),rvalue);
@@ -1079,7 +1144,7 @@ taint_map_from_lvalues_to_svaluest  transform(
                 taint_svaluet::expressiont symbols = it->second.expression();
                 symbols.erase(taint_name);
                 if (!symbols.empty())
-                  rvalue = taint_svaluet(symbols,false,false);
+                  rvalue = taint_svaluet(symbols,{taint_name},false,false);
               }
             }
             assign(result,normalise(*lhs.cbegin(),ns),rvalue);
