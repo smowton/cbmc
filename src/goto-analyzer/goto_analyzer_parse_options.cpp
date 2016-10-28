@@ -242,6 +242,7 @@ void goto_analyzer_parse_optionst::get_command_line_options(optionst &options)
 
 int  run_pointsto_temp_analyser(
   goto_modelt&  program,
+  cmdlinet const&  cmdline,
   message_handlert&  message_handler)
 {
   try
@@ -263,7 +264,8 @@ int  run_pointsto_temp_analyser(
           program,
           call_graph,
           "./dump_pointsto_temp_summaries",
-          &log
+          cmdline.isset("taint-dump-program"),
+          cmdline.isset("taint-dump-log") ? &log : nullptr
           );
   }
   catch (const std::exception& e)
@@ -294,6 +296,7 @@ It performs the whole taint analysis. The planner has already read the initial p
 int  do_taint_analysis(
   goto_modelt&  program,
   jsont& plan,
+  cmdlinet const&  cmdline,
   message_handlert&  message_handler)
 {
   try
@@ -335,7 +338,8 @@ int  do_taint_analysis(
           program,
           call_graph,
           "./dump_top_taint_summaries",
-          &log
+          cmdline.isset("taint-dump-program"),
+          cmdline.isset("taint-dump-log") ? &log : nullptr
           );
 
   }
@@ -411,9 +415,10 @@ int goto_analyzer_parse_optionst::doit()
     return 6;
 
   if (cmdline.isset("run-pointsto-temp-analyser"))
-    return run_pointsto_temp_analyser(goto_model,get_message_handler());
+    return run_pointsto_temp_analyser(goto_model,cmdline,get_message_handler());
   else if (cmdline.isset("taint-analysis"))
-    return do_taint_analysis(goto_model,taint_analysis_plan,get_message_handler());
+    return do_taint_analysis(goto_model,taint_analysis_plan,cmdline,
+                             get_message_handler());
   else if(cmdline.isset("taint"))
   {
     std::string taint_file=cmdline.get_value("taint");
@@ -445,20 +450,31 @@ int goto_analyzer_parse_optionst::doit()
       call_grapht const  call_graph(goto_model.goto_functions);
 
       local_value_set_analysist::dbt* lvsa_database_ptr = 
-	cmdline.isset("taint-no-aa") ? nullptr : &lvsa_database;
-	
+          cmdline.isset("taint-no-aa") ? nullptr : &lvsa_database;
+
       if(fname=="")
       {
-        taint_summarise_all_functions(goto_model,summaries,call_graph,
-                                      nullptr,lvsa_database_ptr,get_message_handler());
+        taint_summarise_all_functions(
+              goto_model,
+              summaries,
+              call_graph,
+              cmdline.isset("taint-dump-log") ? &log : nullptr,
+              lvsa_database_ptr,
+              get_message_handler()
+              );
       }
       else
       {
-        auto ret=taint_summarise_function(fname,goto_model,summaries,
-                                          &log,lvsa_database_ptr,get_message_handler());
+        auto ret=taint_summarise_function(
+              fname,
+              goto_model,
+              summaries,
+              cmdline.isset("taint-dump-log") ? &log : nullptr,
+              lvsa_database_ptr,
+              get_message_handler()
+              );
         summaries.insert(std::make_pair(fname,ret));
       }
-
 
       std::vector<taint_tracet>  error_traces;
       taint_recognise_error_traces(
@@ -468,31 +484,34 @@ int goto_analyzer_parse_optionst::doit()
             summaries,
             taint_sources,
             taint_sinks,
-            &log
+            cmdline.isset("taint-dump-log") ? &log : nullptr
             );
 
       if(json_directory=="")
       {
-        dump_in_html(
-          summaries,
-          &taint_dump_in_html,
-          static_cast<goto_modelt const&>(goto_model),
-          call_graph,
-          "./dump_taint_summaries",
-          &log
-          );
+        if (cmdline.isset("taint-dump-html-summaries"))
+          dump_in_html(
+              summaries,
+              &taint_dump_in_html,
+              static_cast<goto_modelt const&>(goto_model),
+              call_graph,
+              "./dump_taint_summaries",
+              cmdline.isset("taint-dump-program"),
+              cmdline.isset("taint-dump-log") ? &log : nullptr
+              );
+
+        if (cmdline.isset("taint-dump-html-traces"))
+          taint_dump_traces_in_html(
+              error_traces,
+              static_cast<goto_modelt const&>(goto_model),
+              "./dump_taint_traces_html"
+              );
 
         taint_dump_traces_in_json(
-          error_traces,
-          static_cast<goto_modelt const&>(goto_model),
-          "./dump_taint_traces_json"
-          );
-
-        taint_dump_traces_in_html(
-          error_traces,
-          static_cast<goto_modelt const&>(goto_model),
-          "./dump_taint_traces_html"
-          );
+            error_traces,
+            static_cast<goto_modelt const&>(goto_model),
+            "./dump_taint_traces_json"
+            );
       }
       else
       {

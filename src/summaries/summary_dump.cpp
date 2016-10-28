@@ -485,19 +485,25 @@ std::string  dump_in_html(
     goto_modelt const&  program,
     call_grapht const&  call_graph,
     std::string const&  dump_root_directory,
+    bool const  do_dump_program,
     std::ostream* const  log
     )
 {
   fileutl_create_directory(dump_root_directory);
 
-  std::string  err_message =
-      dump_goto_program_in_html(
-          program,
-          call_graph,
-          msgstream() << dump_root_directory << "/goto_model"
-          );
-  if (!err_message.empty())
-    return err_message;
+  std::string  err_message;
+
+  if (do_dump_program)
+  {
+    err_message =
+        dump_goto_program_in_html(
+            program,
+            call_graph,
+            msgstream() << dump_root_directory << "/goto_model"
+            );
+    if (!err_message.empty())
+      return err_message;
+  }
 
   for (auto  it = computed_summaries.cbegin();
        it != computed_summaries.cend();
@@ -527,9 +533,10 @@ std::string  dump_in_html(
       msgstream() << dump_root_directory << "/index.html";
   std::fstream  ostr(log_filename, std::ios_base::out);
   if (!ostr.is_open())
-      return msgstream() << "ERROR: sumfn::taint::taint_summarise_all_functions() : "
-                            "Cannot open the log file '" << log_filename << "'."
-                         ;
+      return msgstream()
+          << "ERROR: sumfn::taint::taint_summarise_all_functions() : "
+             "Cannot open the log file '" << log_filename << "'."
+             ;
   dump_html_prefix(ostr,"Database");
   ostr << "<h1>Taint Summaries</h1>\n"
           "<table>\n"
@@ -552,9 +559,10 @@ std::string  dump_in_html(
             ;
   ostr << "</table>\n";
 
-  ostr << "<p>Dump of whole analysed program is available "
-          "<a href=\"./goto_model/index.html\">here</a></p>\n"
-         ;
+  if (do_dump_program)
+    ostr << "<p>Dump of whole analysed program is available "
+            "<a href=\"./goto_model/index.html\">here</a></p>\n"
+           ;
 
   if (log != nullptr)
     ostr << "<p>Log from summary computation is available "

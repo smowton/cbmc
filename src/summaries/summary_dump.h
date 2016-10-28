@@ -69,6 +69,7 @@ std::string  dump_in_html(
     goto_modelt const&  program,
     call_grapht const&  call_graph,
     std::string const&  dump_root_directory,
+    bool const  do_dump_program,
     std::ostream* const  log = nullptr
     );
 

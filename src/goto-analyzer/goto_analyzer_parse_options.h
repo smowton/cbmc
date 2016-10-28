@@ -43,7 +43,11 @@ class optionst;
   "(run-pointsto-temp-analyser)" \
   "(lvsa-summary-directory):" \
   "(local-value-set-analysis)(lvsa-function):" \
-  "(taint-no-aa)"
+  "(taint-no-aa)" \
+  "(taint-dump-html-traces)" \
+  "(taint-dump-html-summaries)" \
+  "(taint-dump-program)" \
+  "(taint-dump-log)"
 
 class goto_analyzer_parse_optionst:
   public parse_options_baset,
