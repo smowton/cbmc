@@ -255,7 +255,6 @@ void lvsaa_single_external_set_summaryt::from_final_state(
     }
     if(export_this_entry)
     {
-      std::string fieldname=entryname.substr(prefix.length());
       const auto& pointsto=entry.second.object_map.read();
       for(const auto& pointsto_number : pointsto)
       {
