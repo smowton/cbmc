@@ -235,9 +235,13 @@ void  collect_access_paths(
     )
 {
   if (expr.id() == ID_symbol || expr.id() == ID_member)
-    result.insert(
-          perform_normalisation ? normalise(expr,ns) : expr
-          );
+  {
+    std::string const&  ident = as_string(expr.get(ID_identifier));
+    if (ident.find(".String.Literal.") == std::string::npos)
+      result.insert(
+            perform_normalisation ? normalise(expr,ns) : expr
+            );
+  }
   else
     for (exprt const&  op : expr.operands())
       collect_access_paths(op,ns,result);
