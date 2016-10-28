@@ -346,7 +346,7 @@ void  taint_summarise_all_functions(
     database_of_summariest&  summaries_to_compute,
     call_grapht const&  call_graph,
     std::ostream* const  log,
-    const std::string& lvsa_directory,
+    local_value_set_analysist::dbt* lvsa_db,
     message_handlert&
     );
 
@@ -368,7 +368,7 @@ taint_summary_ptrt  taint_summarise_function(
     goto_modelt const&  instrumented_program,
     database_of_summariest const&  database,
     std::ostream* const  log,
-    const std::string& lvsa_directory,
+    local_value_set_analysist::dbt* lvsa_db,
     message_handlert&
     );
 

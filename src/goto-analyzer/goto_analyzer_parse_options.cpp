@@ -439,20 +439,23 @@ int goto_analyzer_parse_optionst::doit()
       std::stringstream  log;
       std::string json_directory=cmdline.get_value("json");
       std::string lvsa_json_directory=cmdline.get_value("lvsa-summary-directory");
-      
+      local_value_set_analysist::dbt lvsa_database(lvsa_json_directory);
       summary_json_databaset<taint_summaryt> summaries(json_directory);
       std::string fname=cmdline.get_value("function");
       call_grapht const  call_graph(goto_model.goto_functions);
-     
+
+      local_value_set_analysist::dbt* lvsa_database_ptr = 
+	cmdline.isset("taint-no-aa") ? nullptr : &lvsa_database;
+	
       if(fname=="")
       {
         taint_summarise_all_functions(goto_model,summaries,call_graph,
-                                      nullptr,lvsa_json_directory,get_message_handler());
+                                      nullptr,lvsa_database_ptr,get_message_handler());
       }
       else
       {
         auto ret=taint_summarise_function(fname,goto_model,summaries,
-                                          &log,lvsa_json_directory,get_message_handler());
+                                          &log,lvsa_database_ptr,get_message_handler());
         summaries.insert(std::make_pair(fname,ret));
       }
 

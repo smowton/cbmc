@@ -561,7 +561,7 @@ std::string  taint_plannert::compute_summaries(
               program,
               *summary_database,
               log,
-              "",
+              nullptr,
               get_message_handler()
               ),
           });
