@@ -15,6 +15,15 @@ Sakai (https://github.com/sakaiproject/sakai.git)
     0635e98865fd3031a699a09ec9e37d9c0bb4c7c4 (XSS)
     dbdf9e73b764de532fa555b59e3d83e9f815f95a (SQL injection)
 
+Openolat (https://github.com/klemens/openolat)
+  commits:
+    6a44ea7c65174a2a25f92b98363f0367f4fd3452 (XSS in AssessmentItemComponentRenderer.java, AssessmentObjectComponentRenderer.java)
+    df8eb0255771f96a8bcb3bd88c0f69d245ab7ef1 (XSS in HistoryController.java)
+    3281878e96fd36f771b023c7133ba4e847f045bc (XSS in BusinessGroupChooserController.java)
+    e9e4e73291223fb6a577701ca37757637301fded (XSS in EPMultipleMapController.java)
+    a53889302a60111e98493f1999d886fa5f992674 (Possible XSS - deduced from comment in the code)
+    001efbb0fbf515bd76bb324e0005ba1c04ab8314 (Disabling XSS by disabling unwnated buttons...)
+    
 Teammates (https://github.com/TEAMMATES/teammates.git)
   commits:
     4073b3d0d1bc7b41d5915f8440b236c4819e496e (XSS)
@@ -34,6 +43,7 @@ Pebble (https://github.com/pebbleblog/pebble.git)
 openuss (http://svn.code.sf.net/p/openuss/code/trunk)
   commits:
     2c7e7027b22c8b631b6fd6f8f8b31868dc0301c8 (XSS)
+
 
 pulse (http://svn.code.sf.net/p/pulse-java/code/trunk)
   commits:
