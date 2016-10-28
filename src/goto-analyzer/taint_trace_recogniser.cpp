@@ -73,10 +73,10 @@ public:
   { return trace.at(index); }
 
   /// Call-stack-related access/check methods
-  bool  stack_empty() const { return call_stack.empty(); }
   bool  stack_has_return() const { return call_stack.size() > 1UL; }
   call_stack_valuet const& stack_top() const { return call_stack.back(); }
   void  stack_push(std::unordered_set<std::string> const&  symbols);
+  void  stack_set_top(std::unordered_set<std::string> const&  symbols);
   void  stack_pop();
 
 private:
@@ -151,6 +151,15 @@ void  trace_under_constructiont::stack_push(
   assert(!empty());
   assert(!symbols.empty());
   call_stack.push_back({trace.size() - 1UL,symbols});
+}
+
+void  trace_under_constructiont::stack_set_top(
+    std::unordered_set<std::string> const&  symbols
+    )
+{
+  assert(!empty());
+  assert(!symbols.empty());
+  call_stack.back().second = symbols;
 }
 
 void  trace_under_constructiont::stack_pop()
@@ -347,19 +356,37 @@ void taint_recognise_error_traces(
             "</table>\n"
             ;
 
-  if (source_function_name != sink_function_name &&
-      !exists_direct_or_indirect_call(
-        call_graph,
-        source_function_name,
-        sink_function_name
-        ))
+  call_grapht  inverted_call_graph;
+  compute_inverted_call_graph(call_graph,inverted_call_graph);
+
+  if (source_function_name != sink_function_name)
+  {
+    std::unordered_set<irep_idt,dstring_hash>  call_roots;
+    find_leaves_bellow_function(
+          inverted_call_graph,
+          source_function_name,
+          call_roots
+          );
+    bool  may_path_exist = false;
+    for (auto const& root_fn_name : call_roots)
+      if (exists_direct_or_indirect_call(
+              call_graph,
+              root_fn_name,
+              sink_function_name
+              ))
+      {
+        may_path_exist = true;
+        break;
+      }
+    if (may_path_exist == false)
     {
-    if (log != nullptr)
-      *log << "<p>The sink function is call-graph unreachable from the source "
-              "function. So, terminating immediatelly.</p>\n"
-              ;
+      if (log != nullptr)
+        *log << "<p>The sink function is call-graph unreachable from the "
+                "source function. So, terminating immediatelly.</p>\n"
+                ;
       return;
     }
+  }
 
   namespacet const  ns(goto_model.symbol_table);
 
@@ -672,7 +699,84 @@ void taint_recognise_error_traces(
         }
       }
       else
+      {
+        std::unordered_set<std::string>  stack_symbols(
+              elem.get_symbols().cbegin(),
+              elem.get_symbols().cend()
+              );
+        {
+          taint_map_from_lvalues_to_svaluest const&  symbol_map =
+              summaries.find<taint_summaryt>(elem.get_name_of_function())
+                       ->input();
+          for (auto const&  lvalue_svalue : symbol_map)
+            for (auto const&  symbol : lvalue_svalue.second.expression())
+              stack_symbols.erase(symbol);
+        }
+        trace.stack_set_top(stack_symbols);
+
+        std::set< std::pair<std::string,goto_programt::const_targett> >
+            possible_callers;
+        {
+          call_grapht::call_edges_ranget const  range =
+              inverted_call_graph.out_edges(elem.get_name_of_function());
+          for (auto  it = range.first; it != range.second; ++it)
+          {
+            goto_functionst::goto_functiont const&  fn =
+                goto_model.goto_functions.function_map.at(it->second);
+            for (auto  inst_it = fn.body.instructions.cbegin();
+                 inst_it != fn.body.instructions.cend();
+                 ++inst_it)
+              if (inst_it->type == FUNCTION_CALL)
+              {
+                code_function_callt const&  fn_call =
+                    to_code_function_call(inst_it->code);
+                if (fn_call.function().id() == ID_symbol)
+                {
+                  std::string const  callee_ident =
+                      as_string(
+                          to_symbol_expr(fn_call.function()).get_identifier()
+                          );
+                  if (callee_ident == elem.get_name_of_function())
+                    possible_callers.insert({as_string(it->second),inst_it});
+                }
+              }
+          }
+        }
+        for (auto const&  func_loc : possible_callers)
+        {
+          taint_map_from_lvalues_to_svaluest const&  from_lvalues_to_svalues =
+              summaries.find<taint_summaryt>(func_loc.first)
+                       ->domain()
+                       ->at(func_loc.second);
+          std::vector<taint_trace_elementt>  successors;
+          taint_collect_successors_inside_function(
+                goto_model,
+                trace,
+                taint_trace_elementt(
+                    func_loc.first,
+                    func_loc.second,
+                    from_lvalues_to_svalues,
+                    taint_svaluet::expressiont(
+                        stack_symbols.cbegin(),
+                        stack_symbols.cend()
+                        ),
+                    ""
+                    ),
+                summaries,
+                taint_name,
+                sink_function_name,
+                sink_instruction,
+                successors,
+                log
+                );
+          for (taint_trace_elementt const&  succ_elem : successors)
+          {
+            processed_traces.push_back(processed_traces.front());
+            processed_traces.back().push_back(succ_elem);
+          }
+        }
         processed_traces.pop_front();
+      }
     }
     else
     {

@@ -320,12 +320,10 @@ static std::string  dump_callgraph_in_svg(
     call_graph.output_dot(functions,ostr);
   }
 
-  /*
   std::string const  command =
       msgstream() << "dot -Tsvg \"" << dot_filename
                   << "\" -o \"" << svg_file_pathname << "\"";
   std::system(command.c_str());
-  */
 
   return ""; // No error.
 }
