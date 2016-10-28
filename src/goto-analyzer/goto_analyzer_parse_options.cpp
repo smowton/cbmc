@@ -459,6 +459,7 @@ int goto_analyzer_parse_optionst::doit()
         summaries.insert(std::make_pair(fname,ret));
       }
 
+      status() << "Generating taint propagtion traces" << eom;
 
       std::vector<taint_tracet>  error_traces;
       taint_recognise_error_traces(
@@ -471,6 +472,8 @@ int goto_analyzer_parse_optionst::doit()
             &log
             );
 
+      status() << "Saving results" << eom;      
+      
       if(json_directory=="")
       {
         dump_in_html(
