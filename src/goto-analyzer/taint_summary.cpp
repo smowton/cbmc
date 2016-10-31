@@ -1431,6 +1431,21 @@ taint_summary_ptrt  taint_summarise_function(
     taint_map_from_lvalues_to_svaluest const&  src_value =
         domain->at(src_instr_it);
 
+    taint_map_from_lvalues_to_svaluest const  transformed =
+      transform(
+                src_value,
+                src_instr_it,
+                function_id,
+                functions,
+                database,
+                lvsa,
+                ns,
+                log,
+		children_with_summaries,
+		nsummary_uses,
+		ndistinct_summary_inputs
+                );
+
     goto_programt::const_targetst successors;
     fn_iter->second.body.get_successors(src_instr_it, successors);
     for(auto  succ_it = successors.begin();
@@ -1461,20 +1476,6 @@ taint_summary_ptrt  taint_summarise_function(
           taint_dump_lvalues_to_svalues_in_html(old_dst_value,ns,*log);
         }
 
-        taint_map_from_lvalues_to_svaluest const  transformed =
-            transform(
-                src_value,
-                src_instr_it,
-                function_id,
-                functions,
-                database,
-                lvsa,
-                ns,
-                log,
-		children_with_summaries,
-		nsummary_uses,
-		ndistinct_summary_inputs
-                );
         dst_value = join(transformed,old_dst_value);
 
         if (log != nullptr)
