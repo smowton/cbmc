@@ -206,8 +206,15 @@ static void  initialise_domain(
 
 /*******************************************************************\
 \*******************************************************************/
-typedef std::unordered_set<instruction_iteratort,
-                           instruction_iterator_hashert>
+
+struct order_by_location_number {
+  bool operator()(instruction_iteratort a, instruction_iteratort b)
+  {
+    return a->location_number < b->location_number;
+  }
+};
+
+typedef std::set<instruction_iteratort,order_by_location_number>
         solver_work_set_t;
 
 
@@ -1357,7 +1364,7 @@ taint_summary_ptrt  taint_summarise_function(
     *log << "<h2>Called sumfn::taint::taint_summarise_function( "
          << to_html_text(as_string(function_id)) << " )</h2>\n"
          ;
-
+  
   goto_functionst::function_mapt const&  functions =
       instrumented_program.goto_functions.function_map;
   auto const  fn_iter = functions.find(function_id);
@@ -1426,6 +1433,7 @@ taint_summary_ptrt  taint_summarise_function(
   {
     instruction_iteratort const  src_instr_it = *work_set.cbegin();
     work_set.erase(work_set.cbegin());
+
     ++steps;
 
     taint_map_from_lvalues_to_svaluest const&  src_value =
