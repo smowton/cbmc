@@ -21,6 +21,7 @@ It provides a dump of computed taint summary in HTML format.
 #include <util/namespace.h>
 #include <iosfwd>
 
+
 /*******************************************************************\
 
 Function:

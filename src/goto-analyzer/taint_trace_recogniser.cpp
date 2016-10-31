@@ -16,6 +16,7 @@ data stored in the databese of taint summaries.
 #include <goto-analyzer/taint_trace_recogniser.h>
 #include <goto-analyzer/taint_summary.h>
 #include <goto-analyzer/taint_summary_dump.h>
+#include <goto-analyzer/taint_statistics.h>
 #include <util/msgstream.h>
 #include <unordered_set>
 #include <deque>
@@ -297,6 +298,9 @@ void taint_recognise_error_traces(
 {
   if (log != nullptr)
     *log << "<h2>Building taint error traces</h2>\n";
+
+  taint_statisticst::instance().begin_error_traces_recognition();
+
   for (auto const  tid_locs : taint_sinks)
     for (auto const  fn_locs : tid_locs.second)
       for (auto const  loc : fn_locs.second)
@@ -318,6 +322,8 @@ void taint_recognise_error_traces(
                     log
                     );
       }
+
+  taint_statisticst::instance().end_error_traces_recognition();
 }
 
 

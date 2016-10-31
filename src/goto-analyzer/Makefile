@@ -9,7 +9,10 @@ SRC = goto_analyzer_main.cpp goto_analyzer_parse_options.cpp \
       pointsto_temp_summary_dump.cpp \
       taint_trace_recogniser.cpp \
       taint_trace_dump_html.cpp \
-      taint_trace_dump_json.cpp
+      taint_trace_dump_json.cpp \
+      taint_statistics.cpp \
+      taint_statistics_dump_html.cpp \
+      taint_statistics_dump_json.cpp
 
 OBJ += ../ansi-c/ansi-c$(LIBEXT) \
       ../cpp/cpp$(LIBEXT) \

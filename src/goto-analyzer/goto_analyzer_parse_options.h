@@ -46,6 +46,8 @@ class optionst;
   "(taint-no-aa)" \
   "(taint-dump-html-traces)" \
   "(taint-dump-html-summaries)" \
+  "(taint-dump-html-statistics)" \
+  "(taint-dump-json-statistics)" \
   "(taint-dump-program)" \
   "(taint-dump-log)"
 

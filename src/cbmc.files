@@ -686,6 +686,11 @@ goto-analyzer/taint_planner.cpp
 goto-analyzer/taint_planner.h
 goto-analyzer/taint_planner_dump.cpp
 goto-analyzer/taint_planner_dump.h
+goto-analyzer/taint_statistics.cpp
+goto-analyzer/taint_statistics.h
+goto-analyzer/taint_statistics_dump_html.cpp
+goto-analyzer/taint_statistics_dump_json.cpp
+goto-analyzer/taint_statistics_dump.h
 goto-analyzer/taint_summary.cpp
 goto-analyzer/taint_summary.h
 goto-analyzer/taint_summary_dump.cpp

@@ -54,6 +54,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <summaries/summary.h>
 #include <goto-analyzer/pointsto_temp_analyser.h>
 #include <goto-analyzer/pointsto_temp_summary_dump.h>
+#include <goto-analyzer/taint_statistics.h>
+#include <goto-analyzer/taint_statistics_dump.h>
 #include <goto-analyzer/taint_summary.h>
 #include <goto-analyzer/taint_summary_dump.h>
 #include <goto-analyzer/taint_summary_json.h>
@@ -66,6 +68,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "taint_analysis.h"
 #include "unreachable_instructions.h"
 #include "static_analyzer.h"
+
+#include <fstream>
 
 /*******************************************************************\
 
@@ -390,6 +394,8 @@ int goto_analyzer_parse_optionst::doit()
            << config.this_architecture() << " "
            << config.this_operating_system() << eom;
 
+  taint_statisticst::instance().begin_goto_program_building();
+
   register_languages();
   
   goto_model.set_message_handler(get_message_handler());
@@ -414,6 +420,10 @@ int goto_analyzer_parse_optionst::doit()
   if(process_goto_program(options))
     return 6;
 
+  taint_statisticst::instance().end_goto_program_building(
+        static_cast<goto_modelt const&>(goto_model)
+        );
+
   if (cmdline.isset("run-pointsto-temp-analyser"))
     return run_pointsto_temp_analyser(goto_model,cmdline,get_message_handler());
   else if (cmdline.isset("taint-analysis"))
@@ -434,6 +444,8 @@ int goto_analyzer_parse_optionst::doit()
       taint_sources_mapt  taint_sources;
       taint_sinks_mapt  taint_sinks;
 
+      taint_statisticst::instance().begin_taint_info_instrumentation();
+
       taint_analysis_instrument_knowledge(
           goto_model,
           taint_file,
@@ -441,13 +453,32 @@ int goto_analyzer_parse_optionst::doit()
           taint_sources,
           taint_sinks
           );
+
+      taint_statisticst::instance().end_taint_info_instrumentation();
+
       std::stringstream  log;
+
       std::string json_directory=cmdline.get_value("json");
       std::string lvsa_json_directory=cmdline.get_value("lvsa-summary-directory");
+
+      taint_statisticst::instance().begin_loading_lvsa_database();
+
       local_value_set_analysist::dbt lvsa_database(lvsa_json_directory);
+
+      taint_statisticst::instance().end_loading_lvsa_database();
+      taint_statisticst::instance().begin_loading_taint_summaries_database();
+
       summary_json_databaset<taint_summaryt> summaries(json_directory);
+
+      taint_statisticst::instance().end_loading_taint_summaries_database();
+
       std::string fname=cmdline.get_value("function");
+
+      taint_statisticst::instance().begin_callgraph_building();
+
       call_grapht const  call_graph(goto_model.goto_functions);
+
+      taint_statisticst::instance().end_callgraph_building();
 
       local_value_set_analysist::dbt* lvsa_database_ptr = 
           cmdline.isset("taint-no-aa") ? nullptr : &lvsa_database;
@@ -493,6 +524,8 @@ int goto_analyzer_parse_optionst::doit()
       
       if(json_directory=="")
       {
+        taint_statisticst::instance().begin_dump_of_taint_html_summaries();
+
         if (cmdline.isset("taint-dump-html-summaries"))
           dump_in_html(
               summaries,
@@ -504,6 +537,9 @@ int goto_analyzer_parse_optionst::doit()
               cmdline.isset("taint-dump-log") ? &log : nullptr
               );
 
+        taint_statisticst::instance().end_dump_of_taint_html_summaries();
+        taint_statisticst::instance().begin_dump_of_taint_html_traces();
+
         if (cmdline.isset("taint-dump-html-traces"))
           taint_dump_traces_in_html(
               error_traces,
@@ -511,16 +547,39 @@ int goto_analyzer_parse_optionst::doit()
               "./dump_taint_traces_html"
               );
 
+        taint_statisticst::instance().end_dump_of_taint_html_traces();
+        taint_statisticst::instance().begin_dump_of_taint_json_traces();
+
         taint_dump_traces_in_json(
             error_traces,
             static_cast<goto_modelt const&>(goto_model),
             "./dump_taint_traces_json"
             );
+
+        taint_statisticst::instance().end_dump_of_taint_json_traces();
       }
       else
       {
+        taint_statisticst::instance().begin_dump_of_taint_json_summaries();
+
         summaries.save_all();
+
+        taint_statisticst::instance().end_dump_of_taint_html_summaries();
       }
+
+      if (cmdline.isset("taint-dump-html-statistics"))
+        taint_dump_statistics_in_HTML("./dump_taint_statistics_HTML");
+
+      if (cmdline.isset("taint-dump-json-statistics"))
+      {
+        fileutl_create_directory("./dump_taint_statistics_JSON");
+        std::ofstream  ostr(
+              "./dump_taint_statistics_JSON/taint_statistics.json"
+              );
+        taint_dump_statistics_in_JSON(ostr);
+      }
+
+      return 0;
     }
     else
     {

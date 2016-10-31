@@ -14,6 +14,7 @@ This module defines interfaces and functionality for taint summaries.
 
 #include <goto-analyzer/taint_summary.h>
 #include <goto-analyzer/taint_summary_dump.h>
+#include <goto-analyzer/taint_statistics.h>
 #include <summaries/utility.h>
 #include <summaries/summary_dump.h>
 #include <pointer-analysis/local_value_set_analysis.h>
@@ -1367,6 +1368,10 @@ taint_summary_ptrt  taint_summarise_function(
   assert(fn_iter != functions.cend());
   assert(fn_iter->second.body_available());
 
+  taint_statisticst::instance().begin_lvsa_analysis_of_function(
+        as_string(function_id)
+        );
+
   local_value_set_analysist::dbt emptydb("");
   auto& use_database=lvsa_database ? *lvsa_database : emptydb;
   local_value_set_analysist lvsainst(ns,fn_iter->second.type,id2string(function_id),
@@ -1394,8 +1399,14 @@ taint_summary_ptrt  taint_summarise_function(
       messaget::eom;
   }
 
+  taint_statisticst::instance().end_lvsa_analysis_of_function();
+
   auto start_time = std::chrono::high_resolution_clock::now();
   
+  taint_statisticst::instance().begin_taint_analysis_of_function(
+        as_string(function_id)
+        );
+
   taint_summary_domain_ptrt  domain = std::make_shared<taint_symmary_domaint>();
   written_expressionst written_lvalues;
   
@@ -1424,6 +1435,8 @@ taint_summary_ptrt  taint_summarise_function(
   initialise_workset(fn_iter->second,work_set);
   while (!work_set.empty())
   {
+    taint_statisticst::instance().on_fixpoint_step_of_taint_analysis();
+
     instruction_iteratort const  src_instr_it = *work_set.cbegin();
     work_set.erase(work_set.cbegin());
     ++steps;
@@ -1523,6 +1536,8 @@ taint_summary_ptrt  taint_summarise_function(
     " child_summary_inputs " << ndistinct_summary_inputs <<
     " time " << duration / 1000 << "ms" <<
     messaget::eom;
+
+  taint_statisticst::instance().end_taint_analysis_of_function();
 
   return std::make_shared<taint_summaryt>(input,output,domain);
 }
