@@ -369,7 +369,7 @@ static void  taint_function_stats_table(
           ;
 
   ostr << "  <tr>\n"
-          "    <td>Number of uses of summaries of the function</td>\n"
+          "    <td>Number of uses of the summary of the function</td>\n"
           "    <td align=\"right\">"
        << fS.get_num_usages_of_my_summary()
        << "</td>\n"

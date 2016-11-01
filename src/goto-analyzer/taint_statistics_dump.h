@@ -48,7 +48,7 @@ Function:
 
 
 \*******************************************************************/
-void  taint_dump_statistics_in_JSON(std::ostream const&  ostr);
+void  taint_dump_statistics_in_JSON(std::ostream&  ostr);
 
 
 #endif

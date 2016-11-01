@@ -1318,13 +1318,13 @@ void  taint_summarise_all_functions(
                                  instrumented_program.goto_functions,
                                  inverted_topological_order);
 
-  size_t processed=0;
-  size_t total_funcs=inverted_topological_order.size();
+//  size_t processed=0;
+//  size_t total_funcs=inverted_topological_order.size();
   messaget msgout;
   msgout.set_message_handler(msg);
   for (auto const&  fn_name : inverted_topological_order)
   {
-    ++processed;
+//    ++processed;
     if(fn_name=="_start")
       continue;
     const goto_functionst::function_mapt& functions_map =
@@ -1343,7 +1343,7 @@ void  taint_summarise_all_functions(
               msg
               ),
           });
-      msgout.progress() << processed << "/" << total_funcs << " functions analysed" << messaget::eom;
+//      msgout.progress() << processed << "/" << total_funcs << " functions analysed" << messaget::eom;
     }
   }
 }
@@ -1387,22 +1387,22 @@ taint_summary_ptrt  taint_summarise_function(
   {
     lvsainst.set_message_handler(msg);
 
-    auto start_time = std::chrono::high_resolution_clock::now();
+//    auto start_time = std::chrono::high_resolution_clock::now();
     
     lvsainst(fn_iter->second.body);
     // Retain this summary for use analysing callers.
     lvsainst.save_summary(fn_iter->second.body);
 
-    auto end_time = std::chrono::high_resolution_clock::now();
-    auto duration =
-      std::chrono::duration_cast<std::chrono::microseconds>(end_time-start_time).count();
+//    auto end_time = std::chrono::high_resolution_clock::now();
+//    auto duration =
+//      std::chrono::duration_cast<std::chrono::microseconds>(end_time-start_time).count();
     
-    m.progress() << "LVSA: " << function_id <<
-      " -- steps " << lvsainst.nsteps <<
-      " stubs " << lvsainst.nstubs <<
-      " stub_assigns " << lvsainst.nstub_assignments <<
-      " time " << duration / 1000 << "ms" <<
-      messaget::eom;
+//    m.progress() << "LVSA: " << function_id <<
+//      " -- steps " << lvsainst.nsteps <<
+//      " stubs " << lvsainst.nstubs <<
+//      " stub_assigns " << lvsainst.nstub_assignments <<
+//      " time " << duration / 1000 << "ms" <<
+//      messaget::eom;
   }
 
   taint_statisticst::instance().end_lvsa_analysis_of_function(
