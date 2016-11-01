@@ -327,7 +327,8 @@ void java_record_outputs(
 
 std::tuple<symbolt, bool, bool> get_main_symbol(symbol_tablet &symbol_table,
                                                 const irep_idt &main_class,
-                                                message_handlert &message_handler)
+                                                message_handlert &message_handler,
+						bool allow_no_body)
 {
   symbolt symbol;
 
@@ -449,7 +450,7 @@ std::tuple<symbolt, bool, bool> get_main_symbol(symbol_tablet &symbol_table,
     symbol=symbol_table.symbols.find(*matches.begin())->second;
   
     // check if it has a body
-    if(symbol.value.is_nil())
+    if(symbol.value.is_nil() && !allow_no_body)
     {
       message.error() << "main method `" << main_class
                       << "' has no body" << messaget::eom;
