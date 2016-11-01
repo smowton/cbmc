@@ -133,48 +133,53 @@ void remove_virtual_functionst::remove_virtual_function(
   // If necessary, cast to the last candidate function to get the object's clsid.
   // By the structure of get_functions, this is the parent of all other classes
   // under consideration.
-  symbol_typet suggested_type(functions.back().class_id);
+  auto base_classid=functions.back().class_id;
+  auto base_function_symbol=functions.back().symbol_expr;
+  symbol_typet suggested_type(base_classid);
   exprt c_id2=get_class_identifier_field(this_expr,suggested_type,ns);
 
-  goto_programt::targett last_function;
+  std::map<irep_idt,goto_programt::targett> calls;
   
-  for(functionst::const_iterator
-      it=functions.begin();
-      it!=functions.end();
-      it++)
+  for(const auto& function : functions)
   {
-    goto_programt::targett t1=new_code_calls.add_instruction();
-    if(it->symbol_expr.get_identifier()!=irep_idt())
+    auto insertit=calls.insert(
+      std::make_pair(function.symbol_expr.get_identifier(),goto_programt::targett()));
+    // Only create one call sequence per possible target:
+    if(insertit.second)
     {
-      // call function
-      t1->make_function_call(code);
-      auto& newcall=to_code_function_call(t1->code);
-      newcall.function()=it->symbol_expr;
-      pointer_typet need_type(symbol_typet(it->symbol_expr.get(ID_C_class)));
-      if(newcall.arguments()[0].type()!=need_type)
-        newcall.arguments()[0].make_typecast(need_type);
-    }
-    else
-    {
-      // No definition for this type; shouldn't be possible...
-      t1->make_assertion(false_exprt());
-    }
-    last_function=t1;
+      goto_programt::targett t1=new_code_calls.add_instruction();
+      if(function.symbol_expr.get_identifier()!=irep_idt())
+      {
+	// call function
+	t1->make_function_call(code);
+	auto& newcall=to_code_function_call(t1->code);
+	newcall.function()=function.symbol_expr;
+	pointer_typet need_type(symbol_typet(function.symbol_expr.get(ID_C_class)));
+	if(newcall.arguments()[0].type()!=need_type)
+	  newcall.arguments()[0].make_typecast(need_type);
+      }
+      else
+      {
+	// No definition for this type; shouldn't be possible...
+	t1->make_assertion(false_exprt());
+      }
+      insertit.first->second=t1;
     
-    // goto final
-    goto_programt::targett t3=new_code_calls.add_instruction();
-    t3->make_goto(t_final, true_exprt());
+      // goto final
+      goto_programt::targett t3=new_code_calls.add_instruction();
+      t3->make_goto(t_final, true_exprt());
+    }
 
-    exprt c_id1=constant_exprt(it->class_id, string_typet());
+    // If this calls the base function we just fall through.
+    // Otherwise branch to the right call:
+    if(function.symbol_expr!=base_function_symbol)
+    {
+      exprt c_id1=constant_exprt(function.class_id, string_typet());
     
-    goto_programt::targett t4=new_code_gotos.add_instruction();
-    t4->make_goto(t1, equal_exprt(c_id1, c_id2));
+      goto_programt::targett t4=new_code_gotos.add_instruction();
+      t4->make_goto(insertit.first->second, equal_exprt(c_id1, c_id2));
+    }
   }
-
-  // In any other case (most likely a stub class) call the most basic
-  // version of the method we know to exist:
-  goto_programt::targett fallthrough=new_code_gotos.add_instruction();
-  fallthrough->make_goto(last_function);
 
   goto_programt new_code;
   
