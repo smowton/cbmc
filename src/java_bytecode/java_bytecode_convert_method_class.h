@@ -8,12 +8,14 @@
 #include <util/std_expr.h>
 #include <analyses/cfg_dominators.h>
 #include "java_bytecode_parse_tree.h"
+#include "java_bytecode_convert_class.h"
 
 #include <vector>
 #include <list>
 
 class symbol_tablet;
 class symbolt;
+class class_hierarchyt;
 
 class java_bytecode_convert_methodt:public messaget
 {
@@ -22,7 +24,9 @@ public:
     symbol_tablet &_symbol_table,
     message_handlert &_message_handler,
     const bool &_disable_runtime_checks,
-    int _max_array_length);
+    int _max_array_length,
+    std::vector<irep_idt>& _needed_methods,
+    const class_hierarchyt& _ch);
 
   typedef java_bytecode_parse_treet::methodt methodt;
   typedef java_bytecode_parse_treet::instructiont instructiont;
@@ -53,6 +57,8 @@ protected:
   symbol_tablet &symbol_table;
   const bool &disable_runtime_checks;
   int max_array_length;
+  std::vector<irep_idt>& needed_methods;
+  const class_hierarchyt& class_hierarchy;
 
   irep_idt current_method;
   typet method_return_type;

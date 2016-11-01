@@ -28,11 +28,13 @@ public:
     symbol_tablet &_symbol_table,
     message_handlert &_message_handler,
     const bool &_disable_runtime_checks,
-    int _max_array_length):
+    int _max_array_length,
+    lazy_methodst& _lm):
     messaget(_message_handler),
     symbol_table(_symbol_table),
     disable_runtime_checks(_disable_runtime_checks),
-    max_array_length(_max_array_length)
+    max_array_length(_max_array_length),
+    lazy_methods(_lm)
   {
   }
 
@@ -53,6 +55,7 @@ protected:
   symbol_tablet &symbol_table;
   const bool &disable_runtime_checks;
   int max_array_length;
+  lazy_methodst &lazy_methods;
 
   // conversion
   void convert(const classt &c);
@@ -134,10 +137,18 @@ void java_bytecode_convert_classt::convert(const classt &c)
     convert(*class_symbol, it);
 
   // now do methods
+  
   for(const auto & it : c.methods)
-    java_bytecode_convert_method(
-      *class_symbol, it, symbol_table, get_message_handler(), 
-      disable_runtime_checks, max_array_length);
+  {
+    const irep_idt method_identifier=
+      id2string(qualified_classname)+"."+id2string(it.name)+":"+it.signature;
+    java_bytecode_convert_method_lazy(
+      *class_symbol,method_identifier,it,symbol_table);
+    lazy_methods[method_identifier]=std::make_pair(class_symbol,&it);
+  }
+  //java_bytecode_convert_method(
+  //  *class_symbol, it, symbol_table, get_message_handler(), 
+  //  disable_runtime_checks, max_array_length);
 
   // is this a root class?
   if(c.extends.empty())
@@ -317,13 +328,15 @@ bool java_bytecode_convert_class(
   const bool &disable_runtime_checks,
   symbol_tablet &symbol_table,
   message_handlert &message_handler,
-  int max_array_length)
+  int max_array_length,
+  lazy_methodst& lazy_methods)
 {
   java_bytecode_convert_classt java_bytecode_convert_class(
 			       symbol_table, 
 			       message_handler, 
 			       disable_runtime_checks,
-			       max_array_length);
+			       max_array_length,
+			       lazy_methods);
 
   try
   {

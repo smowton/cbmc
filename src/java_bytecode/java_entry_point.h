@@ -22,6 +22,7 @@ bool java_entry_point(
 
 std::tuple<symbolt, bool, bool> get_main_symbol(symbol_tablet &symbol_table,
                                                 const irep_idt &main_class,
-                                                message_handlert &);
+                                                message_handlert &,
+						bool allow_no_body = false);
 
 #endif

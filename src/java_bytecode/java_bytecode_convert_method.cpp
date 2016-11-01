@@ -20,6 +20,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/expr_util.h>
 
 #include <goto-programs/cfg.h>
+#include <goto-programs/class_hierarchy.h>
 #include <analyses/cfg_dominators.h>
 
 #include "java_bytecode_convert_method.h"
@@ -91,11 +92,15 @@ java_bytecode_convert_methodt::java_bytecode_convert_methodt(
   symbol_tablet &_symbol_table,
   message_handlert &_message_handler,
   const bool &_disable_runtime_checks,
-  int _max_array_length):
+  int _max_array_length,
+  std::vector<irep_idt>& _needed_methods,
+  const class_hierarchyt& _ch) :
   messaget(_message_handler),
   symbol_table(_symbol_table),
   disable_runtime_checks(_disable_runtime_checks),
-  max_array_length(_max_array_length)
+  max_array_length(_max_array_length),
+  needed_methods(_needed_methods),
+  class_hierarchy(_ch)
 {
 }
 
@@ -181,6 +186,35 @@ void java_bytecode_convert_methodt::push(const exprt::operandst &o)
     stack[stack.size()-o.size()+i]=o[i];
 }
 
+void java_bytecode_convert_method_lazy(
+  const symbolt& class_symbol,
+  const irep_idt method_identifier,
+  const java_bytecode_parse_treet::methodt &m,
+  symbol_tablet& symbol_table)
+{
+  symbolt method_symbol;
+  typet member_type=java_type_from_string(m.signature);
+
+  method_symbol.name=method_identifier;
+  method_symbol.base_name=m.base_name;
+  method_symbol.mode=ID_java;
+  method_symbol.location=m.source_location;
+  method_symbol.location.set_function(method_identifier);
+  
+  if(method_symbol.base_name=="<init>")
+  {
+    method_symbol.pretty_name=id2string(class_symbol.pretty_name)+"."+
+                              id2string(class_symbol.base_name)+"()";
+    member_type.set(ID_constructor,true);
+  }
+  else
+    method_symbol.pretty_name=id2string(class_symbol.pretty_name)+"."+
+      id2string(m.base_name)+"()";
+
+  method_symbol.type=member_type;
+  symbol_table.add(method_symbol);
+}
+  
 /*******************************************************************\
 
 Function: java_bytecode_convert_methodt::convert
@@ -346,9 +380,9 @@ void java_bytecode_convert_methodt::convert(
   if(!m.is_abstract)
     method_symbol.value=convert_instructions(m, code_type);
 
-  // do we have the method symbol already?
+  // Replace the existing stub symbol with the real deal:
   const auto s_it=symbol_table.symbols.find(method.get_name());
-  if(s_it!=symbol_table.symbols.end())
+  assert(s_it!=symbol_table.symbols.end());
     symbol_table.symbols.erase(s_it); // erase, we stubbed it
     
   symbol_table.add(method_symbol);
@@ -991,6 +1025,8 @@ codet java_bytecode_convert_methodt::convert_instructions(
 	  id2string(fn_basename) + "()";
       auto fn_type=arg0.type();
       check_stub_function(id,fn_basename,fn_prettyname,fn_type);
+
+      needed_methods.push_back(arg0.get(ID_identifier));
       
       if(is_virtual)
       {
@@ -998,6 +1034,17 @@ codet java_bytecode_convert_methodt::convert_instructions(
         assert(use_this);
         assert(!call.arguments().empty());
         call.function()=arg0;
+	const auto& call_class=arg0.get(ID_C_class);
+	assert(call_class!=irep_idt());
+	const auto& call_basename=arg0.get(ID_component_name);
+	assert(call_basename!=irep_idt());
+	auto child_classes=class_hierarchy.get_children_trans(call_class);
+	for(const auto& child_class : child_classes)
+	{
+	  auto methodid=id2string(child_class)+"."+id2string(call_basename);
+	  if(symbol_table.has_symbol(methodid))
+	    needed_methods.push_back(methodid);
+	}
       }
       else
       {
@@ -1974,13 +2021,17 @@ void java_bytecode_convert_method(
   symbol_tablet &symbol_table,
   message_handlert &message_handler,
   const bool &disable_runtime_checks,
-  int max_array_length)
+  int max_array_length,
+  std::vector<irep_idt>& needed_methods,
+  const class_hierarchyt& ch)
 {
   java_bytecode_convert_methodt java_bytecode_convert_method(
 				symbol_table, 
 				message_handler, 
 				disable_runtime_checks, 
-				max_array_length);
+				max_array_length,
+				needed_methods,
+				ch);
 
   java_bytecode_convert_method(class_symbol, method);
 }

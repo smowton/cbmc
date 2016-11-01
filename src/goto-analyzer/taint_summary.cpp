@@ -207,8 +207,15 @@ static void  initialise_domain(
 
 /*******************************************************************\
 \*******************************************************************/
-typedef std::unordered_set<instruction_iteratort,
-                           instruction_iterator_hashert>
+
+struct order_by_location_number {
+  bool operator()(instruction_iteratort a, instruction_iteratort b)
+  {
+    return a->location_number < b->location_number;
+  }
+};
+
+typedef std::set<instruction_iteratort,order_by_location_number>
         solver_work_set_t;
 
 
@@ -1364,7 +1371,7 @@ taint_summary_ptrt  taint_summarise_function(
     *log << "<h2>Called sumfn::taint::taint_summarise_function( "
          << to_html_text(as_string(function_id)) << " )</h2>\n"
          ;
-
+  
   goto_functionst::function_mapt const&  functions =
       instrumented_program.goto_functions.function_map;
   auto const  fn_iter = functions.find(function_id);
@@ -1449,10 +1456,27 @@ taint_summary_ptrt  taint_summarise_function(
 
     instruction_iteratort const  src_instr_it = *work_set.cbegin();
     work_set.erase(work_set.cbegin());
+
 //    ++steps;
 
     taint_map_from_lvalues_to_svaluest const&  src_value =
         domain->at(src_instr_it);
+
+    taint_map_from_lvalues_to_svaluest const  transformed =
+      transform(
+          src_value,
+          src_instr_it,
+          function_id,
+          functions,
+          database,
+          lvsa,
+          ns,
+          log
+//          ,
+//		children_with_summaries,
+//		nsummary_uses,
+//		ndistinct_summary_inputs
+          );
 
     goto_programt::const_targetst successors;
     fn_iter->second.body.get_successors(src_instr_it, successors);
@@ -1484,21 +1508,6 @@ taint_summary_ptrt  taint_summarise_function(
           taint_dump_lvalues_to_svalues_in_html(old_dst_value,ns,*log);
         }
 
-        taint_map_from_lvalues_to_svaluest const  transformed =
-            transform(
-                src_value,
-                src_instr_it,
-                function_id,
-                functions,
-                database,
-                lvsa,
-                ns,
-                log
-//              ,
-//		children_with_summaries,
-//		nsummary_uses,
-//		ndistinct_summary_inputs
-                );
         dst_value = join(transformed,old_dst_value);
 
         if (log != nullptr)
