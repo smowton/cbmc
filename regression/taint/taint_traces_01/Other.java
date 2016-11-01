@@ -1,5 +1,11 @@
 public class Other {
 
+  public static void stringFoo() {
+    String s = "hello";
+    s = s+"world";
+  }
+
+
   public static void branches(int x) {
     if (x > 100)
       --x;

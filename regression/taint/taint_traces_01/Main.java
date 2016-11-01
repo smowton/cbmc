@@ -25,7 +25,7 @@ public class Main {
 */  
   public static void foo() {
     int x1 = Main.taint_source_X1_retval();
-//    x1 = Main.taint_sanitiser_X1_retval(x1);
+    x1 = Main.taint_sanitiser_X1_retval(x1);
     Other.XX();
     GG = x1;
     Other.YY();

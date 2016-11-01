@@ -420,9 +420,7 @@ int goto_analyzer_parse_optionst::doit()
   if(process_goto_program(options))
     return 6;
 
-  taint_statisticst::instance().end_goto_program_building(
-        static_cast<goto_modelt const&>(goto_model)
-        );
+  taint_statisticst::instance().end_goto_program_building();
 
   if (cmdline.isset("run-pointsto-temp-analyser"))
     return run_pointsto_temp_analyser(goto_model,cmdline,get_message_handler());
@@ -454,7 +452,10 @@ int goto_analyzer_parse_optionst::doit()
           taint_sinks
           );
 
-      taint_statisticst::instance().end_taint_info_instrumentation();
+      taint_statisticst::instance().end_taint_info_instrumentation(
+            static_cast<goto_modelt const&>(goto_model),
+            taint_sinks
+            );
 
       std::stringstream  log;
 

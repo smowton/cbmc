@@ -19,6 +19,7 @@ traces (if any).
 #define CPROVER_TAINT_STATISTICS_H
 
 #include <goto-programs/goto_model.h>
+#include <goto-analyzer/taint_trace_recogniser.h>
 #include <map>
 #include <set>
 #include <unordered_map>
@@ -54,18 +55,42 @@ public:
   ///////////////////////////////////////////////////////////////////
 
   void  begin_lvsa_analysis();
-  void  end_lvsa_analysis();
-  void  on_fixpoint_step_of_lvsa_analysis();
+  void  end_lvsa_analysis(
+      std::size_t const  num_fixpoint_steps_,
+      std::size_t const  num_uses_of_callee_summaries_,
+      std::size_t const  num_of_processed_rules_callee_summaries_
+      );
 
   void  begin_taint_summaries();
-  void  end_taint_summaries();
+  void  end_taint_summaries(
+      taint_map_from_lvalues_to_svaluest const&  input,
+      taint_map_from_lvalues_to_svaluest const&  output,
+      taint_summary_domain_ptrt const  domain
+      );
   void  on_fixpoint_step_of_taint_summaries();
+  void  on_taint_analysis_use_callee_summary(
+      taint_summary_ptrt const  summary
+      );
+  void  on_taint_analysis_use_my_summary();
+
+  void  on_set_may(unsigned int const  location);
+  void  on_clear_may(unsigned int const  location);
+  void  on_get_may(unsigned int const  location);
 
   ///////////////////////////////////////////////////////////////////
   /// Queries
   ///////////////////////////////////////////////////////////////////
 
   std::size_t  get_num_locations() const noexcept { return num_locations; }
+
+  std::set<unsigned int> const&  get_locations_of_taint_sources() const noexcept
+  { return sources; }
+
+  std::set<unsigned int> const&  get_locations_of_taint_sinks() const noexcept
+  { return sinks; }
+
+  std::set<unsigned int> const&
+      get_locations_of_taint_sanitisers() const noexcept { return sanitisers; }
 
   durationt  get_duration_of_lvsa_analysis() const;
   durationt  get_duration_of_taint_summaries() const;
@@ -77,16 +102,52 @@ public:
 
   std::size_t  get_num_fixpoint_steps_of_both_analyses() const;
 
+  std::size_t  get_num_lvsa_uses_of_callee_summaries() const noexcept
+  { return num_lvsa_uses_of_callee_summaries; }
+  std::size_t  get_num_lvsa_of_processed_rules_callee_summaries() const noexcept
+  { return num_lvsa_of_processed_rules_callee_summaries; }
+
+  std::size_t  get_summary_input_size() const noexcept
+  { return summary_input_size; }
+  std::size_t  get_summary_output_size() const noexcept
+  { return summary_output_size; }
+  std::size_t  get_summary_domain_size() const noexcept
+  { return summary_domain_size; }
+
+  std::size_t  get_num_usages_of_my_summary() const noexcept
+  { return num_usages_of_my_summary; }
+
+  std::size_t  get_num_usages_of_callee_summaries() const noexcept
+  { return num_usages_of_callee_summaries; }
+  std::size_t  get_num_rules_in_used_callee_summaries() const noexcept
+  { return num_rules_in_used_callee_summaries; }
+
 private:
   std::size_t  num_locations;
+
+  std::set<unsigned int>  sources;
+  std::set<unsigned int>  sinks;
+  std::set<unsigned int>  sanitisers;
 
   time_pointt  time_point_begin_lvsa_analysis;
   time_pointt  time_point_end_lvsa_analysis;
   std::size_t  num_fixpoint_steps_of_lvsa_analysis;
 
+  std::size_t  num_lvsa_uses_of_callee_summaries;
+  std::size_t  num_lvsa_of_processed_rules_callee_summaries;
+
   time_pointt  time_point_begin_taint_summaries;
   time_pointt  time_point_end_taint_summaries;
   std::size_t  num_fixpoint_steps_of_taint_summaries;
+
+  std::size_t  summary_input_size;
+  std::size_t  summary_output_size;
+  std::size_t  summary_domain_size;
+
+  std::size_t  num_usages_of_my_summary;
+
+  std::size_t  num_usages_of_callee_summaries;
+  std::size_t  num_rules_in_used_callee_summaries;
 };
 
 
@@ -125,10 +186,13 @@ public:
   ///////////////////////////////////////////////////////////////////
 
   void  begin_goto_program_building();
-  void  end_goto_program_building(goto_modelt const&  model);
+  void  end_goto_program_building();
 
   void  begin_taint_info_instrumentation();
-  void  end_taint_info_instrumentation();
+  void  end_taint_info_instrumentation(
+      goto_modelt const&  model,
+      taint_sinks_mapt  taint_sinks
+      );
 
   void  begin_loading_lvsa_database();
   void  end_loading_lvsa_database();
@@ -140,12 +204,23 @@ public:
   void  end_callgraph_building();
 
   void  begin_lvsa_analysis_of_function(std::string const&  fn_name);
-  void  end_lvsa_analysis_of_function();
-  void  on_fixpoint_step_of_lvsa_analysis();
+  void  end_lvsa_analysis_of_function(
+      std::size_t const  num_fixpoint_steps,
+      std::size_t const  num_uses_of_callee_summaries,
+      std::size_t const  num_of_processed_rules_callee_summaries
+      );
 
   void  begin_taint_analysis_of_function(std::string const&  fn_name);
-  void  end_taint_analysis_of_function();
+  void  end_taint_analysis_of_function(
+      taint_map_from_lvalues_to_svaluest const&  input,
+      taint_map_from_lvalues_to_svaluest const&  output,
+      taint_summary_domain_ptrt const  domain
+      );
   void  on_fixpoint_step_of_taint_analysis();
+  void  on_taint_analysis_use_callee_summary(
+      taint_summary_ptrt const  summary,
+      std::string const  callee_name
+      );
 
   void  begin_error_traces_recognition();
   void  end_error_traces_recognition();
@@ -168,6 +243,7 @@ public:
 
   durationt  get_duration_of_program_building() const;
   durationt  get_duration_of_program_instrumentation() const;
+  durationt  get_duration_of_program_info_collecting() const;
   durationt  get_duration_of_loading_lvsa_database() const;
   durationt  get_duration_of_loading_taint_database() const;
   durationt  get_duration_of_callgraph_building() const;
@@ -205,6 +281,9 @@ private:
   time_pointt  time_point_begin_program_instrumentation;
   time_pointt  time_point_end_program_instrumentation;
 
+  time_pointt  time_point_begin_program_info_collecting;
+  time_pointt  time_point_end_program_info_collecting;
+
   time_pointt  time_point_begin_load_lvsa_database;
   time_pointt  time_point_end_load_lvsa_database;
 
@@ -213,9 +292,6 @@ private:
 
   time_pointt  time_point_begin_callgraph_build;
   time_pointt  time_point_end_callgraph_build;
-
-  time_pointt  time_point_begin_taint_analysis;
-  time_pointt  time_point_end_taint_analysis;
 
   time_pointt  time_point_begin_error_traces_recognition;
   time_pointt  time_point_end_error_traces_recognition;
