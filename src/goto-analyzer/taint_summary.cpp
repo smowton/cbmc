@@ -1342,6 +1342,7 @@ void  taint_summarise_all_functions(
     auto const  fn_it = functions_map.find(fn_name);
     if (fn_it != functions_map.cend() && fn_it->second.body_available())
     {
+      msgout.debug() << "Start function " << fn_name << "\n";
       summaries_to_compute.insert({
           as_string(fn_name),
           taint_summarise_function(
