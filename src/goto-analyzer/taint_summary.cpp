@@ -1381,6 +1381,7 @@ taint_summary_ptrt  taint_summarise_function(
   assert(fn_iter != functions.cend());
   assert(fn_iter->second.body_available());
 
+  std::cout << "begin_lvsa_analysis_of_function(" << as_string(function_id) << ")\n\n\n"; std::cout.flush();
   taint_statisticst::instance().begin_lvsa_analysis_of_function(
         as_string(function_id)
         );
@@ -1417,9 +1418,11 @@ taint_summary_ptrt  taint_summarise_function(
         lvsainst.nstubs,
         lvsainst.nstub_assignments
         );
+  std::cout << "end_lvsa_analysis_of_function\n\n\n"; std::cout.flush();
 
 //  auto start_time = std::chrono::high_resolution_clock::now();
   
+  std::cout << "begin_taint_analysis_of_function(" << as_string(function_id) << ")\n\n\n"; std::cout.flush();
   taint_statisticst::instance().begin_taint_analysis_of_function(
         as_string(function_id)
         );
@@ -1560,6 +1563,7 @@ taint_summary_ptrt  taint_summarise_function(
   taint_statisticst::instance().end_taint_analysis_of_function(
         input,output,domain
         );
+  std::cout << "end_taint_analysis_of_function\n\n\n"; std::cout.flush();
 
   return std::make_shared<taint_summaryt>(input,output,domain);
 }

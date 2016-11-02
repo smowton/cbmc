@@ -395,6 +395,7 @@ int goto_analyzer_parse_optionst::doit()
            << config.this_operating_system() << eom;
 
   taint_statisticst::instance().begin_goto_program_building();
+  status() << "begin_goto_program_building" << eom;
 
   register_languages();
   
@@ -420,6 +421,7 @@ int goto_analyzer_parse_optionst::doit()
   if(process_goto_program(options))
     return 6;
 
+  status() << "end_goto_program_building" << eom;
   taint_statisticst::instance().end_goto_program_building();
 
   if (cmdline.isset("run-pointsto-temp-analyser"))
@@ -443,6 +445,7 @@ int goto_analyzer_parse_optionst::doit()
       taint_sinks_mapt  taint_sinks;
 
       taint_statisticst::instance().begin_taint_info_instrumentation();
+      status() << "begin_taint_info_instrumentation" << eom;
 
       taint_analysis_instrument_knowledge(
           goto_model,
@@ -452,6 +455,7 @@ int goto_analyzer_parse_optionst::doit()
           taint_sinks
           );
 
+      status() << "begin_taint_info_instrumentation" << eom;
       taint_statisticst::instance().end_taint_info_instrumentation(
             static_cast<goto_modelt const&>(goto_model),
             taint_sinks
@@ -463,22 +467,28 @@ int goto_analyzer_parse_optionst::doit()
       std::string lvsa_json_directory=cmdline.get_value("lvsa-summary-directory");
 
       taint_statisticst::instance().begin_loading_lvsa_database();
+      status() << "begin_loading_lvsa_database" << eom;
 
       local_value_set_analysist::dbt lvsa_database(lvsa_json_directory);
 
+      status() << "end_loading_lvsa_database" << eom;
       taint_statisticst::instance().end_loading_lvsa_database();
       taint_statisticst::instance().begin_loading_taint_summaries_database();
+      status() << "begin_loading_taint_summaries_database" << eom;
 
       summary_json_databaset<taint_summaryt> summaries(json_directory);
 
+      status() << "end_loading_taint_summaries_database" << eom;
       taint_statisticst::instance().end_loading_taint_summaries_database();
 
       std::string fname=cmdline.get_value("function");
 
       taint_statisticst::instance().begin_callgraph_building();
+      status() << "begin_callgraph_building" << eom;
 
       call_grapht const  call_graph(goto_model.goto_functions);
 
+      status() << "end_callgraph_building" << eom;
       taint_statisticst::instance().end_callgraph_building();
 
       local_value_set_analysist::dbt* lvsa_database_ptr = 
