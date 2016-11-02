@@ -693,9 +693,12 @@ void value_sett::get_value_set_rec(
       for(const auto& num : tmp.read())
       {
         const auto& e=object_numbering[num.first];
-        if(e.id()=="external-value-set")
+	const exprt* underlying=&e;
+	while(underlying->id()==ID_member)
+	  underlying=&underlying->op0();
+        if(underlying->id()=="external-value-set")
         {
-          external_value_set_exprt evse_copy=to_external_value_set(e);
+          external_value_set_exprt evse_copy=to_external_value_set(*underlying);
           evse_copy.type()=expr.type().subtype();
           insert(dest,evse_copy,num.second);
         }

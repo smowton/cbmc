@@ -105,6 +105,7 @@ static void  initialise_domain(
 
           auto const&  fn_type = functions_map.at(callee_ident).type;
 
+	  /*
           for (exprt const&  arg : fn_call.arguments())
           {
             set_of_access_pathst  paths;
@@ -124,6 +125,7 @@ static void  initialise_domain(
                           )
                       );
           }
+	  */
 
           taint_summary_ptrt const  summary =
               database.find<taint_summaryt>(callee_ident);
@@ -195,6 +197,7 @@ static void  initialise_domain(
         ns,
         *log
         );
+
     *log << "<p>Domain value at all other locations:</p>\n";
     taint_dump_lvalues_to_svalues_in_html(
         domain.at(std::prev(function.body.instructions.cend())),
@@ -854,12 +857,12 @@ static void collect_referee_access_paths(
 
 static exprt transform_external_objects(const exprt& e)
 {
-  if(e.id()==ID_member && e.op0().id()=="external-value-set")
+  if(e.id()==ID_member && get_underlying_object(e).id()=="external-value-set")
   {
     // Rewrite member(externals, "x") as externals("x"), to make subsequent processing easier
     // Note this means we use externals("x") to mean "any x field" whereas LVSA uses it to mean
     // deref(any x field)
-    auto evs_copy=to_external_value_set(e.op0());
+    auto evs_copy=to_external_value_set(get_underlying_object(e));
     access_path_entry_exprt new_entry("."+id2string(to_member_expr(e).get_component_name()),"","");
     evs_copy.extend_access_path(new_entry);
     evs_copy.label()=constant_exprt("external_objects",string_typet());
@@ -1030,10 +1033,10 @@ taint_map_from_lvalues_to_svaluest  transform(
     local_value_set_analysist* lvsa,
     namespacet const&  ns,
     std::ostream* const  log
-//    ,
-//    std::unordered_set<std::string>& child_summaries,
-//    size_t& nsummary_uses,
-//    size_t& ndistinct_summary_inputs
+    ,
+    std::unordered_set<std::string>& child_summaries,
+    size_t& nsummary_uses,
+    size_t& ndistinct_summary_inputs
     )
 {
   goto_programt::instructiont const&  I=*Iit;
@@ -1065,9 +1068,9 @@ taint_map_from_lvalues_to_svaluest  transform(
                 summary,callee_ident
                 );
 
-//	  nsummary_uses++;
-//	  if(child_summaries.insert(callee_ident).second)
-//	    ndistinct_summary_inputs+=summary->input().size();
+	  nsummary_uses++;
+	  if(child_summaries.insert(callee_ident).second)
+	    ndistinct_summary_inputs+=summary->input().size();
 
           auto const&  fn_type = functions_map.at(callee_ident).type;
 
@@ -1325,13 +1328,13 @@ void  taint_summarise_all_functions(
                                  instrumented_program.goto_functions,
                                  inverted_topological_order);
 
-//  size_t processed=0;
-//  size_t total_funcs=inverted_topological_order.size();
+  size_t processed=0;
+  size_t total_funcs=inverted_topological_order.size();
   messaget msgout;
   msgout.set_message_handler(msg);
   for (auto const&  fn_name : inverted_topological_order)
   {
-//    ++processed;
+    ++processed;
     if(fn_name=="_start")
       continue;
     const goto_functionst::function_mapt& functions_map =
@@ -1339,6 +1342,7 @@ void  taint_summarise_all_functions(
     auto const  fn_it = functions_map.find(fn_name);
     if (fn_it != functions_map.cend() && fn_it->second.body_available())
     {
+      msgout.debug() << "Start function " << fn_name << "\n";
       summaries_to_compute.insert({
           as_string(fn_name),
           taint_summarise_function(
@@ -1350,7 +1354,7 @@ void  taint_summarise_all_functions(
               msg
               ),
           });
-//      msgout.progress() << processed << "/" << total_funcs << " functions analysed" << messaget::eom;
+      msgout.progress() << processed << "/" << total_funcs << " functions analysed" << messaget::eom;
     }
   }
 }
@@ -1395,22 +1399,22 @@ taint_summary_ptrt  taint_summarise_function(
   {
     lvsainst.set_message_handler(msg);
 
-//    auto start_time = std::chrono::high_resolution_clock::now();
+    auto start_time = std::chrono::high_resolution_clock::now();
     
     lvsainst(fn_iter->second.body);
     // Retain this summary for use analysing callers.
     lvsainst.save_summary(fn_iter->second.body);
 
-//    auto end_time = std::chrono::high_resolution_clock::now();
-//    auto duration =
-//      std::chrono::duration_cast<std::chrono::microseconds>(end_time-start_time).count();
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration =
+      std::chrono::duration_cast<std::chrono::microseconds>(end_time-start_time).count();
     
-//    m.progress() << "LVSA: " << function_id <<
-//      " -- steps " << lvsainst.nsteps <<
-//      " stubs " << lvsainst.nstubs <<
-//      " stub_assigns " << lvsainst.nstub_assignments <<
-//      " time " << duration / 1000 << "ms" <<
-//      messaget::eom;
+    m.progress() << "LVSA: " << function_id <<
+      " -- steps " << lvsainst.nsteps <<
+      " stubs " << lvsainst.nstubs <<
+      " stub_assigns " << lvsainst.nstub_assignments <<
+      " time " << duration / 1000 << "ms" <<
+      messaget::eom;
   }
 
   taint_statisticst::instance().end_lvsa_analysis_of_function(
@@ -1420,7 +1424,7 @@ taint_summary_ptrt  taint_summarise_function(
         );
   std::cout << "end_lvsa_analysis_of_function\n\n\n"; std::cout.flush();
 
-//  auto start_time = std::chrono::high_resolution_clock::now();
+  auto start_time = std::chrono::high_resolution_clock::now();
   
   std::cout << "begin_taint_analysis_of_function(" << as_string(function_id) << ")\n\n\n"; std::cout.flush();
   taint_statisticst::instance().begin_taint_analysis_of_function(
@@ -1445,11 +1449,11 @@ taint_summary_ptrt  taint_summarise_function(
   taint_map_from_lvalues_to_svaluest  input =
       domain->at(fn_iter->second.body.instructions.cbegin());
 
-//  size_t domain_size=input.size();
-//  size_t steps=0;
-//  size_t nsummary_uses=0;
-//  size_t ndistinct_summary_inputs=0;
-//  std::unordered_set<std::string> children_with_summaries;
+  size_t domain_size=input.size();
+  size_t steps=0;
+  size_t nsummary_uses=0;
+  size_t ndistinct_summary_inputs=0;
+  std::unordered_set<std::string> children_with_summaries;
   
   solver_work_set_t  work_set;
   initialise_workset(fn_iter->second,work_set);
@@ -1460,7 +1464,7 @@ taint_summary_ptrt  taint_summarise_function(
     instruction_iteratort const  src_instr_it = *work_set.cbegin();
     work_set.erase(work_set.cbegin());
 
-//    ++steps;
+    ++steps;
 
     taint_map_from_lvalues_to_svaluest const&  src_value =
         domain->at(src_instr_it);
@@ -1475,10 +1479,10 @@ taint_summary_ptrt  taint_summarise_function(
           lvsa,
           ns,
           log
-//          ,
-//		children_with_summaries,
-//		nsummary_uses,
-//		ndistinct_summary_inputs
+          ,
+		children_with_summaries,
+		nsummary_uses,
+		ndistinct_summary_inputs
           );
 
     goto_programt::const_targetst successors;
@@ -1543,22 +1547,22 @@ taint_summary_ptrt  taint_summarise_function(
         log
         );
 
-//  auto end_time = std::chrono::high_resolution_clock::now();
-//  auto duration =
-//    std::chrono::duration_cast<std::chrono::microseconds>(end_time-start_time).count();
+  auto end_time = std::chrono::high_resolution_clock::now();
+  auto duration =
+    std::chrono::duration_cast<std::chrono::microseconds>(end_time-start_time).count();
   
-//  size_t this_summary_size=output.size();
+  size_t this_summary_size=output.size();
 
-//  m.progress() << "TA: " << function_id <<
-//    " insts " << fn_iter->second.body.instructions.size() <<
-//    " steps " << steps <<
-//    " indomsize " << domain_size <<
-//    " outdomsize " << this_summary_size <<
-//    " summary_uses " << nsummary_uses <<
-//    " unique_summary_uses " << children_with_summaries.size() <<
-//    " child_summary_inputs " << ndistinct_summary_inputs <<
-//    " time " << duration / 1000 << "ms" <<
-//    messaget::eom;
+  m.progress() << "TA: " << function_id <<
+    " insts " << fn_iter->second.body.instructions.size() <<
+    " steps " << steps <<
+    " indomsize " << domain_size <<
+    " outdomsize " << this_summary_size <<
+    " summary_uses " << nsummary_uses <<
+    " unique_summary_uses " << children_with_summaries.size() <<
+    " child_summary_inputs " << ndistinct_summary_inputs <<
+    " time " << duration / 1000 << "ms" <<
+    messaget::eom;
 
   taint_statisticst::instance().end_taint_analysis_of_function(
         input,output,domain
