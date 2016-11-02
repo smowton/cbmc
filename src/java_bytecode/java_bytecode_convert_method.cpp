@@ -94,12 +94,14 @@ java_bytecode_convert_methodt::java_bytecode_convert_methodt(
   const bool &_disable_runtime_checks,
   int _max_array_length,
   std::vector<irep_idt>& _needed_methods,
+  std::set<irep_idt>& _needed_classes,  
   const class_hierarchyt& _ch) :
   messaget(_message_handler),
   symbol_table(_symbol_table),
   disable_runtime_checks(_disable_runtime_checks),
   max_array_length(_max_array_length),
   needed_methods(_needed_methods),
+  needed_classes(_needed_classes),
   class_hierarchy(_ch)
 {
 }
@@ -954,7 +956,10 @@ codet java_bytecode_convert_methodt::convert_instructions(
 	  if(statement=="invokespecial")
 	  {
 	    if(as_string(arg0.get(ID_identifier)).find("<init>")!=std::string::npos)
+	    {
+	      needed_classes.insert(classname);
 	      code_type.set(ID_constructor, true);
+	    }
 	    else
 	      code_type.set("java_super_method_call", true);
 	  }
@@ -1026,30 +1031,19 @@ codet java_bytecode_convert_methodt::convert_instructions(
       auto fn_type=arg0.type();
       check_stub_function(id,fn_basename,fn_prettyname,fn_type);
 
-      needed_methods.push_back(arg0.get(ID_identifier));
-      
       if(is_virtual)
       {
         // dynamic binding
         assert(use_this);
         assert(!call.arguments().empty());
         call.function()=arg0;
-	const auto& call_class=arg0.get(ID_C_class);
-	assert(call_class!=irep_idt());
-	const auto& call_basename=arg0.get(ID_component_name);
-	assert(call_basename!=irep_idt());
-	auto child_classes=class_hierarchy.get_children_trans(call_class);
-	for(const auto& child_class : child_classes)
-	{
-	  auto methodid=id2string(child_class)+"."+id2string(call_basename);
-	  if(symbol_table.has_symbol(methodid))
-	    needed_methods.push_back(methodid);
-	}
+	// Populate needed methods later, once we know what object types can exist.
       }
       else
       {
         // static binding
         call.function()=symbol_exprt(arg0.get(ID_identifier), arg0.type());
+	needed_methods.push_back(arg0.get(ID_identifier));
       }
 
       call.function().add_source_location()=dloc;
@@ -1553,6 +1547,8 @@ codet java_bytecode_convert_methodt::convert_instructions(
       const auto& fieldname=arg0.get_string(ID_component_name);
       symbol_expr.set_identifier(arg0.get_string(ID_class)+"."+fieldname);
       check_static_field_stub(symbol_expr,fieldname);
+      if(arg0.type().id()==ID_symbol)
+	needed_classes.insert(to_symbol_type(arg0.type()).get_identifier());
       results[0]=java_bytecode_promotion(symbol_expr);
 
       // set $assertionDisabled to false
@@ -1576,6 +1572,8 @@ codet java_bytecode_convert_methodt::convert_instructions(
       const auto& fieldname=arg0.get_string(ID_component_name);
       symbol_expr.set_identifier(arg0.get_string(ID_class)+"."+fieldname);
       check_static_field_stub(symbol_expr,fieldname);
+      if(arg0.type().id()==ID_symbol)
+	needed_classes.insert(to_symbol_type(arg0.type()).get_identifier());      
       c=code_assignt(symbol_expr, op[0]);
     }
     else if(statement==patternt("?2?")) // i2c etc.
@@ -2023,6 +2021,7 @@ void java_bytecode_convert_method(
   const bool &disable_runtime_checks,
   int max_array_length,
   std::vector<irep_idt>& needed_methods,
+  std::set<irep_idt>& needed_classes,
   const class_hierarchyt& ch)
 {
   java_bytecode_convert_methodt java_bytecode_convert_method(
@@ -2031,6 +2030,7 @@ void java_bytecode_convert_method(
 				disable_runtime_checks, 
 				max_array_length,
 				needed_methods,
+				needed_classes,
 				ch);
 
   java_bytecode_convert_method(class_symbol, method);

@@ -172,6 +172,45 @@ bool java_bytecode_languaget::parse(
   return false;
 }
 
+static void get_virtual_method_targets(
+  const exprt& e,
+  const std::set<irep_idt>& needed_classes,
+  std::vector<irep_idt>& needed_methods,
+  const symbol_tablet& symbol_table,
+  const class_hierarchyt& class_hierarchy)
+{
+
+  if(e.id()!=ID_code)
+    return;
+  const auto& c = to_code(e);
+  if(c.get_statement()==ID_function_call)
+  {
+    const auto& called_function=to_code_function_call(c).function();
+    if(called_function.id()!=ID_virtual_function)
+      return;
+    
+    const auto& call_class=called_function.get(ID_C_class);
+    assert(call_class!=irep_idt());
+    const auto& call_basename=called_function.get(ID_component_name);
+    assert(call_basename!=irep_idt());
+    
+    auto child_classes=class_hierarchy.get_children_trans(call_class);
+    child_classes.push_back(call_class);
+    for(const auto& child_class : child_classes)
+    {
+      // Program-wide, is this class ever instantiated?
+      if(!needed_classes.count(child_class))
+	continue;
+      auto methodid=id2string(child_class)+"."+id2string(call_basename);
+      if(symbol_table.has_symbol(methodid))
+	needed_methods.push_back(methodid);
+    }
+  }
+  else
+    forall_operands(it,c)
+      get_virtual_method_targets(*it,needed_classes,needed_methods,symbol_table,class_hierarchy);
+}
+
 static void gather_needed_globals(const exprt& e, const symbol_tablet& symbol_table, symbol_tablet& needed)
 {
   if(e.id()==ID_symbol)
@@ -183,6 +222,44 @@ static void gather_needed_globals(const exprt& e, const symbol_tablet& symbol_ta
   else
     forall_operands(opit,e)
       gather_needed_globals(*opit,symbol_table,needed);
+}
+
+static void gather_field_types(
+  const typet& class_type,
+  const namespacet& ns,
+  std::set<irep_idt>& needed_classes)
+{
+  const auto& underlying_type=to_struct_type(ns.follow(class_type));
+  for(const auto& field : underlying_type.components())
+  {
+    if(field.type().id()==ID_struct || field.type().id()==ID_symbol)
+      gather_field_types(field.type(),ns,needed_classes);
+    else if(field.type().id()==ID_pointer)
+    {
+      needed_classes.insert(to_symbol_type(field.type().subtype()).get_identifier());
+      gather_field_types(field.type().subtype(),ns,needed_classes);
+    }
+  }
+}
+  
+static void initialise_needed_classes(
+  const std::vector<irep_idt>& entry_points,
+  const namespacet& ns,
+  std::set<irep_idt>& needed_classes)
+{
+  for(const auto& mname : entry_points)
+  {
+    const auto& symbol=ns.lookup(mname);
+    const auto& mtype=to_code_type(symbol.type);
+    for(const auto& param : mtype.parameters())
+    {
+      if(param.type().id()==ID_pointer)
+      {
+	needed_classes.insert(to_symbol_type(param.type().subtype()).get_identifier());
+	gather_field_types(param.type().subtype(),ns,needed_classes);
+      }
+    }
+  }
 }
 
 /*******************************************************************\
@@ -231,9 +308,9 @@ bool java_bytecode_languaget::typecheck(
   // Convert-method will need this to find virtual function targets.
   class_hierarchyt ch;
   ch(symbol_table);
-  
-  std::vector<irep_idt> worklist1;
-  std::vector<irep_idt> worklist2;
+
+  std::vector<irep_idt> method_worklist1;
+  std::vector<irep_idt> method_worklist2;
 
   auto main_function=get_main_symbol(symbol_table,main_class,get_message_handler(),true);
   if(std::get<2>(main_function))
@@ -245,34 +322,56 @@ bool java_bytecode_languaget::typecheck(
       const irep_idt methodid="java::"+id2string(main_class)+"."+
 	id2string(method.name)+":"+
 	id2string(method.signature);
-      worklist2.push_back(methodid);
+      method_worklist2.push_back(methodid);
     }
   }
   else
-    worklist2.push_back(std::get<0>(main_function).name);
-  
-  std::set<irep_idt> already_populated;
-  while(worklist2.size()!=0)
-  {
-    std::swap(worklist1,worklist2);
-    for(const auto& mname : worklist1)
+    method_worklist2.push_back(std::get<0>(main_function).name);
+
+  std::set<irep_idt> needed_classes;
+  initialise_needed_classes(method_worklist2,namespacet(symbol_table),needed_classes);
+
+  std::set<irep_idt> methods_already_populated;
+
+  bool any_new_methods;
+  do {
+
+    any_new_methods=false;
+    while(method_worklist2.size()!=0)
     {
-      if(!already_populated.insert(mname).second)
-	continue;
-      auto findit=lazy_methods.find(mname);
-      if(findit==lazy_methods.end())
+      std::swap(method_worklist1,method_worklist2);
+      for(const auto& mname : method_worklist1)
       {
-	debug() << "Skip " << mname << eom;
-	continue;
+	if(!methods_already_populated.insert(mname).second)
+	  continue;
+	auto findit=lazy_methods.find(mname);
+	if(findit==lazy_methods.end())
+        {
+	  debug() << "Skip " << mname << eom;
+	  continue;
+	}
+	debug() << "Lazy methods: elaborate " << mname << eom;      
+	const auto& parsed_method=findit->second;
+	java_bytecode_convert_method(*parsed_method.first,*parsed_method.second,
+				     symbol_table,get_message_handler(),
+				     disable_runtime_checks,max_user_array_length,
+				     method_worklist2,needed_classes,ch);
+	any_new_methods=true;
       }
-      debug() << "Lazy methods: elaborate " << mname << eom;      
-      const auto& parsed_method=findit->second;
-      java_bytecode_convert_method(*parsed_method.first,*parsed_method.second,
-				   symbol_table,get_message_handler(),
-				   disable_runtime_checks,max_user_array_length,worklist2,ch);
+      method_worklist1.clear();
     }
-    worklist1.clear();
-  }
+
+    // Given the object types we now know may be created, populate more
+    // possible virtual function call targets:
+
+    for(const auto& method : methods_already_populated)
+    {
+      const auto& sym=symbol_table.lookup(method);
+      get_virtual_method_targets(sym.value,needed_classes,method_worklist2,
+				 symbol_table,ch);
+    }
+
+  } while(any_new_methods);
 
   // Remove symbols for methods that were declared but never used:
   symbol_tablet keep_symbols;
@@ -281,7 +380,7 @@ bool java_bytecode_languaget::typecheck(
   {
     if(sym.second.is_static_lifetime)
       continue;    
-    if(lazy_methods.count(sym.first) && !already_populated.count(sym.first))
+    if(lazy_methods.count(sym.first) && !methods_already_populated.count(sym.first))
       continue;
     if(sym.second.type.id()==ID_code)
       gather_needed_globals(sym.second.value,symbol_table,keep_symbols);
