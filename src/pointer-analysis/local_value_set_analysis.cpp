@@ -132,13 +132,11 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
         // This should be an external value set assigned to initialise some global or parameter.
         assert(evse.access_path_size()==0);
         const symbolt& inflow_symbol=ns.lookup(to_constant_expr(evse.label()).get_value());
+	exprt inflow_expr;
         if(inflow_symbol.is_static_lifetime)
         {
-          // Global variable. Read its actual incoming value set:
-          value_sett::entryt global_entry_name(inflow_symbol.name,"");
-          value_sett::entryt& global_entry=
-            valuesets.get_entry(global_entry_name,inflow_symbol.type,ns);
-          valuesets.make_union(rhs_map,global_entry.object_map);
+          // Global variable. Read its actual incoming value set:	  
+	  inflow_expr=inflow_symbol.symbol_expr();
         }
         else
         {
@@ -154,8 +152,12 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
             }
           }
           assert(paramidx!=(size_t)-1 && "Unknown parameter symbol?");
-          valuesets.get_value_set(fcall.arguments()[paramidx],rhs_map,ns,false);
+	  inflow_expr=fcall.arguments()[paramidx];
         }
+	pointer_typet expect_type(evse.type());
+	if(inflow_expr.type()!=expect_type)
+	  inflow_expr.make_typecast(expect_type);
+	valuesets.get_value_set(inflow_expr,rhs_map,ns,false);
       }
     }
     else
@@ -171,6 +173,7 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
   for(const auto& assignment : call_summary.field_assignments)
   {
     const auto& rhs_values=pre_call_rhs_value_sets.at(assignment.second);
+    
     if(assignment.first.basename==external_objects_basename)
     {
       std::vector<value_sett::entryt*> lhs_entries;
