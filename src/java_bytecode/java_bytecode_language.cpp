@@ -173,42 +173,45 @@ bool java_bytecode_languaget::parse(
 }
 
 static void get_virtual_method_targets(
-  const exprt& e,
+  const code_function_callt& c,
   const std::set<irep_idt>& needed_classes,
   std::vector<irep_idt>& needed_methods,
   const symbol_tablet& symbol_table,
   const class_hierarchyt& class_hierarchy)
 {
 
+  const auto& called_function=c.function();
+  assert(called_function.id()==ID_virtual_function);
+  
+  const auto& call_class=called_function.get(ID_C_class);
+  assert(call_class!=irep_idt());
+  const auto& call_basename=called_function.get(ID_component_name);
+  assert(call_basename!=irep_idt());
+    
+  auto child_classes=class_hierarchy.get_children_trans(call_class);
+  child_classes.push_back(call_class);
+  for(const auto& child_class : child_classes)
+  {
+    // Program-wide, is this class ever instantiated?
+    if(!needed_classes.count(child_class))
+      continue;
+    auto methodid=id2string(child_class)+"."+id2string(call_basename);
+    if(symbol_table.has_symbol(methodid))
+      needed_methods.push_back(methodid);
+  }
+}
+
+static void gather_virtual_callsites(const exprt& e, std::vector<const code_function_callt*>& result)
+{
   if(e.id()!=ID_code)
     return;
-  const auto& c = to_code(e);
-  if(c.get_statement()==ID_function_call)
-  {
-    const auto& called_function=to_code_function_call(c).function();
-    if(called_function.id()!=ID_virtual_function)
-      return;
-    
-    const auto& call_class=called_function.get(ID_C_class);
-    assert(call_class!=irep_idt());
-    const auto& call_basename=called_function.get(ID_component_name);
-    assert(call_basename!=irep_idt());
-    
-    auto child_classes=class_hierarchy.get_children_trans(call_class);
-    child_classes.push_back(call_class);
-    for(const auto& child_class : child_classes)
-    {
-      // Program-wide, is this class ever instantiated?
-      if(!needed_classes.count(child_class))
-	continue;
-      auto methodid=id2string(child_class)+"."+id2string(call_basename);
-      if(symbol_table.has_symbol(methodid))
-	needed_methods.push_back(methodid);
-    }
-  }
+  const codet& c=to_code(e);
+  if(c.get_statement()==ID_function_call &&
+     to_code_function_call(c).function().id()==ID_virtual_function)
+    result.push_back(&to_code_function_call(c));
   else
-    forall_operands(it,c)
-      get_virtual_method_targets(*it,needed_classes,needed_methods,symbol_table,class_hierarchy);
+    forall_operands(it,e)
+      gather_virtual_callsites(*it,result);
 }
 
 static void gather_needed_globals(const exprt& e, const symbol_tablet& symbol_table, symbol_tablet& needed)
@@ -336,6 +339,7 @@ bool java_bytecode_languaget::typecheck(
   initialise_needed_classes(method_worklist2,namespacet(symbol_table),needed_classes);
 
   std::set<irep_idt> methods_already_populated;
+  std::vector<const code_function_callt*> virtual_callsites;
 
   bool any_new_methods;
   do {
@@ -360,6 +364,7 @@ bool java_bytecode_languaget::typecheck(
 				     symbol_table,get_message_handler(),
 				     disable_runtime_checks,max_user_array_length,
 				     method_worklist2,needed_classes,ch);
+	gather_virtual_callsites(symbol_table.lookup(mname).value,virtual_callsites);
 	any_new_methods=true;
       }
       method_worklist1.clear();
@@ -368,12 +373,12 @@ bool java_bytecode_languaget::typecheck(
     // Given the object types we now know may be created, populate more
     // possible virtual function call targets:
 
-    debug() << "Lazy methods: add virtual method targets" << eom;
+    debug() << "Lazy methods: add virtual method targets (" << virtual_callsites.size() <<
+      " callsites)" << eom;
 
-    for(const auto& method : methods_already_populated)
+    for(const auto& callsite : virtual_callsites)
     {
-      const auto& sym=symbol_table.lookup(method);
-      get_virtual_method_targets(sym.value,needed_classes,method_worklist2,
+      get_virtual_method_targets(*callsite,needed_classes,method_worklist2,
 				 symbol_table,ch);
     }
 
