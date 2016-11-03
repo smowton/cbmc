@@ -35,7 +35,8 @@ void local_value_set_analysist::initialize(const goto_programt& fun)
 {
   summarydb.set_message_handler(get_message_handler());
   // TODO: replace this with something less ugly.
-  value_sett::use_malloc_type=true; 
+  value_sett::use_malloc_type=true;
+  value_sett::use_dead_statements=true;
   value_set_analysist::initialize(fun);
 
   if(fun.instructions.size()==0)
@@ -116,10 +117,6 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
       auto& evse=to_external_value_set(assignment.second);
       if(to_constant_expr(evse.label()).get_value()=="external_objects")
       {
-        // external objects without is_modified set represent the possibility
-        // of the field remaining unchanged, and therefore represent no flow.
-        if(!evse.is_modified())
-          continue;
         std::vector<value_sett::entryt*> rhs_entries;
         get_all_field_value_sets(
           id2string(to_external_value_set(assignment.second).access_path_back().label()),
@@ -274,6 +271,18 @@ void lvsaa_single_external_set_summaryt::from_final_state(
 	const exprt* toexport=&pointsto_expr;
 	while(toexport->id()==ID_member)
 	  toexport=&toexport->op0();
+
+	bool export_this_expr=false;
+	if(toexport->id()=="external-value-set" && to_external_value_set(*toexport).is_modified())
+	  export_this_expr=true;
+	else if(toexport->id()==ID_dynamic_object)
+	  export_this_expr=true;
+	else if(toexport->id()==ID_symbol)
+	  export_this_expr=true;
+	
+	if(!export_this_expr)
+	  continue;
+	
         struct fieldname thisname = {id2string(entry.second.identifier), entry.second.suffix};
         field_assignments.push_back(std::make_pair(thisname,*toexport));
       }
