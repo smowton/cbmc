@@ -154,11 +154,13 @@ template<class SummaryType>
 class summary_json_databaset : public database_of_summariest, public messaget {
  public:
   
- summary_json_databaset(const std::string& dirname) : database_dirname(dirname)
+ summary_json_databaset(const std::string& dirname, bool do_load_index = true)
+   : database_dirname(dirname)
   {
     if(dirname!="")
       fileutl_create_directory(dirname);
-    load_index();
+    if (do_load_index)
+      load_index();
   }
 
   void load_index()
