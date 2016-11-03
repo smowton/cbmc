@@ -42,7 +42,7 @@ class optionst;
   "(taint-analysis):" \
   "(run-pointsto-temp-analyser)" \
   "(lvsa-summary-directory):" \
-  "(local-value-set-analysis)(lvsa-function):" \
+  "(local-value-set-analysis)(show-value-sets)(lvsa-function):" \
   "(taint-no-aa)" \
   "(taint-dump-html-traces)" \
   "(taint-dump-html-summaries)" \

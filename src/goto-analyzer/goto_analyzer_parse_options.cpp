@@ -633,7 +633,7 @@ int goto_analyzer_parse_optionst::doit()
           ns,gf.type,id2string(fname),summarydb,LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET);
         value_set_analysis.set_message_handler(get_message_handler());
         value_set_analysis(gf.body);
-	if(ui_message_handler.get_verbosity()>=message_clientt::M_DEBUG)
+	if(cmdline.isset("show-value-sets"))
 	  show_value_sets(get_ui(), gf.body, value_set_analysis);
 	else
 	  progress() << processed << "/" << total_funcs << " functions analysed" << eom;
