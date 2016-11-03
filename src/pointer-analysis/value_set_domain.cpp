@@ -41,6 +41,7 @@ void value_set_domaint::transform(
   case OTHER:
   case ASSIGN:
   case DECL:
+  case DEAD:
     value_set.apply_code(from_l->code, ns);
     break;
     

@@ -37,6 +37,7 @@ public:
   static object_numberingt object_numbering;
   // TODO: figure out a less awful way to get configuration state into value-set.
   static bool use_malloc_type;
+  static bool use_dead_statements;
 
   typedef irep_idt idt;
   

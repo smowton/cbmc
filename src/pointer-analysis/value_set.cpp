@@ -1885,6 +1885,15 @@ void value_sett::apply_code(
         assign(lhs, exprt(ID_invalid), ns, false, false);
     }
   }
+  else if(statement==ID_dead &&
+	  use_dead_statements)
+  {
+    const exprt &lhs=code.op0();
+    if(lhs.id()!=ID_symbol)
+      throw "dead expected to have symbol on lhs";
+      
+    assign(lhs,exprt(ID_invalid),ns,true,false);
+  }
   else if(statement=="specc_notify" ||
           statement=="specc_wait")
   {
@@ -2065,3 +2074,4 @@ exprt value_sett::make_member(
 }
 
 bool value_sett::use_malloc_type;
+bool value_sett::use_dead_statements;
