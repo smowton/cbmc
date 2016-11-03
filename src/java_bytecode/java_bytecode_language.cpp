@@ -236,8 +236,12 @@ static void gather_field_types(
       gather_field_types(field.type(),ns,needed_classes);
     else if(field.type().id()==ID_pointer)
     {
-      needed_classes.insert(to_symbol_type(field.type().subtype()).get_identifier());
-      gather_field_types(field.type().subtype(),ns,needed_classes);
+      // Skip array primitive pointers, for example:
+      if(field.type().subtype().id()!=ID_symbol)
+	continue;
+      const auto& field_classid=to_symbol_type(field.type().subtype()).get_identifier();
+      if(needed_classes.insert(field_classid).second)
+	gather_field_types(field.type().subtype(),ns,needed_classes);
     }
   }
 }
@@ -364,6 +368,8 @@ bool java_bytecode_languaget::typecheck(
     // Given the object types we now know may be created, populate more
     // possible virtual function call targets:
 
+    debug() << "Lazy methods: add virtual method targets" << eom;
+
     for(const auto& method : methods_already_populated)
     {
       const auto& sym=symbol_table.lookup(method);
@@ -390,7 +396,7 @@ bool java_bytecode_languaget::typecheck(
   debug() << "Lazy methods: removed " << symbol_table.symbols.size() - keep_symbols.symbols.size() << " unreachable methods and globals" << eom;
 
   symbol_table.swap(keep_symbols);
-    
+
   // now typecheck all
   if(java_bytecode_typecheck(
        symbol_table, get_message_handler()))
