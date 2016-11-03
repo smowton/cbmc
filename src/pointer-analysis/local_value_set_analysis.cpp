@@ -151,6 +151,10 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
               break;
             }
           }
+	  if(paramidx==(size_t)-1)
+	  {
+	    error() << "Failed to find parameter " << inflow_symbol.name << "(evse label: " << to_constant_expr(evse.label()).get_value() << eom;
+	  }
           assert(paramidx!=(size_t)-1 && "Unknown parameter symbol?");
 	  inflow_expr=fcall.arguments()[paramidx];
         }
@@ -265,8 +269,13 @@ void lvsaa_single_external_set_summaryt::from_final_state(
       for(const auto& pointsto_number : pointsto)
       {
         const auto& pointsto_expr=final_state.object_numbering[pointsto_number.first];
+	// Remove any subclass qualifiers-- for our purposes, "points to A cast to a B"
+	// is equivalent to just "points to A".
+	const exprt* toexport=&pointsto_expr;
+	while(toexport->id()==ID_member)
+	  toexport=&toexport->op0();
         struct fieldname thisname = {id2string(entry.second.identifier), entry.second.suffix};
-        field_assignments.push_back(std::make_pair(thisname,pointsto_expr));
+        field_assignments.push_back(std::make_pair(thisname,*toexport));
       }
     }
   }
