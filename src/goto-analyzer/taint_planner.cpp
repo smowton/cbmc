@@ -22,6 +22,7 @@ the underlying analyses).
 #include <goto-analyzer/taint_analysis.h>
 #include <goto-analyzer/taint_summary.h>
 #include <util/msgstream.h>
+#include <util/string2int.h>
 #include <summaries/utility.h>
 #include <cassert>
 #include <cctype>
@@ -100,18 +101,6 @@ static access_path_to_memoryt string_to_access_path(
                   << function_name << "'."
       );
 }
-
-
-static bool is_TN(const std::string& s)
-{
-  if (s.size() < 2UL || s.front() != 'T')
-    return false;
-  for (std::size_t  i = 1UL; i != s.size(); ++i)
-    if (!std::isdigit(s.at(i)))
-      return false;
-  return true;
-}
-
 
 static taint_plan_for_analysis_ptrt  read_json_plan_for_analysis(
     jsont const&  plan
@@ -206,23 +195,13 @@ static void read_json_taint_symbols(
         );
   for (const jsont&  name : symbols.array)
   {
-    if (!name.is_string())
+    if (!name.is_number())
       throw std::runtime_error(
           msgstream() << "In taint_plannert::taint_plannert() : "
                          "Cannot find string element in "
                          "array element 'taint_symbols'."
           );
-    if (name.value.empty())
-      throw std::runtime_error(
-          msgstream() << "In taint_plannert::taint_plannert() : "
-                         "A taint symbol cannot be an empty string."
-          );
-    if (is_TN(name.value))
-      throw std::runtime_error(
-          msgstream() << "In taint_plannert::taint_plannert() : "
-                         "A taint symbol cannot have the form 'T<number>'."
-          );
-    taint_symbols.push_back(name.value);
+    taint_symbols.push_back(safe_string2unsigned(name.value));
   }
   if (taint_symbols.empty())
     throw std::runtime_error(
@@ -306,14 +285,14 @@ static void read_json_summaries_of_sources(
       taint_svaluet::expressiont  expression;
       for (const auto&  symbol : symbols.array)
       {
-        if (!symbol.is_string())
+        if (!symbol.is_number())
           throw std::runtime_error(
               msgstream() << "In taint_plannert::taint_plannert() : "
                              "Cannot find string value in array 'symbols' "
                              "of array 'summary' of arrays "
                              "'summaries_of_sources'."
-              );
-        expression.insert(symbol.value);
+				   );
+        expression.insert(safe_string2unsigned(symbol.value));
       }
 
       output_map.insert({
@@ -386,14 +365,14 @@ static void read_json_sinks(
       taint_svaluet::expressiont  expression;
       for (const auto&  symbol : symbols.array)
       {
-        if (!symbol.is_string())
+        if (!symbol.is_number())
           throw std::runtime_error(
               msgstream() << "In taint_plannert::taint_plannert() : "
                              "Cannot find string value in array 'symbols' "
                              "of array 'failures' of arrays "
                              "'sinks'."
               );
-        expression.insert(symbol.value);
+        expression.insert(safe_string2unsigned(symbol.value));
       }
 
       map_to_values.insert({

@@ -44,7 +44,7 @@ class  taint_svaluet
 {
 public:
 
-  typedef std::string  taint_symbolt;
+  typedef unsigned long  taint_symbolt;
   typedef std::set<taint_symbolt>  expressiont;
 
   taint_svaluet(
@@ -240,7 +240,7 @@ Function:
 
 
 \*******************************************************************/
-std::string find_taint_value(const exprt &expr);
+taint_svaluet::taint_symbolt find_taint_value(const exprt &expr);
 
 
 /*******************************************************************\

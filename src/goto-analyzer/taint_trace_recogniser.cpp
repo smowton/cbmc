@@ -38,9 +38,9 @@ public:
 
   typedef std::pair<
               std::size_t, //!< Index into this trace where is a call statement.
-              std::unordered_set<std::string> //!< A set of symbols representing
-                                              //!< the tainted symbol in the
-                                              //!< called function.
+              std::unordered_set<taint_svaluet::taint_symbolt> //!< A set of symbols representing
+                                                               //!< the tainted symbol in the
+                                                               //!< called function.
               >
           call_stack_valuet;
 
@@ -50,7 +50,7 @@ public:
 
   explicit trace_under_constructiont(
       taint_trace_elementt const&  element,
-      std::unordered_set<std::string> const&  symbols
+      std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols
       );
 
   taint_tracet const&  get_trace() const noexcept  { return trace; }
@@ -76,8 +76,8 @@ public:
   /// Call-stack-related access/check methods
   bool  stack_has_return() const { return call_stack.size() > 1UL; }
   call_stack_valuet const& stack_top() const { return call_stack.back(); }
-  void  stack_push(std::unordered_set<std::string> const&  symbols);
-  void  stack_set_top(std::unordered_set<std::string> const&  symbols);
+  void  stack_push(std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols);
+  void  stack_set_top(std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols);
   void  stack_pop();
 
 private:
@@ -88,7 +88,7 @@ private:
 
 trace_under_constructiont::trace_under_constructiont(
     taint_trace_elementt const&  element,
-    std::unordered_set<std::string> const&  symbols
+    std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols
     )
   : trace{element}
   , visited{}
@@ -146,7 +146,7 @@ void trace_under_constructiont::push_back(
 }
 
 void  trace_under_constructiont::stack_push(
-    std::unordered_set<std::string> const&  symbols
+    std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols
     )
 {
   assert(!empty());
@@ -155,7 +155,7 @@ void  trace_under_constructiont::stack_push(
 }
 
 void  trace_under_constructiont::stack_set_top(
-    std::unordered_set<std::string> const&  symbols
+    std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols
     )
 {
   assert(!empty());
@@ -210,7 +210,7 @@ static void  taint_collect_successors_inside_function(
     trace_under_constructiont const&  trace,
     taint_trace_elementt const&  elem,
     database_of_summariest const&  summaries,
-    std::string const&  taint_name,
+    taint_svaluet::taint_symbolt const&  taint_name,
     std::string const&  sink_function_name,
     goto_programt::const_targett const sink_instruction,
     std::vector<taint_trace_elementt>&  successors,
@@ -332,7 +332,7 @@ void taint_recognise_error_traces(
     goto_modelt const&  goto_model,
     call_grapht const&  call_graph,
     database_of_summariest const&  summaries,
-    std::string const&  taint_name,
+    taint_svaluet::taint_symbolt const&  taint_name,
     std::string const&  source_function_name,
     goto_programt::const_targett const source_instruction,
     std::string const&  sink_function_name,
@@ -355,7 +355,7 @@ void taint_recognise_error_traces(
             "  <tr>\n"
             "    <td>" << to_html_text(source_function_name) << "</td>\n"
             "    <td>" << source_instruction->location_number << "</td>\n"
-            "    <td>" << to_html_text(taint_name) << "</td>\n"
+            "    <td>" << to_html_text(i2string(taint_name)) << "</td>\n"
             "    <td>" << to_html_text(sink_function_name) << "</td>\n"
             "    <td>" << sink_instruction->location_number << "</td>\n"
             "  </tr>\n"
@@ -527,7 +527,7 @@ void taint_recognise_error_traces(
             as_string(to_symbol_expr(fn_call.function()).get_identifier());
 
         taint_map_from_lvalues_to_svaluest  from_lvalues_to_svalues;
-        std::unordered_set<std::string>  symbols;
+        std::unordered_set<taint_svaluet::taint_symbolt>  symbols;
         {
           taint_summary_domain_ptrt const  domain =
               summaries.find<taint_summaryt>(
@@ -706,7 +706,7 @@ void taint_recognise_error_traces(
       }
       else
       {
-        std::unordered_set<std::string>  stack_symbols(
+        std::unordered_set<taint_svaluet::taint_symbolt>  stack_symbols(
               elem.get_symbols().cbegin(),
               elem.get_symbols().cend()
               );

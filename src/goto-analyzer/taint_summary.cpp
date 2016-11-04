@@ -21,6 +21,7 @@ This module defines interfaces and functionality for taint summaries.
 #include <util/std_types.h>
 #include <util/file_util.h>
 #include <util/msgstream.h>
+#include <util/string2int.h>
 #include <analyses/ai.h>
 #include <vector>
 #include <algorithm>
@@ -629,8 +630,7 @@ static void  maybe_assign(
 taint_svaluet  taint_make_symbol()
 {
   static uint64_t  counter = 0UL;
-  std::string const  symbol_name =
-      msgstream() << "T" << ++counter;
+  taint_svaluet::taint_symbolt const  symbol_name = ++counter;
   return {{symbol_name},false,false};
 }
 
@@ -945,7 +945,9 @@ static void collect_lvsa_access_paths(
   }
 }
 
-std::string find_taint_value(const exprt &expr)
+static const taint_svaluet::taint_symbolt invalid_taint=(unsigned long)-1;
+
+taint_svaluet::taint_symbolt find_taint_value(const exprt &expr)
 {
   if (expr.id() == ID_typecast)
     return find_taint_value(to_typecast_expr(expr).op());
@@ -954,9 +956,9 @@ std::string find_taint_value(const exprt &expr)
   else if (expr.id() == ID_index)
     return find_taint_value(to_index_expr(expr).array());
   else if (expr.id() == ID_string_constant)
-    return as_string(expr.get(ID_value));
+    return safe_string2unsigned(as_string(expr.get(ID_value)));
   else
-    return ""; // ERROR!
+    return invalid_taint; // ERROR!
 }
 
 exprt find_taint_expression(const exprt &expr)
@@ -1155,8 +1157,8 @@ taint_map_from_lvalues_to_svaluest  transform(
     if (I.code.get_statement() == "set_may")
     {
       assert(I.code.operands().size() == 2UL);
-      std::string const  taint_name = find_taint_value(I.code.op1());
-      if (!taint_name.empty())
+      auto const  taint_name = find_taint_value(I.code.op1());
+      if (taint_name!=invalid_taint)
       {
         taint_svaluet const  rvalue({taint_name},false,false);
         taint_lvaluet const  lvalue =
@@ -1180,8 +1182,8 @@ taint_map_from_lvalues_to_svaluest  transform(
     else if (I.code.get_statement() == "clear_may")
     {
       assert(I.code.operands().size() == 2UL);
-      std::string const  taint_name = find_taint_value(I.code.op1());
-      if (!taint_name.empty())
+      auto const  taint_name = find_taint_value(I.code.op1());
+      if (taint_name!=invalid_taint)
       {
         taint_lvaluet const  lvalue =
             normalise(find_taint_expression(I.code.op0()),ns);
