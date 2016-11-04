@@ -683,6 +683,41 @@ code_blockt& java_bytecode_convert_methodt::get_or_create_block_for_pcrange(
     
 }
 
+static void gather_symbol_live_ranges(
+  unsigned pc,
+  const exprt& e,
+  std::map<irep_idt, java_bytecode_convert_methodt::variablet>& result)
+{
+  if(e.id()==ID_symbol)
+  {
+    const auto& symexpr=to_symbol_expr(e);
+    auto findit=result.insert(std::make_pair(symexpr.get_identifier(),
+					     java_bytecode_convert_methodt::variablet()));
+    auto& var=findit.first->second;
+    if(findit.second)
+    {
+      var.symbol_expr=symexpr;
+      var.start_pc=pc;
+      var.length=1;
+    }
+    else
+    {
+      if(pc < var.start_pc)
+      {
+	var.length += (var.start_pc - pc);
+	var.start_pc = pc;
+      }
+      else
+      {
+	var.length = std::max(var.length, (pc - var.start_pc) + 1);
+      }
+    }
+  }
+  else
+    forall_operands(it,e)
+      gather_symbol_live_ranges(pc,*it,result);
+}
+
 /*******************************************************************    \
 
 Function: java_bytecode_convert_methodt::convert_instructions
@@ -1887,19 +1922,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
   // review successor computation of athrow!
   code_blockt code;
 
-  // temporaries; no scoping yet.
-  for(const auto & var : tmp_vars)
-  {
-    code_declt decl = code_declt(var);
-    code_declt &declaration = decl;
-    source_locationt loc = instructions.begin()->source_location;
-    source_locationt &dloc = loc;
-    dloc.set_function(method_id);
-    declaration.add_source_location() = dloc;
-    code.add(declaration);
-  }
-
-  // Add anonymous locals to the symtab, and declare at top:
+  // Add anonymous locals to the symtab:
   for(const auto & var : used_local_names)
   {
     auxiliary_symbolt new_symbol;
@@ -1910,7 +1933,6 @@ codet java_bytecode_convert_methodt::convert_instructions(
     new_symbol.mode=ID_java;
     new_symbol.is_type=false;
     symbol_table.add(new_symbol);
-    code.add(code_declt(new_symbol.symbol_expr()));
   }
 
   // Try to recover block structure as indicated in the local variable table:
@@ -1957,42 +1979,54 @@ codet java_bytecode_convert_methodt::convert_instructions(
     start_new_block=it.second.successors.size()>1;
   }
 
+  // Find out where temporaries are used: 
+  std::map<irep_idt, variablet> temporary_variable_live_ranges;
+  for(const auto& aentry : address_map)
+    gather_symbol_live_ranges(aentry.first,aentry.second.code,temporary_variable_live_ranges);
+
+  std::vector<const variablet*> vars_to_process;
   for(const auto& vlist : variables)
+    for(const auto& v : vlist)
+      vars_to_process.push_back(&v);
+
+  for(const auto& v : tmp_vars)
+    vars_to_process.push_back(&temporary_variable_live_ranges.at(v.get_identifier()));
+
+  for(const auto& v : used_local_names)
+    vars_to_process.push_back(&temporary_variable_live_ranges.at(v.get_identifier()));
+
+  for(const auto vp : vars_to_process)
   {
-    for(const auto& v : vlist)
-    {
-      if(v.is_parameter)
-        continue;
-      // Merge lexical scopes as far as possible to allow us to
-      // declare these variable scopes faithfully.
-      // Don't insert yet, as for the time being the blocks' only
-      // operands must be other blocks.
-      get_or_create_block_for_pcrange(
-        root,
-        root_block,
-        v.start_pc,
-        v.start_pc+v.length,
-        std::numeric_limits<unsigned>::max(),
-        address_map);
-    }
+    const auto& v=*vp;
+    if(v.is_parameter)
+      continue;
+    // Merge lexical scopes as far as possible to allow us to
+    // declare these variable scopes faithfully.
+    // Don't insert yet, as for the time being the blocks' only
+    // operands must be other blocks.
+    get_or_create_block_for_pcrange(
+      root,
+      root_block,
+      v.start_pc,
+      v.start_pc+v.length,
+      std::numeric_limits<unsigned>::max(),
+      address_map);
   }
-  for(const auto& vlist : variables)
-  {  
-    for(const auto& v : vlist)
-    {
-      if(v.is_parameter)
-        continue;
-      if(v.symbol_expr.get_identifier()==irep_idt())
-        continue;
-      auto& block=get_block_for_pcrange(
-        root,
-        root_block,
-        v.start_pc,
-        v.start_pc+v.length,
-        std::numeric_limits<unsigned>::max());
-      code_declt d(v.symbol_expr);
-      block.operands().insert(block.operands().begin(),d);
-    }
+  for(const auto vp : vars_to_process)
+  {
+    const auto& v=*vp;
+    if(v.is_parameter)
+      continue;
+    if(v.symbol_expr.get_identifier()==irep_idt())
+      continue;
+    auto& block=get_block_for_pcrange(
+      root,
+      root_block,
+      v.start_pc,
+      v.start_pc+v.length,
+      std::numeric_limits<unsigned>::max());
+    code_declt d(v.symbol_expr);
+    block.operands().insert(block.operands().begin(),d);
   }
 
   for(auto& block : root_block.operands())

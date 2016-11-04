@@ -65,6 +65,7 @@ protected:
   irep_idt current_method;
   typet method_return_type;
 
+ public:
   class variablet
   {
   public:
@@ -75,7 +76,8 @@ protected:
     std::vector<holet> holes;
     variablet() : symbol_expr(), is_parameter(false) {}      
   };
-  
+
+ protected:
   typedef std::vector<variablet> variablest;
   expanding_vector<variablest> variables;
   std::set<symbol_exprt> used_local_names;
