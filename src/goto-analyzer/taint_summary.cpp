@@ -880,6 +880,7 @@ static exprt transform_external_objects(const exprt& e)
     evs_copy.extend_access_path(new_entry);
     evs_copy.label()=constant_exprt("external_objects",string_typet());
     evs_copy.type()=e.type();
+    evs_copy.remove("modified");
     return evs_copy;
   }
   else if(e.id()=="external-value-set")
@@ -891,6 +892,7 @@ static exprt transform_external_objects(const exprt& e)
     evs_copy.extend_access_path(new_entry);
     evs_copy.label()=constant_exprt("external_objects",string_typet());
     evs_copy.type()=e.type();
+    evs_copy.remove("modified");
     return evs_copy;    
   }
   else
