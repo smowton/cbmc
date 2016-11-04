@@ -299,6 +299,24 @@ taint_map_from_lvalues_to_svaluest  join(
 
 
 /*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
+taint_map_from_lvalues_to_svaluest  assign(
+    taint_map_from_lvalues_to_svaluest const&  a,
+    taint_map_from_lvalues_to_svaluest const&  b
+    );
+
+
+/*******************************************************************\
 \*******************************************************************/
 typedef goto_programt::instructiont::const_targett  instruction_iteratort;
 
@@ -374,7 +392,8 @@ void  taint_summarise_all_functions(
     call_grapht const&  call_graph,
     std::ostream* const  log,
     local_value_set_analysist::dbt* lvsa_db,
-    message_handlert&
+    message_handlert&,
+    double  timeout = 60.0
     );
 
 

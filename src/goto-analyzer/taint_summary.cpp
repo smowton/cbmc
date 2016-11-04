@@ -105,7 +105,7 @@ static void  initialise_domain(
 
           auto const&  fn_type = functions_map.at(callee_ident).type;
 
-	  /*
+          /* // TODO: this loop should be returned back!
           for (exprt const&  arg : fn_call.arguments())
           {
             set_of_access_pathst  paths;
@@ -125,7 +125,7 @@ static void  initialise_domain(
                           )
                       );
           }
-	  */
+          */
 
           taint_summary_ptrt const  summary =
               database.find<taint_summaryt>(callee_ident);
@@ -602,7 +602,10 @@ static void  assign(
 {
   auto const  it = map.find(lvalue);
   if (it == map.end())
-    map.insert({lvalue,svalue});
+  {
+    if (!svalue.is_bottom())
+      map.insert({lvalue,svalue});
+  }
   else
     it->second = svalue;
 }
@@ -615,7 +618,10 @@ static void  maybe_assign(
 {
   auto const  it = map.find(lvalue);
   if (it == map.end())
-    map.insert({lvalue,svalue});
+  {
+    if (!svalue.is_bottom())
+      map.insert({lvalue,svalue});
+  }
   else
     it->second = join(it->second,svalue);
 }
@@ -638,6 +644,13 @@ taint_svaluet  taint_make_bottom()
 taint_svaluet  taint_make_top()
 {
   return {taint_svaluet::expressiont{},false,true};
+}
+
+
+taint_svaluet const&  taint_get_symbol_of_NONDET()
+{
+  static taint_svaluet  symbol = taint_make_symbol();
+  return symbol;
 }
 
 
@@ -977,12 +990,12 @@ static void handle_assignment(
   }
   
   if (log != nullptr)
-    {
-      *log << "<p>\nRecognised ASSIGN instruction. Left-hand-side "
-	"l-value is { ";
-      taint_dump_lvalue_in_html(normalise(asgn.lhs(),ns),ns,*log);
-      *log << " }. Right-hand-side l-values are { ";
-    }
+  {
+    *log << "<p>\nRecognised ASSIGN instruction. Left-hand-side "
+            "l-value is { ";
+    taint_dump_lvalue_in_html(normalise(asgn.lhs(),ns),ns,*log);
+    *log << " }. Right-hand-side l-values are { ";
+  }
 
   taint_svaluet  rvalue = taint_make_bottom();
   {
@@ -992,17 +1005,17 @@ static void handle_assignment(
     else
       collect_lvsa_access_paths(asgn.rhs(),ns,rhs,*lvsa,Iit);
     for (auto const&  lvalue : rhs)
-      {
-	auto const  it = a.find(lvalue);
-	if (it != a.cend())
-	  rvalue = join(rvalue,it->second);
+    {
+      auto const  it = a.find(lvalue);
+      if (it != a.cend())
+        rvalue = join(rvalue,it->second);
 
-	if (log != nullptr)
-          {
-            taint_dump_lvalue_in_html(lvalue,ns,*log);
-            *log << ", ";
-          }
+      if (log != nullptr)
+      {
+        taint_dump_lvalue_in_html(lvalue,ns,*log);
+        *log << ", ";
       }
+    }
   }
 
   if (log != nullptr)
@@ -1010,18 +1023,18 @@ static void handle_assignment(
 
   if(!lvsa)
     assign(result,normalise(asgn.lhs(),ns),rvalue);
-  else {
+  else
+  {
     taint_lvalues_sett lhs;
     collect_lvsa_access_paths(asgn.lhs(),ns,lhs,*lvsa,Iit);
     for(const auto& path : lhs)
-      {
-	if(lhs.size()>1 || (lhs.size()==1 && !is_singular_object(path)))
-	  maybe_assign(result,normalise(path,ns),rvalue);
-	else
-	  assign(result,normalise(path,ns),rvalue);
-      }
+    {
+      if(lhs.size()>1 || (lhs.size()==1 && !is_singular_object(path)))
+        maybe_assign(result,normalise(path,ns),rvalue);
+      else
+        assign(result,normalise(path,ns),rvalue);
+    }
   }
-
 }
 
 taint_map_from_lvalues_to_svaluest  transform(
@@ -1033,10 +1046,6 @@ taint_map_from_lvalues_to_svaluest  transform(
     local_value_set_analysist* lvsa,
     namespacet const&  ns,
     std::ostream* const  log
-    ,
-    std::unordered_set<std::string>& child_summaries,
-    size_t& nsummary_uses,
-    size_t& ndistinct_summary_inputs
     )
 {
   goto_programt::instructiont const&  I=*Iit;
@@ -1046,6 +1055,31 @@ taint_map_from_lvalues_to_svaluest  transform(
   case ASSIGN:
     {
       code_assignt const&  asgn = to_code_assign(I.code);
+      if (asgn.rhs().id() == ID_side_effect)
+      {
+        side_effect_exprt const  see = to_side_effect_expr(asgn.rhs());
+        if(see.get_statement()==ID_nondet)
+        {
+          if (lvsa == nullptr)
+            assign(result,normalise(asgn.lhs(),ns),
+                   taint_get_symbol_of_NONDET());
+          else
+          {
+            taint_lvalues_sett lhs;
+            collect_lvsa_access_paths(asgn.lhs(),ns,lhs,*lvsa,Iit);
+            for (const auto& path : lhs)
+            {
+              if (lhs.size() > 1UL)
+                maybe_assign(result,normalise(path,ns),
+                             taint_get_symbol_of_NONDET());
+              else
+                assign(result,normalise(path,ns),
+                       taint_get_symbol_of_NONDET());
+            }
+          }
+          return result;
+        }
+      }
       handle_assignment(asgn,a,result,Iit,lvsa,ns,log);
     }
     break;
@@ -1067,10 +1101,6 @@ taint_map_from_lvalues_to_svaluest  transform(
           taint_statisticst::instance().on_taint_analysis_use_callee_summary(
                 summary,callee_ident
                 );
-
-	  nsummary_uses++;
-	  if(child_summaries.insert(callee_ident).second)
-	    ndistinct_summary_inputs+=summary->input().size();
 
           auto const&  fn_type = functions_map.at(callee_ident).type;
 
@@ -1094,7 +1124,7 @@ taint_map_from_lvalues_to_svaluest  transform(
                   substituted_summary,
                   summary->output(),
                   symbols_substitution,
-		  a,
+                  a,
                   caller_ident,
                   callee_ident,
                   fn_call,
@@ -1103,7 +1133,7 @@ taint_map_from_lvalues_to_svaluest  transform(
                   log
                   );
           }
-          result = join(result,substituted_summary);
+          result = assign(result,substituted_summary);
         }
         else
           if (log != nullptr)
@@ -1291,6 +1321,18 @@ taint_map_from_lvalues_to_svaluest  join(
 }
 
 
+taint_map_from_lvalues_to_svaluest  assign(
+    taint_map_from_lvalues_to_svaluest const&  a,
+    taint_map_from_lvalues_to_svaluest const&  b
+    )
+{
+  taint_map_from_lvalues_to_svaluest  result = a;
+  for (auto  b_it = b.cbegin(); b_it != b.cend(); ++b_it)
+    assign(result,b_it->first,b_it->second);
+  return result;
+}
+
+
 taint_summaryt::taint_summaryt(
     taint_map_from_lvalues_to_svaluest const&  input,
     taint_map_from_lvalues_to_svaluest const&  output,
@@ -1320,7 +1362,8 @@ void  taint_summarise_all_functions(
     call_grapht const&  call_graph,
     std::ostream* const  log,
     local_value_set_analysist::dbt* lvsa_database,
-    message_handlert& msg
+    message_handlert& msg,
+    double  timeout
     )
 {
   std::vector<irep_idt>  inverted_topological_order;
@@ -1328,13 +1371,52 @@ void  taint_summarise_all_functions(
                                  instrumented_program.goto_functions,
                                  inverted_topological_order);
 
-  size_t processed=0;
-  size_t total_funcs=inverted_topological_order.size();
   messaget msgout;
   msgout.set_message_handler(msg);
+  size_t processed = 0UL;
+  size_t skipped = 0UL;
+
+  auto start_time = std::chrono::high_resolution_clock::now();
   for (auto const&  fn_name : inverted_topological_order)
   {
-    ++processed;
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration<double>(end_time-start_time).count();
+    if (duration >= timeout)
+    {
+      msgout.progress()
+          << "["
+          << std::fixed << std::setprecision(1) << std::setw(5)
+          << (inverted_topological_order.size() == 0UL ? 100.0 :
+                100.0 * (double)(processed + skipped) /
+                        (double)inverted_topological_order.size())
+          << "%] "
+          << " TIMEOUT! ("
+          << processed << " processed, "
+          << inverted_topological_order.size() - processed << " skipped)."
+          << messaget::eom; std::cout.flush();
+      return;
+    }
+//std::string const  fname = as_string(fn_name);
+//if (fname.find("java::sun.") == 0UL
+//    || fname.find("java::jdk.") == 0UL
+//    || fname.find("java::sun.") == 0UL
+//    || fname.find("java::java.") == 0UL
+//    || fname.find("java::javax.") == 0UL
+//    )
+//{
+//  msgout.progress()
+//      << "["
+//      << std::fixed << std::setprecision(1) << std::setw(5)
+//      << (inverted_topological_order.size() == 0UL ? 100.0 :
+//            100.0 * (double)(processed + skipped) /
+//                    (double)inverted_topological_order.size())
+//      << "%] Skipping: "
+//      << fn_name
+//      << messaget::eom; std::cout.flush();
+//  ++skipped;
+//  continue;
+//}
+
     if(fn_name=="_start")
       continue;
     const goto_functionst::function_mapt& functions_map =
@@ -1342,7 +1424,16 @@ void  taint_summarise_all_functions(
     auto const  fn_it = functions_map.find(fn_name);
     if (fn_it != functions_map.cend() && fn_it->second.body_available())
     {
-      msgout.debug() << "Start function " << fn_name << "\n";
+      msgout.progress()
+          << "["
+          << std::fixed << std::setprecision(1) << std::setw(5)
+          << (inverted_topological_order.size() == 0UL ? 100.0 :
+                100.0 * (double)(processed + skipped) /
+                        (double)inverted_topological_order.size())
+          << "%] "
+          << fn_name
+          << messaget::eom; std::cout.flush();
+
       summaries_to_compute.insert({
           as_string(fn_name),
           taint_summarise_function(
@@ -1354,9 +1445,28 @@ void  taint_summarise_all_functions(
               msg
               ),
           });
-      msgout.progress() << processed << "/" << total_funcs << " functions analysed" << messaget::eom;
+
+      ++processed;
+    }
+    else
+    {
+      msgout.progress()
+          << "["
+          << std::fixed << std::setprecision(1) << std::setw(5)
+          << (inverted_topological_order.size() == 0UL ? 100.0 :
+                100.0 * (double)(processed + skipped) /
+                        (double)inverted_topological_order.size())
+          << "%] Skipping: "
+          << fn_name
+          << messaget::eom; std::cout.flush();
+      ++skipped;
     }
   }
+  msgout.progress()
+      << "[100.0%] Taint analysis has finished successfully ("
+      << processed << " processed, "
+      << skipped << " skipped)."
+      << messaget::eom; std::cout.flush();
 }
 
 taint_summary_ptrt  taint_summarise_function(
@@ -1368,9 +1478,6 @@ taint_summary_ptrt  taint_summarise_function(
     message_handlert& msg
     )
 {
-  messaget m;
-  m.set_message_handler(msg);
- 
   if (log != nullptr)
     *log << "<h2>Called sumfn::taint::taint_summarise_function( "
          << to_html_text(as_string(function_id)) << " )</h2>\n"
@@ -1398,22 +1505,9 @@ taint_summary_ptrt  taint_summarise_function(
   {
     lvsainst.set_message_handler(msg);
 
-    auto start_time = std::chrono::high_resolution_clock::now();
-    
     lvsainst(fn_iter->second.body);
     // Retain this summary for use analysing callers.
     lvsainst.save_summary(fn_iter->second.body);
-
-    auto end_time = std::chrono::high_resolution_clock::now();
-    auto duration =
-      std::chrono::duration_cast<std::chrono::microseconds>(end_time-start_time).count();
-    
-    m.progress() << "LVSA: " << function_id <<
-      " -- steps " << lvsainst.nsteps <<
-      " stubs " << lvsainst.nstubs <<
-      " stub_assigns " << lvsainst.nstub_assignments <<
-      " time " << duration / 1000 << "ms" <<
-      messaget::eom;
   }
 
   taint_statisticst::instance().end_lvsa_analysis_of_function(
@@ -1422,8 +1516,6 @@ taint_summary_ptrt  taint_summarise_function(
         lvsainst.nstub_assignments
         );
 
-  auto start_time = std::chrono::high_resolution_clock::now();
-  
   taint_statisticst::instance().begin_taint_analysis_of_function(
         as_string(function_id)
         );
@@ -1445,13 +1537,6 @@ taint_summary_ptrt  taint_summarise_function(
 
   taint_map_from_lvalues_to_svaluest  input =
       domain->at(fn_iter->second.body.instructions.cbegin());
-
-  size_t domain_size=input.size();
-  size_t steps=0;
-  size_t nsummary_uses=0;
-  size_t ndistinct_summary_inputs=0;
-  std::unordered_set<std::string> children_with_summaries;
-  
   solver_work_set_t  work_set;
   initialise_workset(fn_iter->second,work_set);
   while (!work_set.empty())
@@ -1460,8 +1545,6 @@ taint_summary_ptrt  taint_summarise_function(
 
     instruction_iteratort const  src_instr_it = *work_set.cbegin();
     work_set.erase(work_set.cbegin());
-
-    ++steps;
 
     taint_map_from_lvalues_to_svaluest const&  src_value =
         domain->at(src_instr_it);
@@ -1476,10 +1559,6 @@ taint_summary_ptrt  taint_summarise_function(
           lvsa,
           ns,
           log
-          ,
-		children_with_summaries,
-		nsummary_uses,
-		ndistinct_summary_inputs
           );
 
     goto_programt::const_targetst successors;
@@ -1543,23 +1622,6 @@ taint_summary_ptrt  taint_summarise_function(
         ns,
         log
         );
-
-  auto end_time = std::chrono::high_resolution_clock::now();
-  auto duration =
-    std::chrono::duration_cast<std::chrono::microseconds>(end_time-start_time).count();
-  
-  size_t this_summary_size=output.size();
-
-  m.progress() << "TA: " << function_id <<
-    " insts " << fn_iter->second.body.instructions.size() <<
-    " steps " << steps <<
-    " indomsize " << domain_size <<
-    " outdomsize " << this_summary_size <<
-    " summary_uses " << nsummary_uses <<
-    " unique_summary_uses " << children_with_summaries.size() <<
-    " child_summary_inputs " << ndistinct_summary_inputs <<
-    " time " << duration / 1000 << "ms" <<
-    messaget::eom;
 
   taint_statisticst::instance().end_taint_analysis_of_function(
         input,output,domain

@@ -47,8 +47,9 @@ class optionst;
   "(taint-dump-html-traces)" \
   "(taint-dump-html-summaries)" \
   "(taint-dump-html-statistics)" \
-  "(taint-dump-json-statistics)" \
+  "(taint-dump-lvsa-summaries)" \
   "(taint-dump-program)" \
+  "(taint-summaries-timeout-seconds):" \
   "(taint-dump-log)"
 
 class goto_analyzer_parse_optionst:

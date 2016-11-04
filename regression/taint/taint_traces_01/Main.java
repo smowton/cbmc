@@ -1,4 +1,9 @@
 public class Main {
+  public static void stringFoo() {
+    String s = "hello";
+    s = s+"world";
+  }
+
 /*
   public static void branches(int x) {
     if (x > 100)
@@ -25,7 +30,7 @@ public class Main {
 */  
   public static void foo() {
     int x1 = Main.taint_source_X1_retval();
-    x1 = Main.taint_sanitiser_X1_retval(x1);
+//    x1 = Main.taint_sanitiser_X1_retval(x1);
     Other.XX();
     GG = x1;
     Other.YY();
@@ -48,8 +53,13 @@ public class Main {
     return a0;
   }
 */
+
+  public static void XYZ(int a0) { }
+  
+
   public static void bug(int a0) {
     Main.taint_sink_X1_arg_0(a0);
+    XYZ(a0);
   }
   
   static int GG;

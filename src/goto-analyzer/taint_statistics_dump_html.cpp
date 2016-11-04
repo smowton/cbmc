@@ -487,7 +487,7 @@ static void  taint_per_function_stats_table(
                             ;
   }
 
-  std::size_t  fn_id = 0UL;
+  static std::size_t  fn_id = 0UL;
   for (auto const&  fn_name : S.get_map_from_files_to_functions().at(file_name))
   {
     taint_function_statisticst const fS =
@@ -613,16 +613,11 @@ static void  taint_per_function_stats_table(
             ;
 
     {
-      ostr << "    <td align=\"center\"><a href=\"./function_"
-           << fn_id << "_"
-           << to_file_name(fn_name)
+      ostr << "    <td align=\"center\"><a href=\"./function_" << fn_id
            << ".html\">here</a></td>\n"
               ;
       std::ofstream  file_ostr(msgstream() << dump_root_directory
-                                           << "/function_"
-                                           << fn_id << "_"
-                                           << to_file_name(fn_name)
-                                           << ".html");
+                                           << "/function_" << fn_id << ".html");
       dump_html_prefix(file_ostr,"Function statistics");
       file_ostr << "<h1>Statistical data from a run of taint analysis on "
                    "function '"
@@ -740,7 +735,7 @@ static void  taint_per_file_stats_table(
           "    <th colspan=\"2\">Sinks</th>\n"
           "    <th colspan=\"2\">Sanitisers</th>\n"
           "    <th colspan=\"4\">LVSA analysis</th>\n"
-          "    <th colspan=\"4\">Taint summaries</th>\n"
+          "    <th colspan=\"6\">Taint summaries</th>\n"
           "    <th colspan=\"4\">LVSA+Taint summaries</th>\n"
           "    <th rowspan=\"2\">Details</th>\n"
           "  </tr>\n"
@@ -763,6 +758,8 @@ static void  taint_per_file_stats_table(
           "    <th>%</th>\n"
           "    <th>Steps</th>\n"
           "    <th>%</th>\n"
+          "    <th>Rules</th>\n"
+          "    <th>%</th>\n"
           "    <th>Time [s]</th>\n"
           "    <th>%</th>\n"
           "    <th>Steps</th>\n"
@@ -777,6 +774,7 @@ static void  taint_per_file_stats_table(
   std::size_t  total_num_sources = 0UL;
   std::size_t  total_num_sinks = 0UL;
   std::size_t  total_num_sanitisers = 0UL;
+  std::size_t  total_num_rules = 0UL;
   for (auto const&  file_fns : S.get_map_from_files_to_functions())
   {
     for (auto const&  fn_name : file_fns.second)
@@ -791,9 +789,12 @@ static void  taint_per_file_stats_table(
       total_num_sources += fS.get_locations_of_taint_sources().size();
       total_num_sinks += fS.get_locations_of_taint_sinks().size();
       total_num_sanitisers += fS.get_locations_of_taint_sanitisers().size();
+      total_num_rules += fS.get_summary_input_size()
+                            + fS.get_summary_output_size()
+                            + fS.get_summary_domain_size();
     }
   }
-  std::size_t  file_id = 0UL;
+  static std::size_t  file_id = 0UL;
   for (auto const&  file_fns : S.get_map_from_files_to_functions())
   {
     ostr << "  <tr>\n"
@@ -816,6 +817,7 @@ static void  taint_per_file_stats_table(
     std::size_t  num_sources = 0UL;
     std::size_t  num_sinks = 0UL;
     std::size_t  num_sanitisers = 0UL;
+    std::size_t  num_rules = 0UL;
     for (auto const&  fn_name : file_fns.second)
     {
       taint_function_statisticst const fS =
@@ -828,6 +830,9 @@ static void  taint_per_file_stats_table(
       num_sources += fS.get_locations_of_taint_sources().size();
       num_sinks += fS.get_locations_of_taint_sinks().size();
       num_sanitisers += fS.get_locations_of_taint_sanitisers().size();
+      num_rules += fS.get_summary_input_size()
+                      + fS.get_summary_output_size()
+                      + fS.get_summary_domain_size();
     }
     ostr << "    <td align=\"right\">" << num_locations << "</td>\n";
     ostr << "    <td align=\"right\">"
@@ -894,6 +899,13 @@ static void  taint_per_file_stats_table(
          << std::fixed << std::setprecision(1)
          << 100.0 * (total_taint_steps == 0UL ? 0.0 :
                 (double)taint_steps / (double)total_taint_steps)
+         << "</td>\n"
+            ;
+    ostr << "    <td align=\"right\">" << num_rules << "</td>\n";
+    ostr << "    <td align=\"right\">"
+         << std::fixed << std::setprecision(1)
+         << 100.0 * (total_num_rules == 0UL ? 0.0 :
+                (double)num_rules / (double)total_num_rules)
          << "</td>\n"
             ;
 
@@ -974,6 +986,10 @@ static void  taint_per_file_stats_table(
           "    <td align=\"right\"><b>100.0</b></td>\n"
           "    <td align=\"right\"><b>"
        << total_taint_steps
+       << "</b></td>\n"
+          "    <td align=\"right\"><b>100.0</b></td>\n"
+          "    <td align=\"right\"><b>"
+       << total_num_rules
        << "</b></td>\n"
           "    <td align=\"right\"><b>100.0</b></td>\n"
           "    <td align=\"right\"><b>"

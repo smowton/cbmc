@@ -323,13 +323,13 @@ static std::string  dump_callgraph_in_svg(
   std::string const  command =
       msgstream() << "dot -Tsvg \"" << dot_filename
                   << "\" -o \"" << svg_file_pathname << "\"";
-  std::system(command.c_str());
+  //std::system(command.c_str());
 
   return ""; // No error.
 }
 
 
-static std::string  dump_goto_program_in_html(
+std::string  dump_goto_program_in_html(
     goto_modelt const&  program,
     call_grapht const&  call_graph,
     std::string const&  dump_root_directory

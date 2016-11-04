@@ -86,6 +86,25 @@ Function:
 
 
 \*******************************************************************/
+std::string  dump_goto_program_in_html(
+    goto_modelt const&  program,
+    call_grapht const&  call_graph,
+    std::string const&  dump_root_directory
+    );
+
+
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 std::string  dump_in_html(
     object_summaryt const  summary,
     callback_dump_derived_summary_in_htmlt const&  summary_dump_callback,
