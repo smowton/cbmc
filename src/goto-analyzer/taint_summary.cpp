@@ -1420,26 +1420,26 @@ void  taint_summarise_all_functions(
           << messaget::eom; std::cout.flush();
       return;
     }
-//std::string const  fname = as_string(fn_name);
-//if (fname.find("java::sun.") == 0UL
-//    || fname.find("java::jdk.") == 0UL
-//    || fname.find("java::sun.") == 0UL
-//    || fname.find("java::java.") == 0UL
-//    || fname.find("java::javax.") == 0UL
-//    )
-//{
-//  msgout.progress()
-//      << "["
-//      << std::fixed << std::setprecision(1) << std::setw(5)
-//      << (inverted_topological_order.size() == 0UL ? 100.0 :
-//            100.0 * (double)(processed + skipped) /
-//                    (double)inverted_topological_order.size())
-//      << "%] Skipping: "
-//      << fn_name
-//      << messaget::eom; std::cout.flush();
-//  ++skipped;
-//  continue;
-//}
+std::string const  fname = as_string(fn_name);
+if (fname.find("java::sun.") == 0UL
+    || fname.find("java::jdk.") == 0UL
+    || fname.find("java::sun.") == 0UL
+    || fname.find("java::java.") == 0UL
+    || fname.find("java::javax.") == 0UL
+    )
+{
+  msgout.progress()
+      << "["
+      << std::fixed << std::setprecision(1) << std::setw(5)
+      << (inverted_topological_order.size() == 0UL ? 100.0 :
+            100.0 * (double)(processed + skipped) /
+                    (double)inverted_topological_order.size())
+      << "%] Skipping: "
+      << fn_name
+      << messaget::eom; std::cout.flush();
+  ++skipped;
+  continue;
+}
 
     if(fn_name=="_start")
       continue;

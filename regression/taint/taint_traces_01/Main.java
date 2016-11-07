@@ -4,6 +4,11 @@ public class Main {
     s = s+"world";
   }
 
+  public static void  someMethodCaller() {
+    Other ptr = new Other();
+    Other.someMethodCaller(ptr);
+  }
+
 /*
   public static void branches(int x) {
     if (x > 100)

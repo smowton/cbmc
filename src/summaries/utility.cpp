@@ -177,6 +177,19 @@ bool  is_static(access_path_to_memoryt const&  lvalue, namespacet const&  ns)
   return false;
 }
 
+bool  is_auxiliary_variable(access_path_to_memoryt const&  lvalue,
+                            namespacet const&  ns)
+{
+  if (is_identifier(lvalue))
+  {
+    irep_idt const&  name = name_of_symbol_access_path(lvalue);
+    symbolt const*  symbol = nullptr;
+    ns.lookup(name,symbol);
+    return symbol != nullptr && symbol->is_auxiliary;
+  }
+  return false;
+}
+
 bool  is_return_value_auxiliary(access_path_to_memoryt const&  lvalue,
                                 namespacet const&  ns)
 {

@@ -1,4 +1,25 @@
-public class Other {
+class OtherBase1 {
+
+  void  someMethod() {
+  }
+
+}
+
+class OtherBase2 extends OtherBase1 {
+
+  void  someMethod() {
+  }
+
+}
+
+public class Other extends OtherBase2 {
+
+  void  someMethod() {
+  }
+
+  public static void  someMethodCaller(OtherBase1 ptr) {
+    ptr.someMethod();
+  }
 
   public static void branches(int x) {
     if (x > 100)

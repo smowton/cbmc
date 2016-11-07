@@ -54,6 +54,17 @@ public:
   /// Notifications
   ///////////////////////////////////////////////////////////////////
 
+  void  on_declaration() { ++num_declarations; }
+  void  on_temporary() { ++num_temporaries; }
+  void  on_assignment_to_temporary() { ++num_assignments_to_temporaries; }
+  void  on_dead_statement() { ++num_dead_statements; }
+  void  on_NONDET_call() { ++num_NONDET_calls; }
+  void  on_SKIP() { ++num_SKIPs; }
+  void  on_GOTO() { ++num_GOTOs; }
+  void  on_string_builder_line() { ++num_string_builder_lines; }
+  void  on_virtual_dispatch() { ++num_virtual_dispatches; }
+  void  on_auxiliary_location() { ++num_auxiliary_locations; }
+
   void  begin_lvsa_analysis();
   void  end_lvsa_analysis(
       std::size_t const  num_fixpoint_steps_,
@@ -82,6 +93,25 @@ public:
   ///////////////////////////////////////////////////////////////////
 
   std::size_t  get_num_locations() const noexcept { return num_locations; }
+  std::size_t  get_num_declarations() const noexcept
+  { return num_declarations; }
+  std::size_t  get_num_temporaries() const noexcept { return num_temporaries; }
+  std::size_t  get_num_assignments_to_temporaries() const noexcept
+  { return num_assignments_to_temporaries; }
+  std::size_t  get_num_dead_statements() const noexcept
+  { return num_dead_statements; }
+  std::size_t  get_num_NONDET_calls() const noexcept
+  { return num_NONDET_calls; }
+  std::size_t  get_num_SKIPs() const noexcept
+  { return num_SKIPs; }
+  std::size_t  get_num_GOTOs() const noexcept
+  { return num_GOTOs; }
+  std::size_t  get_num_string_builder_lines() const noexcept
+  { return num_string_builder_lines; }
+  std::size_t  get_num_virtual_dispatches() const noexcept
+  { return num_virtual_dispatches; }
+  std::size_t  get_num_auxiliary_locations() const noexcept
+  { return num_auxiliary_locations; }
 
   std::set<unsigned int> const&  get_locations_of_taint_sources() const noexcept
   { return sources; }
@@ -113,6 +143,8 @@ public:
   { return summary_output_size; }
   std::size_t  get_summary_domain_size() const noexcept
   { return summary_domain_size; }
+  std::size_t  get_summary_domain_num_abstract_values() const noexcept
+  { return summary_domain_num_abstract_values; }
 
   std::size_t  get_num_usages_of_my_summary() const noexcept
   { return num_usages_of_my_summary; }
@@ -124,6 +156,16 @@ public:
 
 private:
   std::size_t  num_locations;
+  std::size_t  num_declarations;
+  std::size_t  num_temporaries;
+  std::size_t  num_assignments_to_temporaries;
+  std::size_t  num_dead_statements;
+  std::size_t  num_NONDET_calls;
+  std::size_t  num_SKIPs;
+  std::size_t  num_GOTOs;
+  std::size_t  num_string_builder_lines;
+  std::size_t  num_virtual_dispatches;
+  std::size_t  num_auxiliary_locations;
 
   std::set<unsigned int>  sources;
   std::set<unsigned int>  sinks;
@@ -143,6 +185,7 @@ private:
   std::size_t  summary_input_size;
   std::size_t  summary_output_size;
   std::size_t  summary_domain_size;
+  std::size_t  summary_domain_num_abstract_values;
 
   std::size_t  num_usages_of_my_summary;
 
