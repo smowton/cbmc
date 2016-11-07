@@ -216,26 +216,28 @@ static void  initialise_domain(
     }
   }
 
-  /*
+  
   if (log != nullptr)
   {
     *log << "<h3>Initialising the domain</h3>\n"
             "<p>Domain value at the entry location:</p>\n"
          ;
-    taint_dump_lvalues_to_svalues_in_html(
+    taint_dump_numbered_lvalues_to_svalues_as_html(
         domain.at(function.body.instructions.cbegin()),
         ns,
+	taint_object_numbering,
         *log
         );
 
     *log << "<p>Domain value at all other locations:</p>\n";
-    taint_dump_lvalues_to_svalues_in_html(
+    taint_dump_numbered_lvalues_to_svalues_as_html(
         domain.at(std::prev(function.body.instructions.cend())),
         ns,
+	taint_object_numbering,
         *log
         );
   }
-  */
+  
 }
 
 
@@ -517,8 +519,8 @@ static void  build_substituted_summary(
 
   if (log != nullptr)
   {
-    //*log << "<p>Substituted summary:</p>\n";
-    //taint_dump_lvalues_to_svalues_in_html(substituted_summary,ns,*log);
+    *log << "<p>Substituted summary:</p>\n";
+    taint_dump_numbered_lvalues_to_svalues_as_html(substituted_summary,ns,taint_object_numbering,*log);
   }
 }
 
