@@ -305,7 +305,8 @@ static void read_json_summaries_of_sources(
         std::make_shared<taint_summaryt const>(
               input_map,
               output_map,
-              taint_summary_domain_ptrt()
+              taint_numbered_domaint(),
+	      object_numberingt()
               );
 
     sources.insert({function.value,taint_summary});

@@ -23,6 +23,7 @@ This module defines interfaces and functionality for taint summaries.
 #include <goto-programs/goto_functions.h>
 #include <analyses/call_graph.h>
 #include <pointer-analysis/local_value_set_analysis.h>
+#include <pointer-analysis/object_numbering.h>
 #include <util/irep.h>
 #include <unordered_map>
 #include <unordered_set>
@@ -80,7 +81,6 @@ private:
   bool  m_is_bottom;
   bool  m_is_top;
 };
-
 
 /*******************************************************************\
 
@@ -270,8 +270,13 @@ Function:
 
 
 \*******************************************************************/
-taint_map_from_lvalues_to_svaluest  transform(
-    taint_map_from_lvalues_to_svaluest const&  a,
+
+typedef std::map<unsigned int,taint_svaluet> taint_numbered_lvalue_svalue_mapt;
+typedef goto_programt::instructiont::const_targett  instruction_iteratort;
+typedef std::unordered_map<instruction_iteratort, taint_numbered_lvalue_svalue_mapt, instruction_iterator_hashert> taint_numbered_domaint;
+
+taint_numbered_lvalue_svalue_mapt  transform(
+    taint_numbered_lvalue_svalue_mapt const&  a,
     goto_programt::instructiont const&  I,
     goto_functionst::function_mapt const&  functions_map,
     database_of_summariest const&  database,
@@ -292,9 +297,9 @@ Function:
 
 
 \*******************************************************************/
-taint_map_from_lvalues_to_svaluest  join(
-    taint_map_from_lvalues_to_svaluest const&  a,
-    taint_map_from_lvalues_to_svaluest const&  b
+taint_numbered_lvalue_svalue_mapt  join(
+    taint_numbered_lvalue_svalue_mapt const&  a,
+    taint_numbered_lvalue_svalue_mapt const&  b
     );
 
 
@@ -310,18 +315,14 @@ Function:
 
 
 \*******************************************************************/
-taint_map_from_lvalues_to_svaluest  assign(
-    taint_map_from_lvalues_to_svaluest const&  a,
-    taint_map_from_lvalues_to_svaluest const&  b
+taint_numbered_lvalue_svalue_mapt  assign(
+    taint_numbered_lvalue_svalue_mapt const&  a,
+    taint_numbered_lvalue_svalue_mapt const&  b
     );
 
 
 /*******************************************************************\
 \*******************************************************************/
-typedef goto_programt::instructiont::const_targett  instruction_iteratort;
-
-
-
 
 /*******************************************************************\
 \*******************************************************************/
@@ -346,7 +347,8 @@ public:
 
   taint_summaryt(taint_map_from_lvalues_to_svaluest const&  input,
                  taint_map_from_lvalues_to_svaluest const&  output,
-                 taint_summary_domain_ptrt const domain);
+                 const taint_numbered_domaint& domain,
+		 const object_numberingt& numbering);
 
   taint_summaryt() {}
 
@@ -358,8 +360,8 @@ public:
   taint_map_from_lvalues_to_svaluest const&  output() const noexcept
   { return m_output; }
 
-  taint_summary_domain_ptrt  domain() const noexcept { return m_domain; }
-  void  drop_domain() { m_domain.reset(); }
+  const taint_numbered_domaint&  domain() const noexcept { return m_domain; }
+  const object_numberingt& domain_numbering() const noexcept { return numbering; }
 
   json_objectt to_json() const;
   void from_json(const json_objectt&);
@@ -367,7 +369,8 @@ public:
 private:
   taint_map_from_lvalues_to_svaluest  m_input;
   taint_map_from_lvalues_to_svaluest  m_output;
-  taint_summary_domain_ptrt  m_domain;
+  taint_numbered_domaint  m_domain;
+  object_numberingt numbering;
 };
 
 typedef std::shared_ptr<taint_summaryt const>  taint_summary_ptrt;

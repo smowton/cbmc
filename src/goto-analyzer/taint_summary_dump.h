@@ -77,6 +77,12 @@ void  taint_dump_lvalues_to_svalues_in_html(
     std::ostream&  ostr
     );
 
+void taint_dump_numbered_lvalues_to_svalues_as_html(
+    taint_numbered_lvalue_svalue_mapt const&  lvalues_to_svalues,
+    namespacet const&  ns,
+    const object_numberingt&,
+    std::ostream&  ostr
+    );						    
 
 /*******************************************************************\
 
