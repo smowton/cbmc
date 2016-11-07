@@ -33,6 +33,127 @@ static inline  taint_statisticst::durationt  get_duration(
 }
 
 
+bool  does_irep_contains_ident(irept const&  expr, std::string const&  ident)
+{
+  if (expr.id() == ID_symbol)
+  {
+    std::string const&  curr_ident = as_string(expr.get(ID_identifier));
+    return curr_ident == ident;
+  }
+  for (irept const&  op : expr.get_sub())
+    if (does_irep_contains_ident(op,ident))
+      return true;
+  return false;
+}
+
+
+static bool  is_instruction_DEAD(goto_programt::instructiont const&  I)
+{
+  return I.type == DEAD;
+}
+
+static bool  is_instruction_DECL(goto_programt::instructiont const&  I)
+{
+  return I.type == DECL;
+}
+
+static bool  is_instruction_DECL_temporary(
+    goto_programt::instructiont const&  I,
+    namespacet const&  ns
+    )
+{
+  return I.type == DECL &&
+         is_auxiliary_variable(to_code_decl(I.code).symbol(),ns);
+}
+
+static bool  is_instruction_assignment_to_temporary(
+    goto_programt::instructiont const&  I,
+    namespacet const&  ns
+    )
+{
+  if (I.type == ASSIGN)
+  {
+    code_assignt const&  asgn = to_code_assign(I.code);
+    return is_auxiliary_variable(asgn.lhs(),ns);
+  }
+  return false;
+}
+
+static bool  is_instruction_SKIP(goto_programt::instructiont const&  I)
+{
+  return I.type == SKIP;
+}
+
+static bool  is_instruction_GOTO(goto_programt::instructiont const&  I)
+{
+  return I.type == GOTO && I.guard.id() == ID_constant;
+}
+
+static bool  is_instruction_call_NONDET(goto_programt::instructiont const&  I)
+{
+  if (I.type == ASSIGN)
+  {
+    code_assignt const&  asgn = to_code_assign(I.code);
+    if (asgn.rhs().id() == ID_side_effect)
+    {
+      side_effect_exprt const  see = to_side_effect_expr(asgn.rhs());
+      if(see.get_statement() == ID_nondet)
+        return true;
+    }
+  }
+  return false;
+}
+
+static bool  is_instruction_StringBuilder_call(
+    goto_programt::instructiont const&  I,
+    namespacet const&  ns
+    )
+{
+  if (I.type == FUNCTION_CALL)
+  {
+    code_function_callt const&  fn_call = to_code_function_call(I.code);
+    if (fn_call.function().id() == ID_symbol)
+    {
+      irep_idt const&  raw_callee_ident =
+          to_symbol_expr(fn_call.function()).get_identifier();
+      std::string const  callee_ident = as_string(raw_callee_ident);
+      if (callee_ident.find("java.lang.StringBuilder") != std::string::npos)
+        return true;
+    }
+  }
+  if (I.type == ASSIGN)
+  {
+    code_assignt const&  asgn = to_code_assign(I.code);
+    if(asgn.rhs().id()==ID_side_effect)
+    {
+      side_effect_exprt const  see = to_side_effect_expr(asgn.rhs());
+      if(see.get_statement() == ID_malloc &&
+         does_irep_contains_ident(see.type(),"java::java.lang.StringBuilder") )
+        return true;
+    }
+  }
+  return false;
+}
+
+static bool  is_instruction_virtual_dispatch(
+    goto_programt::instructiont const&  I
+    )
+{
+  if (I.type == GOTO)
+  {
+    if (I.guard.id() == ID_equal)
+    {
+      equal_exprt const& eq = to_equal_expr(I.guard);
+      if (eq.lhs().id() == ID_constant &&
+          eq.lhs().get(ID_type) == ID_string &&
+          as_string(eq.rhs().get(ID_component_name)) == "@class_identifier")
+        return true;
+    }
+  }
+  return false;
+}
+
+
 ///////////////////////////////////////////////////////////////////
 ///
 /// IMPLEMENTATION OF taint_function_statisticst
@@ -44,6 +165,16 @@ taint_function_statisticst::taint_function_statisticst(
         std::size_t const  num_locations_
         )
     : num_locations(num_locations_)
+    , num_declarations(0UL)
+    , num_temporaries(0UL)
+    , num_assignments_to_temporaries(0UL)
+    , num_dead_statements(0UL)
+    , num_NONDET_calls(0UL)
+    , num_SKIPs(0UL)
+    , num_GOTOs(0UL)
+    , num_string_builder_lines(0UL)
+    , num_virtual_dispatches(0UL)
+    , num_auxiliary_locations(0UL)
 
     , sources()
     , sinks()
@@ -63,6 +194,7 @@ taint_function_statisticst::taint_function_statisticst(
     , summary_input_size(0UL)
     , summary_output_size(0UL)
     , summary_domain_size(0UL)
+    , summary_domain_num_abstract_values(0UL)
 
     , num_usages_of_my_summary(0UL)
 
@@ -110,7 +242,10 @@ void  taint_function_statisticst::end_taint_summaries(
   summary_input_size = input.size();
   summary_output_size = output.size();
   for (auto const&  iit_value : *domain)
+  {
     summary_domain_size += iit_value.second.size();
+    ++summary_domain_num_abstract_values;
+  }
 }
 
 void  taint_function_statisticst::on_fixpoint_step_of_taint_summaries()
@@ -293,6 +428,67 @@ void  taint_statisticst::end_taint_info_instrumentation(
           statistics_of_functions.at(as_string(fname_sinks.first));
       for (auto const&  sink_it : fname_sinks.second)
         fn_stats.on_get_may(sink_it->location_number);
+    }
+
+  namespacet const  ns(model.symbol_table);
+  for (auto const&  name_fn : model.goto_functions.function_map)
+    if (!name_fn.second.body.instructions.empty())
+    {
+      taint_function_statisticst& fn_stats =
+          statistics_of_functions.at(as_string(name_fn.first));
+      for (goto_programt::instructiont const&  I :
+           name_fn.second.body.instructions)
+      {
+        bool is_auxiliaty = false;
+        if (is_instruction_DECL(I))
+        {
+          fn_stats.on_declaration();
+          is_auxiliaty = true;
+        }
+        if (is_instruction_DECL_temporary(I,ns))
+        {
+          fn_stats.on_temporary();
+          is_auxiliaty = true;
+        }
+        if (is_instruction_assignment_to_temporary(I,ns))
+        {
+          fn_stats.on_assignment_to_temporary();
+          is_auxiliaty = true;
+        }
+        if (is_instruction_DEAD(I))
+        {
+          fn_stats.on_dead_statement();
+          is_auxiliaty = true;
+        }
+        if (is_instruction_call_NONDET(I))
+        {
+          fn_stats.on_NONDET_call();
+          is_auxiliaty = true;
+        }
+        if (is_instruction_SKIP(I))
+        {
+          fn_stats.on_SKIP();
+          is_auxiliaty = true;
+        }
+        if (is_instruction_GOTO(I))
+        {
+          fn_stats.on_GOTO();
+          is_auxiliaty = true;
+        }
+        if (is_instruction_StringBuilder_call(I,ns))
+        {
+          fn_stats.on_string_builder_line();
+          is_auxiliaty = true;
+        }
+        if (is_instruction_virtual_dispatch(I))
+        {
+          fn_stats.on_virtual_dispatch();
+          is_auxiliaty = true;
+        }
+
+        if (is_auxiliaty == true)
+          fn_stats.on_auxiliary_location();
+      }
     }
 
   time_point_end_program_info_collecting = get_current_time();

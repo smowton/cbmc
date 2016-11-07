@@ -229,6 +229,22 @@ Function:
 
 
 \*******************************************************************/
+bool  is_auxiliary_variable(access_path_to_memoryt const&  lvalue,
+                            namespacet const&  ns);
+
+
+/*******************************************************************\
+
+Function:
+
+  Inputs: See purpose
+
+ Outputs: See purpose
+
+ Purpose:
+
+
+\*******************************************************************/
 bool  is_return_value_auxiliary(access_path_to_memoryt const&  lvalue,
                                 namespacet const&  ns);
 

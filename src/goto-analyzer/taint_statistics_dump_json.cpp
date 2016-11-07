@@ -96,6 +96,29 @@ static void  taint_dump_files_table(json_objectt&  root)
             json_stringt(fn_name);
         fn_table["num-locations"] =
             json_numbert(msgstream() << fS.get_num_locations());
+
+        fn_table["num-decl-locations"] =
+            json_numbert(msgstream() << fS.get_num_declarations());
+        fn_table["num-decl-axiliary-vars"] =
+            json_numbert(msgstream() << fS.get_num_auxiliary_locations());
+        fn_table["num-decl-axiliary-assigns"] =
+            json_numbert(
+                msgstream() << fS.get_num_assignments_to_temporaries()
+                );
+        fn_table["num-DEAD-statements"] =
+            json_numbert(msgstream() << fS.get_num_dead_statements());
+        fn_table["num-NONDET-calls"] =
+            json_numbert(msgstream() << fS.get_num_NONDET_calls());
+        fn_table["num-SKIP-statements"] =
+            json_numbert(msgstream() << fS.get_num_SKIPs());
+        fn_table["num-GOTO-unconditional-statements"] =
+            json_numbert(msgstream() << fS.get_num_GOTOs());
+        fn_table["num-StringBuilder-locations"] =
+            json_numbert(msgstream() << fS.get_num_string_builder_lines());
+        fn_table["num-virtual-dispatch-locations"] =
+            json_numbert(msgstream() << fS.get_num_virtual_dispatches());
+        fn_table["num-auxiliary-locations"] =
+            json_numbert(msgstream() << fS.get_num_auxiliary_locations());
         fn_table["num-taint-sources"] =
             json_numbert(msgstream()
                       << fS.get_locations_of_taint_sources().size());
