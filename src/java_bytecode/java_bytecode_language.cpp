@@ -429,7 +429,9 @@ bool java_bytecode_languaget::final(symbol_tablet &symbol_table)
   */
   java_internal_additions(symbol_table);
 
-
+  // XXX for now don't generate stubs:
+  return false;
+  
   std::tuple<symbolt, bool, bool> t = get_main_symbol(symbol_table, main_class, get_message_handler());
   if(std::get<2>(t))
     return std::get<1>(t);
