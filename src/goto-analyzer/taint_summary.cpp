@@ -733,6 +733,8 @@ bool  operator==(taint_svaluet const&  a, taint_svaluet const&  b)
 
 bool  operator<(taint_svaluet const&  a, taint_svaluet const&  b)
 {
+  if (a == b)
+    return false;
   if (a.is_top() || b.is_bottom())
     return false;
   if (a.is_bottom() || b.is_top())
@@ -1324,7 +1326,7 @@ taint_numbered_lvalue_svalue_mapt join(
       result_dict.insert({a_it->first,join(a_it->second,b_it->second)});
       ++a_it; ++b_it;
     }
-    else if(b_it==b_end || a_it->first < b_it->first)
+    else if(b_it==b_end || (a_it!=a_end && a_it->first < b_it->first))
     {
       result_dict.insert(*a_it);
       ++a_it;
