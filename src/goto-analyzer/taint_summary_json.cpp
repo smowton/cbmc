@@ -2,6 +2,8 @@
 #include "taint_summary_json.h"
 
 #include "util/json_irep.h"
+#include "util/i2string.h"
+#include "util/string2int.h"
 
 #include <algorithm>
 #include <memory>
@@ -13,7 +15,7 @@ static json_objectt taint_to_json(const taint_svaluet& svalue)
   ret["is_bottom"]=jsont::json_boolean(svalue.is_bottom());  
   json_arrayt taints;
   for(const auto& sym : svalue.expression())
-    taints.push_back(json_stringt(sym));
+    taints.push_back(json_numbert(i2string(sym)));
   ret["taints"]=taints;
   return ret;
 }
@@ -74,8 +76,8 @@ static taint_svaluet taint_from_json(const jsont& js)
   assert(js_taints.is_array());
   for(const auto& js_taint : js_taints.array)
   {
-    assert(js_taint.is_string());
-    taints.insert(js_taint.value);
+    assert(js_taint.is_number());
+    taints.insert(safe_string2unsigned(js_taint.value));
   }
   return taint_svaluet(taints,
 			       bool_from_json(js_object["is_bottom"]),

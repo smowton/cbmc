@@ -74,9 +74,9 @@ public:
 
   void  begin_taint_summaries();
   void  end_taint_summaries(
-      taint_map_from_lvalues_to_svaluest const&  input,
+      const taint_numbered_lvalue_svalue_mapt&  input,
       taint_map_from_lvalues_to_svaluest const&  output,
-      taint_summary_domain_ptrt const  domain
+      const taint_numbered_domaint& domain
       );
   void  on_fixpoint_step_of_taint_summaries();
   void  on_taint_analysis_use_callee_summary(
@@ -255,9 +255,9 @@ public:
 
   void  begin_taint_analysis_of_function(std::string const&  fn_name);
   void  end_taint_analysis_of_function(
-      taint_map_from_lvalues_to_svaluest const&  input,
+      taint_numbered_lvalue_svalue_mapt const&  input,
       taint_map_from_lvalues_to_svaluest const&  output,
-      taint_summary_domain_ptrt const  domain
+      const taint_numbered_domaint& domain
       );
   void  on_fixpoint_step_of_taint_analysis();
   void  on_taint_analysis_use_callee_summary(

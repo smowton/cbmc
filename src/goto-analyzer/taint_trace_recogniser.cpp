@@ -38,9 +38,9 @@ public:
 
   typedef std::pair<
               std::size_t, //!< Index into this trace where is a call statement.
-              std::unordered_set<std::string> //!< A set of symbols representing
-                                              //!< the tainted symbol in the
-                                              //!< called function.
+              std::unordered_set<taint_svaluet::taint_symbolt> //!< A set of symbols representing
+                                                               //!< the tainted symbol in the
+                                                               //!< called function.
               >
           call_stack_valuet;
 
@@ -50,7 +50,7 @@ public:
 
   explicit trace_under_constructiont(
       taint_trace_elementt const&  element,
-      std::unordered_set<std::string> const&  symbols
+      std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols
       );
 
   taint_tracet const&  get_trace() const noexcept  { return trace; }
@@ -76,8 +76,8 @@ public:
   /// Call-stack-related access/check methods
   bool  stack_has_return() const { return call_stack.size() > 1UL; }
   call_stack_valuet const& stack_top() const { return call_stack.back(); }
-  void  stack_push(std::unordered_set<std::string> const&  symbols);
-  void  stack_set_top(std::unordered_set<std::string> const&  symbols);
+  void  stack_push(std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols);
+  void  stack_set_top(std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols);
   void  stack_pop();
 
 private:
@@ -88,7 +88,7 @@ private:
 
 trace_under_constructiont::trace_under_constructiont(
     taint_trace_elementt const&  element,
-    std::unordered_set<std::string> const&  symbols
+    std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols
     )
   : trace{element}
   , visited{}
@@ -146,7 +146,7 @@ void trace_under_constructiont::push_back(
 }
 
 void  trace_under_constructiont::stack_push(
-    std::unordered_set<std::string> const&  symbols
+    std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols
     )
 {
   assert(!empty());
@@ -155,7 +155,7 @@ void  trace_under_constructiont::stack_push(
 }
 
 void  trace_under_constructiont::stack_set_top(
-    std::unordered_set<std::string> const&  symbols
+    std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols
     )
 {
   assert(!empty());
@@ -210,7 +210,7 @@ static void  taint_collect_successors_inside_function(
     trace_under_constructiont const&  trace,
     taint_trace_elementt const&  elem,
     database_of_summariest const&  summaries,
-    std::string const&  taint_name,
+    taint_svaluet::taint_symbolt const&  taint_name,
     std::string const&  sink_function_name,
     goto_programt::const_targett const sink_instruction,
     std::vector<taint_trace_elementt>&  successors,
@@ -232,12 +232,10 @@ static void  taint_collect_successors_inside_function(
       taint_map_from_lvalues_to_svaluest  from_lvalues_to_svalues;
       taint_svaluet::expressiont  symbols;
       {
-        taint_summary_domain_ptrt const  domain =
-            summaries.find<taint_summaryt>(
-                elem.get_name_of_function()
-                )->domain();
-        assert(domain.operator bool());
-        for (auto const&  lvalue_svalue : domain->at(succ_target))
+	const auto& summary=*summaries.find<taint_summaryt>(elem.get_name_of_function());
+        const auto& domain=summary.domain();
+	const auto& numbering=summary.domain_numbering();
+	for (auto const&  lvalue_svalue : domain.at(succ_target))
         {
           taint_svaluet::expressiont  symbols;
           for (auto const&  symbol : lvalue_svalue.second.expression())
@@ -245,7 +243,7 @@ static void  taint_collect_successors_inside_function(
               symbols.insert(symbol);
           if (!symbols.empty())
             from_lvalues_to_svalues.insert({
-                lvalue_svalue.first,
+                numbering[lvalue_svalue.first],
                 { symbols, false, false}
                 });
         }
@@ -332,7 +330,7 @@ void taint_recognise_error_traces(
     goto_modelt const&  goto_model,
     call_grapht const&  call_graph,
     database_of_summariest const&  summaries,
-    std::string const&  taint_name,
+    taint_svaluet::taint_symbolt const&  taint_name,
     std::string const&  source_function_name,
     goto_programt::const_targett const source_instruction,
     std::string const&  sink_function_name,
@@ -355,7 +353,7 @@ void taint_recognise_error_traces(
             "  <tr>\n"
             "    <td>" << to_html_text(source_function_name) << "</td>\n"
             "    <td>" << source_instruction->location_number << "</td>\n"
-            "    <td>" << to_html_text(taint_name) << "</td>\n"
+            "    <td>" << to_html_text(i2string(taint_name)) << "</td>\n"
             "    <td>" << to_html_text(sink_function_name) << "</td>\n"
             "    <td>" << sink_instruction->location_number << "</td>\n"
             "  </tr>\n"
@@ -400,15 +398,13 @@ void taint_recognise_error_traces(
   {
     taint_map_from_lvalues_to_svaluest  from_lvalues_to_svalues;
     {
-      taint_summary_domain_ptrt const  domain =
-          summaries.find<taint_summaryt>(
-              source_function_name
-              )->domain();
-      assert(domain.operator bool());
-      for (auto const&  lvalue_svalue : domain->at(source_instruction))
+      const auto& summary=*summaries.find<taint_summaryt>(source_function_name);
+      const auto& domain=summary.domain();
+      const auto& numbering=summary.domain_numbering();
+      for (const auto& lvalue_svalue : domain.at(source_instruction))
         if (lvalue_svalue.second.expression().count(taint_name) != 0UL)
           from_lvalues_to_svalues.insert({
-              lvalue_svalue.first,
+              numbering[lvalue_svalue.first],
               { {taint_name}, false, false}
               });
     }
@@ -435,14 +431,17 @@ void taint_recognise_error_traces(
       {
         exprt const  taint_expr =
             taint_find_expression_of_rule(sink_instruction->guard);
-        taint_summary_domain_ptrt const  domain =
-            summaries.find<taint_summaryt>(
-                elem.get_name_of_function()
-                )->domain();
-        assert(domain.operator bool());
-        taint_map_from_lvalues_to_svaluest const&  lvalue_svalue =
-            domain->at(elem.get_instruction_iterator());
-        auto const it = lvalue_svalue.find(taint_expr);
+	const auto& summary=*summaries.find<taint_summaryt>(elem.get_name_of_function());
+	const auto& domain=summary.domain();
+	const auto& numbering=summary.domain_numbering();
+        const auto& lvalue_svalue =
+            domain.at(elem.get_instruction_iterator());
+	object_numberingt::number_type taint_num;
+	bool found=numbering.get_number(taint_expr,taint_num);
+	const auto it=
+	  (!found) ?
+	  lvalue_svalue.end() :
+	  lvalue_svalue.find(taint_num);
         if (it != lvalue_svalue.cend())
         {
           for (auto const&  symbol : it->second.expression())
@@ -527,25 +526,27 @@ void taint_recognise_error_traces(
             as_string(to_symbol_expr(fn_call.function()).get_identifier());
 
         taint_map_from_lvalues_to_svaluest  from_lvalues_to_svalues;
-        std::unordered_set<std::string>  symbols;
+        std::unordered_set<taint_svaluet::taint_symbolt>  symbols;
         {
-          taint_summary_domain_ptrt const  domain =
-              summaries.find<taint_summaryt>(
-                  elem.get_name_of_function()
-                  )->domain();
-          assert(domain.operator bool());
-          taint_map_from_lvalues_to_svaluest const&  lvalue_svalue =
-              domain->at(elem.get_instruction_iterator());
+	  const auto& summary=*summaries.find<taint_summaryt>(elem.get_name_of_function());
+	  const auto& domain=summary.domain();
+          const auto& lvalue_svalue =
+	    domain.at(elem.get_instruction_iterator());
+	  const auto& numbering=summary.domain_numbering();
 
-          code_typet const&  callee_type =
+          const code_typet& callee_type=
               goto_model.goto_functions.function_map.at(callee_ident).type;
-          taint_map_from_lvalues_to_svaluest const&  callee_symbol_map =
+          const auto& callee_symbol_map=
               summaries.find<taint_summaryt>(callee_ident)->input();
 
           for (auto const&  callee_lvalue_svalue : callee_symbol_map)
             if (is_static(callee_lvalue_svalue.first,ns))
-            {
-              auto const it = lvalue_svalue.find(callee_lvalue_svalue.first);
+	    {
+	      object_numberingt::number_type lvalue_number;
+              auto const it =
+		numbering.get_number(callee_lvalue_svalue.first,lvalue_number) ?
+		lvalue_svalue.cend() :
+		lvalue_svalue.find(lvalue_number);
               if (it != lvalue_svalue.cend())
               {
                 taint_svaluet::expressiont  symbols_intersection;
@@ -580,7 +581,11 @@ void taint_recognise_error_traces(
             collect_access_paths(fn_call.arguments().at(i),ns,paths);
             for (auto const&  path : paths)
             {
-              auto const  svalue_it = lvalue_svalue.find(path);
+	      object_numberingt::number_type pathnum;
+	      const auto svalue_it=
+		numbering.get_number(path,pathnum) ?
+		lvalue_svalue.cend() :
+		lvalue_svalue.find(pathnum);
               if (svalue_it != lvalue_svalue.cend())
                 for (auto const&  symbol : svalue_it->second.expression())
                   if (trace.stack_top().second.count(symbol) != 0UL)
@@ -706,7 +711,7 @@ void taint_recognise_error_traces(
       }
       else
       {
-        std::unordered_set<std::string>  stack_symbols(
+        std::unordered_set<taint_svaluet::taint_symbolt>  stack_symbols(
               elem.get_symbols().cbegin(),
               elem.get_symbols().cend()
               );
@@ -750,10 +755,13 @@ void taint_recognise_error_traces(
         }
         for (auto const&  func_loc : possible_callers)
         {
-          taint_map_from_lvalues_to_svaluest const&  from_lvalues_to_svalues =
-              summaries.find<taint_summaryt>(func_loc.first)
-                       ->domain()
-                       ->at(func_loc.second);
+	  const auto& summary=*summaries.find<taint_summaryt>(func_loc.first);
+          const auto& from_lvalues_to_svalues=summary.domain().at(func_loc.second);
+	  const auto& numbering=summary.domain_numbering();
+	  taint_map_from_lvalues_to_svaluest explicit_domain;
+	  for(const auto& kv : from_lvalues_to_svalues)
+	    explicit_domain.insert({numbering[kv.first],kv.second});
+	  
           std::vector<taint_trace_elementt>  successors;
           taint_collect_successors_inside_function(
                 goto_model,
@@ -761,7 +769,7 @@ void taint_recognise_error_traces(
                 taint_trace_elementt(
                     func_loc.first,
                     func_loc.second,
-                    from_lvalues_to_svalues,
+                    explicit_domain,
                     taint_svaluet::expressiont(
                         stack_symbols.cbegin(),
                         stack_symbols.cend()

@@ -94,12 +94,14 @@ java_bytecode_convert_methodt::java_bytecode_convert_methodt(
   const bool &_disable_runtime_checks,
   int _max_array_length,
   std::vector<irep_idt>& _needed_methods,
+  std::set<irep_idt>& _needed_classes,  
   const class_hierarchyt& _ch) :
   messaget(_message_handler),
   symbol_table(_symbol_table),
   disable_runtime_checks(_disable_runtime_checks),
   max_array_length(_max_array_length),
   needed_methods(_needed_methods),
+  needed_classes(_needed_classes),
   class_hierarchy(_ch)
 {
 }
@@ -681,6 +683,41 @@ code_blockt& java_bytecode_convert_methodt::get_or_create_block_for_pcrange(
     
 }
 
+static void gather_symbol_live_ranges(
+  unsigned pc,
+  const exprt& e,
+  std::map<irep_idt, java_bytecode_convert_methodt::variablet>& result)
+{
+  if(e.id()==ID_symbol)
+  {
+    const auto& symexpr=to_symbol_expr(e);
+    auto findit=result.insert(std::make_pair(symexpr.get_identifier(),
+					     java_bytecode_convert_methodt::variablet()));
+    auto& var=findit.first->second;
+    if(findit.second)
+    {
+      var.symbol_expr=symexpr;
+      var.start_pc=pc;
+      var.length=1;
+    }
+    else
+    {
+      if(pc < var.start_pc)
+      {
+	var.length += (var.start_pc - pc);
+	var.start_pc = pc;
+      }
+      else
+      {
+	var.length = std::max(var.length, (pc - var.start_pc) + 1);
+      }
+    }
+  }
+  else
+    forall_operands(it,e)
+      gather_symbol_live_ranges(pc,*it,result);
+}
+
 /*******************************************************************    \
 
 Function: java_bytecode_convert_methodt::convert_instructions
@@ -954,7 +991,10 @@ codet java_bytecode_convert_methodt::convert_instructions(
 	  if(statement=="invokespecial")
 	  {
 	    if(as_string(arg0.get(ID_identifier)).find("<init>")!=std::string::npos)
+	    {
+	      needed_classes.insert(classname);
 	      code_type.set(ID_constructor, true);
+	    }
 	    else
 	      code_type.set("java_super_method_call", true);
 	  }
@@ -1026,30 +1066,19 @@ codet java_bytecode_convert_methodt::convert_instructions(
       auto fn_type=arg0.type();
       check_stub_function(id,fn_basename,fn_prettyname,fn_type);
 
-      needed_methods.push_back(arg0.get(ID_identifier));
-      
       if(is_virtual)
       {
         // dynamic binding
         assert(use_this);
         assert(!call.arguments().empty());
         call.function()=arg0;
-	const auto& call_class=arg0.get(ID_C_class);
-	assert(call_class!=irep_idt());
-	const auto& call_basename=arg0.get(ID_component_name);
-	assert(call_basename!=irep_idt());
-	auto child_classes=class_hierarchy.get_children_trans(call_class);
-	for(const auto& child_class : child_classes)
-	{
-	  auto methodid=id2string(child_class)+"."+id2string(call_basename);
-	  if(symbol_table.has_symbol(methodid))
-	    needed_methods.push_back(methodid);
-	}
+	// Populate needed methods later, once we know what object types can exist.
       }
       else
       {
         // static binding
         call.function()=symbol_exprt(arg0.get(ID_identifier), arg0.type());
+	needed_methods.push_back(arg0.get(ID_identifier));
       }
 
       call.function().add_source_location()=dloc;
@@ -1553,6 +1582,8 @@ codet java_bytecode_convert_methodt::convert_instructions(
       const auto& fieldname=arg0.get_string(ID_component_name);
       symbol_expr.set_identifier(arg0.get_string(ID_class)+"."+fieldname);
       check_static_field_stub(symbol_expr,fieldname);
+      if(arg0.type().id()==ID_symbol)
+	needed_classes.insert(to_symbol_type(arg0.type()).get_identifier());
       results[0]=java_bytecode_promotion(symbol_expr);
 
       // set $assertionDisabled to false
@@ -1576,6 +1607,8 @@ codet java_bytecode_convert_methodt::convert_instructions(
       const auto& fieldname=arg0.get_string(ID_component_name);
       symbol_expr.set_identifier(arg0.get_string(ID_class)+"."+fieldname);
       check_static_field_stub(symbol_expr,fieldname);
+      if(arg0.type().id()==ID_symbol)
+	needed_classes.insert(to_symbol_type(arg0.type()).get_identifier());      
       c=code_assignt(symbol_expr, op[0]);
     }
     else if(statement==patternt("?2?")) // i2c etc.
@@ -1889,19 +1922,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
   // review successor computation of athrow!
   code_blockt code;
 
-  // temporaries; no scoping yet.
-  for(const auto & var : tmp_vars)
-  {
-    code_declt decl = code_declt(var);
-    code_declt &declaration = decl;
-    source_locationt loc = instructions.begin()->source_location;
-    source_locationt &dloc = loc;
-    dloc.set_function(method_id);
-    declaration.add_source_location() = dloc;
-    code.add(declaration);
-  }
-
-  // Add anonymous locals to the symtab, and declare at top:
+  // Add anonymous locals to the symtab:
   for(const auto & var : used_local_names)
   {
     auxiliary_symbolt new_symbol;
@@ -1912,7 +1933,6 @@ codet java_bytecode_convert_methodt::convert_instructions(
     new_symbol.mode=ID_java;
     new_symbol.is_type=false;
     symbol_table.add(new_symbol);
-    code.add(code_declt(new_symbol.symbol_expr()));
   }
 
   // Try to recover block structure as indicated in the local variable table:
@@ -1959,42 +1979,54 @@ codet java_bytecode_convert_methodt::convert_instructions(
     start_new_block=it.second.successors.size()>1;
   }
 
+  // Find out where temporaries are used: 
+  std::map<irep_idt, variablet> temporary_variable_live_ranges;
+  for(const auto& aentry : address_map)
+    gather_symbol_live_ranges(aentry.first,aentry.second.code,temporary_variable_live_ranges);
+
+  std::vector<const variablet*> vars_to_process;
   for(const auto& vlist : variables)
+    for(const auto& v : vlist)
+      vars_to_process.push_back(&v);
+
+  for(const auto& v : tmp_vars)
+    vars_to_process.push_back(&temporary_variable_live_ranges.at(v.get_identifier()));
+
+  for(const auto& v : used_local_names)
+    vars_to_process.push_back(&temporary_variable_live_ranges.at(v.get_identifier()));
+
+  for(const auto vp : vars_to_process)
   {
-    for(const auto& v : vlist)
-    {
-      if(v.is_parameter)
-        continue;
-      // Merge lexical scopes as far as possible to allow us to
-      // declare these variable scopes faithfully.
-      // Don't insert yet, as for the time being the blocks' only
-      // operands must be other blocks.
-      get_or_create_block_for_pcrange(
-        root,
-        root_block,
-        v.start_pc,
-        v.start_pc+v.length,
-        std::numeric_limits<unsigned>::max(),
-        address_map);
-    }
+    const auto& v=*vp;
+    if(v.is_parameter)
+      continue;
+    // Merge lexical scopes as far as possible to allow us to
+    // declare these variable scopes faithfully.
+    // Don't insert yet, as for the time being the blocks' only
+    // operands must be other blocks.
+    get_or_create_block_for_pcrange(
+      root,
+      root_block,
+      v.start_pc,
+      v.start_pc+v.length,
+      std::numeric_limits<unsigned>::max(),
+      address_map);
   }
-  for(const auto& vlist : variables)
-  {  
-    for(const auto& v : vlist)
-    {
-      if(v.is_parameter)
-        continue;
-      if(v.symbol_expr.get_identifier()==irep_idt())
-        continue;
-      auto& block=get_block_for_pcrange(
-        root,
-        root_block,
-        v.start_pc,
-        v.start_pc+v.length,
-        std::numeric_limits<unsigned>::max());
-      code_declt d(v.symbol_expr);
-      block.operands().insert(block.operands().begin(),d);
-    }
+  for(const auto vp : vars_to_process)
+  {
+    const auto& v=*vp;
+    if(v.is_parameter)
+      continue;
+    if(v.symbol_expr.get_identifier()==irep_idt())
+      continue;
+    auto& block=get_block_for_pcrange(
+      root,
+      root_block,
+      v.start_pc,
+      v.start_pc+v.length,
+      std::numeric_limits<unsigned>::max());
+    code_declt d(v.symbol_expr);
+    block.operands().insert(block.operands().begin(),d);
   }
 
   for(auto& block : root_block.operands())
@@ -2023,6 +2055,7 @@ void java_bytecode_convert_method(
   const bool &disable_runtime_checks,
   int max_array_length,
   std::vector<irep_idt>& needed_methods,
+  std::set<irep_idt>& needed_classes,
   const class_hierarchyt& ch)
 {
   java_bytecode_convert_methodt java_bytecode_convert_method(
@@ -2031,6 +2064,7 @@ void java_bytecode_convert_method(
 				disable_runtime_checks, 
 				max_array_length,
 				needed_methods,
+				needed_classes,
 				ch);
 
   java_bytecode_convert_method(class_symbol, method);

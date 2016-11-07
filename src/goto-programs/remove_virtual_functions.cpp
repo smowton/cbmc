@@ -112,9 +112,11 @@ void remove_virtual_functionst::remove_virtual_function(
   if(functions.size()==1)
   {
     assert(target->is_function_call());
-    to_code_function_call(target->code).function()=
-      functions.begin()->symbol_expr;
-
+    if(functions.begin()->symbol_expr==symbol_exprt())
+      target->make_skip();
+    else
+      to_code_function_call(target->code).function()=
+	functions.begin()->symbol_expr;
     return;
   }
 
@@ -139,9 +141,10 @@ void remove_virtual_functionst::remove_virtual_function(
   exprt c_id2=get_class_identifier_field(this_expr,suggested_type,ns);
 
   std::map<irep_idt,goto_programt::targett> calls;
-  
-  for(const auto& function : functions)
+
+  for(auto it=functions.crbegin(), itend=functions.crend(); it!=itend; ++it)
   {
+    const auto& function=*it;
     auto insertit=calls.insert(
       std::make_pair(function.symbol_expr.get_identifier(),goto_programt::targett()));
     // Only create one call sequence per possible target:

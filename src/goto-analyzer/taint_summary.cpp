@@ -1,4 +1,4 @@
-/*******************************************************************\
+/*******************************************************************	\
 
 Module: taint_summary
 
@@ -21,6 +21,7 @@ This module defines interfaces and functionality for taint summaries.
 #include <util/std_types.h>
 #include <util/file_util.h>
 #include <util/msgstream.h>
+#include <util/string2int.h>
 #include <analyses/ai.h>
 #include <vector>
 #include <algorithm>
@@ -31,12 +32,18 @@ This module defines interfaces and functionality for taint summaries.
 
 #include <iostream>
 
+typedef std::set<unsigned int> taint_numbered_lvalues_sett;
+typedef std::map<irep_idt,std::set<unsigned> > object_numbers_by_fieldnamet;
+
+typedef taint_numbered_lvalues_sett written_expressionst;
+
 static void collect_lvsa_access_paths(
   exprt const& e,
   namespacet const& ns,
-  taint_lvalues_sett& result,
+  taint_numbered_lvalues_sett& result,
   local_value_set_analysist& lvsa,
-  instruction_iteratort const& instit);
+  instruction_iteratort const& instit,
+  object_numberingt&);
 
 struct parameter_matches_id {
   parameter_matches_id(const irep_idt& _id) : id(_id) {}
@@ -44,8 +51,6 @@ struct parameter_matches_id {
 protected:
   const irep_idt id;
 };
-
-typedef taint_lvalues_sett written_expressionst;
 
 /*******************************************************************\
 
@@ -65,15 +70,17 @@ static void  initialise_domain(
     goto_functionst::function_mapt const&  functions_map,
     namespacet const&  ns,
     database_of_summariest const&  database,
-    taint_symmary_domaint&  domain,
+    taint_numbered_domaint&  domain,
     written_expressionst& written,
     local_value_set_analysist* lvsa,
-    std::ostream* const  log
+    std::ostream* const  log,
+    object_numberingt& taint_object_numbering,
+    object_numbers_by_fieldnamet& object_numbers_by_field
     )
 {
   // TODO: Improve this to only count as inputs those values which may be read
   // without a preceding write within the same function.
-  taint_lvalues_sett  environment;
+  taint_numbered_lvalues_sett  environment;
   {
     for (auto  it = function.body.instructions.cbegin();
          it != function.body.instructions.cend();
@@ -83,16 +90,16 @@ static void  initialise_domain(
         code_assignt const&  asgn = to_code_assign(it->code);
         if(lvsa)
         {
-          collect_lvsa_access_paths(asgn.lhs(),ns,environment,*lvsa,it);
-          collect_lvsa_access_paths(asgn.lhs(),ns,written,*lvsa,it);          
-          collect_lvsa_access_paths(asgn.rhs(),ns,environment,*lvsa,it);
+          collect_lvsa_access_paths(asgn.lhs(),ns,environment,*lvsa,it,taint_object_numbering);
+          collect_lvsa_access_paths(asgn.lhs(),ns,written,*lvsa,it,taint_object_numbering);
+          collect_lvsa_access_paths(asgn.rhs(),ns,environment,*lvsa,it,taint_object_numbering);
         }
         else
         {
-          exprt lhs=normalise(asgn.lhs(),ns);
+	  /*          exprt lhs=normalise(asgn.lhs(),ns);
           environment.insert(lhs);
           written.insert(lhs);
-          collect_access_paths(asgn.rhs(),ns,environment);
+          collect_access_paths(asgn.rhs(),ns,environment);*/
         }
       }
       else if (it->type == FUNCTION_CALL)
@@ -144,42 +151,44 @@ static void  initialise_domain(
                 const auto paramidx=std::distance(fn_type.parameters().begin(),findit);
                 if(lvsa)
                   collect_lvsa_access_paths(fn_call.arguments()[paramidx],ns,environment,
-                                            *lvsa,it);
-                else
-                  collect_access_paths(fn_call.arguments()[paramidx],ns,environment);
+                                            *lvsa,it,taint_object_numbering);
+                else {
+		  //collect_access_paths(fn_call.arguments()[paramidx],ns,environment);
+		}
               }
               else if (!is_parameter(lvalue_svalue.first,ns) &&
                        !is_return_value_auxiliary(lvalue_svalue.first,ns))
-                environment.insert(
-                      scope_translation(
-                          lvalue_svalue.first,
-                          callee_ident,
-                          function_id,
-                          fn_call,
-                          fn_type,
-                          ns
-                          )
-                      );
-             
+	      {
+		environment.insert(taint_object_numbering.number(lvalue_svalue.first));
+	      }
+	      if(lvalue_svalue.first.id()=="external-value-set")
+	      {
+		const auto& evse=to_external_value_set(lvalue_svalue.first);
+		if(evse.access_path_size()==1)
+		  object_numbers_by_field.insert({evse.access_path_back().label(),{}});
+	      }
             }
             for(auto const&  lvalue_svalue : summary->output())
-              written.insert(lvalue_svalue.first);            
+              written.insert(taint_object_numbering.number(lvalue_svalue.first));
           }
         }
       }
   }
 
-  taint_map_from_lvalues_to_svaluest  entry_map;
-  taint_map_from_lvalues_to_svaluest  others_map;
-  for (taint_lvaluet const&  lvalue : environment)
+  taint_numbered_lvalue_svalue_mapt entry_map;
+  taint_numbered_lvalue_svalue_mapt others_map;
+  for (const auto  lvaluenum : environment)
+  {
+    const auto& lvalue=taint_object_numbering[lvaluenum];
     if (!is_pure_local(lvalue,ns) &&
         !is_return_value_auxiliary(lvalue,ns) &&
         !is_this(lvalue,ns) &&
         !(get_underlying_object(lvalue).id()==ID_dynamic_object))
     {
-      entry_map.insert({lvalue, taint_make_symbol() });
-      others_map.insert({lvalue, taint_make_bottom() });
+      entry_map.insert({lvaluenum, taint_make_symbol() });
+      others_map.insert({lvaluenum, taint_make_bottom() });
     }
+  }
 
   domain.insert({function.body.instructions.cbegin(),entry_map});
   for (auto  it = std::next(function.body.instructions.cbegin());
@@ -187,24 +196,48 @@ static void  initialise_domain(
        ++it)
     domain.insert({it,others_map});
 
+  // Now populate object-numbers-by-field, which maps field names mentioned in
+  // child call summaries onto the set of value-numbers at local scope referring to the
+  // same fields:
+
+  for(const auto lvaluenum : environment)
+  {
+    const auto& lvalue=taint_object_numbering[lvaluenum];
+    irep_idt fieldname;
+    if(lvalue.id()==ID_member)
+      fieldname=to_member_expr(lvalue).get_component_name();
+    else if(lvalue.id()==ID_dynamic_object)
+      fieldname="[]";
+    if(fieldname!=irep_idt())
+    {
+      auto findit=object_numbers_by_field.find(fieldname);
+      if(findit!=object_numbers_by_field.end())
+	findit->second.insert(lvaluenum);
+    }
+  }
+
+  
   if (log != nullptr)
   {
     *log << "<h3>Initialising the domain</h3>\n"
             "<p>Domain value at the entry location:</p>\n"
          ;
-    taint_dump_lvalues_to_svalues_in_html(
+    taint_dump_numbered_lvalues_to_svalues_as_html(
         domain.at(function.body.instructions.cbegin()),
         ns,
+	taint_object_numbering,
         *log
         );
 
     *log << "<p>Domain value at all other locations:</p>\n";
-    taint_dump_lvalues_to_svalues_in_html(
+    taint_dump_numbered_lvalues_to_svalues_as_html(
         domain.at(std::prev(function.body.instructions.cend())),
         ns,
+	taint_object_numbering,
         *log
         );
   }
+  
 }
 
 
@@ -261,24 +294,17 @@ Function:
 static void  erase_dead_lvalue(
     taint_lvaluet const&  lvalue,
     namespacet const&  ns,
-    taint_map_from_lvalues_to_svaluest&  map
+    taint_numbered_lvalue_svalue_mapt&  map,
+    object_numberingt& object_numbering
     )
 {
-  if (map.erase(lvalue) == 0ULL && lvalue.id() == ID_symbol)
-  {
-    irep_idt const&  ident = to_symbol_expr(lvalue).get_identifier();
-    for (auto  it = map.begin(); it != map.end(); ++it)
-      if (is_pure_local(it->first,ns) && it->first.id() == ID_symbol &&
-          to_symbol_expr(it->first).get_identifier() == ident)
-      {
-        map.erase(it);
-        return;
-      }
-  }
+  auto num=object_numbering.number(lvalue);
+  map.erase(num);
 }
 
-static void expand_external_objects(taint_lvalues_sett& lvalue_set,
-                                    taint_map_from_lvalues_to_svaluest const& all_keys)
+static void expand_external_objects(taint_numbered_lvalues_sett& lvalue_set,
+                                    const object_numbers_by_fieldnamet& by_fieldname,
+				    const object_numberingt& taint_object_numbering)
 {
   // Whenever a value like external_value_set("external_objects.x") occurs,
   // expand that to include the 'x' fields of all objects we know about,
@@ -293,9 +319,10 @@ static void expand_external_objects(taint_lvalues_sett& lvalue_set,
   // TODO: figure out when an external reference made by the callee
   // is certain to be resolved here, so we can remove the external reference.
 
-  std::vector<exprt> new_keys;
-  for(const auto& lval : lvalue_set)
+  std::vector<unsigned> new_keys;
+  for(const auto& lval_number : lvalue_set)
   {
+    const auto& lval=taint_object_numbering[lval_number];
     if(lval.id()=="external-value-set")
     {
       const auto& evse=to_external_value_set(lval);
@@ -303,37 +330,10 @@ static void expand_external_objects(taint_lvalues_sett& lvalue_set,
       if(label=="external_objects")
       {
         assert(evse.access_path_size()==1);
-        std::string fieldname=id2string(evse.access_path_back().label());
-        assert(fieldname.size()>=2);
-        if(fieldname[0]=='.')
-        {
-          fieldname=fieldname.substr(1);
-          // This represents a given field of all objects
-          // preceding entering this function.
-          // Return all known keys that match the field.
-          for(const auto& keyval : all_keys)
-          {
-            const auto& key=keyval.first;
-            if(key.id()==ID_member)
-            {
-              auto key_field=to_member_expr(key).get_component_name();
-              if(key_field==fieldname)
-                new_keys.push_back(key);
-            }
-          }
-        }
-        else
-        {
-          assert(fieldname=="[]");
-          // Return all array-typed objects we know about.
-          // In current taint domain with LVSA, that's anything dynamic without a member operator.
-          for(const auto& keyval : all_keys)
-          {
-            const auto& key=keyval.first;
-            if(key.id()==ID_dynamic_object)
-              new_keys.push_back(key);
-          }
-        }
+        const auto fieldname=evse.access_path_back().label();
+	auto findit=by_fieldname.find(fieldname);
+	if(findit!=by_fieldname.end())
+	  new_keys.insert(new_keys.end(),findit->second.begin(),findit->second.end());
       }
     }
   }
@@ -358,7 +358,7 @@ Function:
 static void  build_symbols_substitution(
     std::unordered_map<taint_svaluet::taint_symbolt,taint_svaluet>&
         symbols_substitution,
-    taint_map_from_lvalues_to_svaluest const&  a,
+    taint_numbered_lvalue_svalue_mapt const&  a,
     taint_summary_ptrt const  summary,
     irep_idt const&  caller_ident,
     code_function_callt const&  fn_call,
@@ -366,7 +366,9 @@ static void  build_symbols_substitution(
     namespacet const&  ns,
     local_value_set_analysist* lvsa,
     instruction_iteratort const& Iit,
-    std::ostream* const  log
+    std::ostream* const  log,
+    object_numberingt& taint_object_numbering,
+    const object_numbers_by_fieldnamet& object_numbers_by_field
     )
 {
   if (log != nullptr)
@@ -389,7 +391,7 @@ static void  build_symbols_substitution(
     assert(!lvalue_svalue.second.is_bottom());
     assert(lvalue_svalue.second.expression().size() == 1UL);
 
-    taint_lvalues_sett  argument_lvalues;
+    taint_numbered_lvalues_sett  argument_lvalues;
     
     if (is_parameter(lvalue_svalue.first,ns))
     {
@@ -413,32 +415,27 @@ static void  build_symbols_substitution(
               ns,
               argument_lvalues,
               *lvsa,
-              Iit);
+              Iit,
+	      taint_object_numbering);
         }
         else
         {
+	  /*
           collect_access_paths(
             fn_call.arguments().at(param_idx),
             ns,
             argument_lvalues
-            );
+            );*/
         }
       }
     }
     else
     {
-      taint_lvaluet const  translated_lvalue = scope_translation(
-            lvalue_svalue.first,
-            callee_ident,
-            caller_ident,
-            fn_call,
-            fn_type,
-            ns
-            );
-      argument_lvalues.insert(translated_lvalue);
+      auto const lvalue = taint_object_numbering.number(lvalue_svalue.first);
+      argument_lvalues.insert(lvalue);
     }
 
-    expand_external_objects(argument_lvalues,a);
+    expand_external_objects(argument_lvalues,object_numbers_by_field,taint_object_numbering);
       
     taint_svaluet  argument_svalue = taint_make_bottom();
     for (auto const&  lvalue : argument_lvalues)
@@ -473,34 +470,28 @@ Function:
 
 \*******************************************************************/
 static void  build_substituted_summary(
-    taint_map_from_lvalues_to_svaluest&  substituted_summary,
+    taint_numbered_lvalue_svalue_mapt& substituted_summary,
     taint_map_from_lvalues_to_svaluest const&  original_summary,
     std::unordered_map<taint_svaluet::taint_symbolt,taint_svaluet> const&
         symbols_substitution,
-    taint_map_from_lvalues_to_svaluest const& local_lvalues,
     irep_idt const&  caller_ident,
     irep_idt const&  callee_ident,
     code_function_callt const&  fn_call,
     code_typet const&  fn_type,
     namespacet const&  ns,
-    std::ostream* const  log
+    std::ostream* const  log,
+    object_numberingt& taint_object_numbering,
+    const object_numbers_by_fieldnamet& object_numbers_by_fieldname
     )
 {
   for (auto const&  lvalue_svalue : original_summary)
   {
-    taint_lvaluet const  translated_lvalue = scope_translation(
-          lvalue_svalue.first,
-          callee_ident,
-          caller_ident,
-          fn_call,
-          fn_type,
-          ns
-          );
-    if (!is_empty(translated_lvalue))
+    const auto& lvalue=lvalue_svalue.first;
+    if (!is_empty(lvalue))
     {
-      taint_lvalues_sett lhs_set;
-      lhs_set.insert(translated_lvalue);
-      expand_external_objects(lhs_set,local_lvalues);
+      taint_numbered_lvalues_sett lhs_set;
+      lhs_set.insert(taint_object_numbering.number(lvalue));
+      expand_external_objects(lhs_set,object_numbers_by_fieldname,taint_object_numbering);
       for(const auto& lhs : lhs_set)
       {
         if (lvalue_svalue.second.is_bottom() || lvalue_svalue.second.is_top())
@@ -529,7 +520,7 @@ static void  build_substituted_summary(
   if (log != nullptr)
   {
     *log << "<p>Substituted summary:</p>\n";
-    taint_dump_lvalues_to_svalues_in_html(substituted_summary,ns,*log);
+    taint_dump_numbered_lvalues_to_svalues_as_html(substituted_summary,ns,taint_object_numbering,*log);
   }
 }
 
@@ -547,12 +538,13 @@ Function:
 
 \*******************************************************************/
 static void  build_summary_from_computed_domain(
-    taint_summary_domain_ptrt const  domain,
+    taint_numbered_domaint const&  domain,
     written_expressionst const& written,
     taint_map_from_lvalues_to_svaluest&  output,
     goto_functionst::function_mapt::const_iterator const  fn_iter,
     namespacet const&  ns,
-    std::ostream* const  log
+    std::ostream* const  log,
+    const object_numberingt& taint_object_numbering
     )
 {
   if (log != nullptr)
@@ -563,17 +555,19 @@ static void  build_summary_from_computed_domain(
          << ":</p>\n<ul>\n"
          ;
 
-  taint_map_from_lvalues_to_svaluest const&  end_svalue =
-      domain->at(std::prev(fn_iter->second.body.instructions.cend()));
+  auto const&  end_svalue =
+      domain.at(std::prev(fn_iter->second.body.instructions.cend()));
   for (auto  it = end_svalue.cbegin(); it != end_svalue.cend(); ++it)
-    if ((!is_pure_local(it->first,ns)) && (!is_parameter(it->first,ns)) && written.count(it->first))
+  {
+    const auto& lval=taint_object_numbering[it->first];
+    if ((!is_pure_local(lval,ns)) && (!is_parameter(lval,ns)) && written.count(it->first))
     {
-      output.insert(*it);
+      output.insert(std::make_pair(lval,it->second));
 
       if (log != nullptr)
       {
         *log << "<li>";
-        taint_dump_lvalue_in_html(it->first,ns,*log);
+        taint_dump_lvalue_in_html(lval,ns,*log);
         *log << " &rarr; ";
         taint_dump_svalue_in_html(it->second,*log);
           *log << "</li>\n";
@@ -583,11 +577,12 @@ static void  build_summary_from_computed_domain(
       if (log != nullptr)
       {
         *log << "<li>!! EXCLUDING !! : ";
-        taint_dump_lvalue_in_html(it->first,ns,*log);
+        taint_dump_lvalue_in_html(lval,ns,*log);
         *log << " &rarr; ";
         taint_dump_svalue_in_html(it->second,*log);
         *log << "</li>\n";
       }
+  }
 
   if (log != nullptr)
     *log << "</ul>\n";
@@ -595,8 +590,8 @@ static void  build_summary_from_computed_domain(
 
 
 static void  assign(
-    taint_map_from_lvalues_to_svaluest&  map,
-    taint_lvaluet const&  lvalue,
+    taint_numbered_lvalue_svalue_mapt&  map,
+    unsigned const  lvalue,
     taint_svaluet const&  svalue
     )
 {
@@ -611,8 +606,8 @@ static void  assign(
 }
 
 static void  maybe_assign(
-    taint_map_from_lvalues_to_svaluest&  map,
-    taint_lvaluet const&  lvalue,
+    taint_numbered_lvalue_svalue_mapt&  map,
+    unsigned const  lvalue,
     taint_svaluet const&  svalue
     )
 {
@@ -629,8 +624,7 @@ static void  maybe_assign(
 taint_svaluet  taint_make_symbol()
 {
   static uint64_t  counter = 0UL;
-  std::string const  symbol_name =
-      msgstream() << "T" << ++counter;
+  taint_svaluet::taint_symbolt const  symbol_name = ++counter;
   return {{symbol_name},false,false};
 }
 
@@ -741,6 +735,8 @@ bool  operator==(taint_svaluet const&  a, taint_svaluet const&  b)
 
 bool  operator<(taint_svaluet const&  a, taint_svaluet const&  b)
 {
+  if (a == b)
+    return false;
   if (a.is_top() || b.is_bottom())
     return false;
   if (a.is_bottom() || b.is_top())
@@ -880,6 +876,7 @@ static exprt transform_external_objects(const exprt& e)
     evs_copy.extend_access_path(new_entry);
     evs_copy.label()=constant_exprt("external_objects",string_typet());
     evs_copy.type()=e.type();
+    evs_copy.remove("modified");
     return evs_copy;
   }
   else if(e.id()=="external-value-set")
@@ -891,6 +888,7 @@ static exprt transform_external_objects(const exprt& e)
     evs_copy.extend_access_path(new_entry);
     evs_copy.label()=constant_exprt("external_objects",string_typet());
     evs_copy.type()=e.type();
+    evs_copy.remove("modified");
     return evs_copy;    
   }
   else
@@ -900,9 +898,10 @@ static exprt transform_external_objects(const exprt& e)
 static void collect_lvsa_access_paths(
   exprt const& e,
   namespacet const& ns,
-  taint_lvalues_sett& result,
+  taint_numbered_lvalues_sett& result,
   local_value_set_analysist& lvsa,
-  instruction_iteratort const& instit)
+  instruction_iteratort const& instit,
+  object_numberingt& taint_object_numbering)
 {
   if(e.id()==ID_symbol ||
      e.id()==ID_index ||
@@ -933,17 +932,19 @@ static void collect_lvsa_access_paths(
           continue;
       }
 
-      result.insert(transformed_object);
+      result.insert(taint_object_numbering.number(transformed_object));
     }
   }
   else
   {
     forall_operands(it,e)
-      collect_lvsa_access_paths(*it,ns,result,lvsa,instit);
+      collect_lvsa_access_paths(*it,ns,result,lvsa,instit,taint_object_numbering);
   }
 }
 
-std::string find_taint_value(const exprt &expr)
+static const taint_svaluet::taint_symbolt invalid_taint=(unsigned long)-1;
+
+taint_svaluet::taint_symbolt find_taint_value(const exprt &expr)
 {
   if (expr.id() == ID_typecast)
     return find_taint_value(to_typecast_expr(expr).op());
@@ -952,9 +953,9 @@ std::string find_taint_value(const exprt &expr)
   else if (expr.id() == ID_index)
     return find_taint_value(to_index_expr(expr).array());
   else if (expr.id() == ID_string_constant)
-    return as_string(expr.get(ID_value));
+    return safe_string2unsigned(as_string(expr.get(ID_value)));
   else
-    return ""; // ERROR!
+    return invalid_taint; // ERROR!
 }
 
 exprt find_taint_expression(const exprt &expr)
@@ -967,12 +968,13 @@ exprt find_taint_expression(const exprt &expr)
 
 static void handle_assignment(
     const code_assignt& asgn,
-    taint_map_from_lvalues_to_svaluest const&  a,
-    taint_map_from_lvalues_to_svaluest& result,  
+    taint_numbered_lvalue_svalue_mapt const&  a,
+    taint_numbered_lvalue_svalue_mapt& result,  
     instruction_iteratort const& Iit,
     local_value_set_analysist* lvsa,
     namespacet const&  ns,
-    std::ostream* const  log)
+    std::ostream* const  log,
+    object_numberingt& taint_object_numbering)
 {
 
   const auto& lhs_type=ns.follow(asgn.lhs().type());
@@ -984,7 +986,7 @@ static void handle_assignment(
     {
       code_assignt member_assign(member_exprt(asgn.lhs(),c.get_name(),c.type()),
 				 member_exprt(asgn.rhs(),c.get_name(),c.type()));
-      handle_assignment(member_assign,a,result,Iit,lvsa,ns,log);
+      handle_assignment(member_assign,a,result,Iit,lvsa,ns,log,taint_object_numbering);
     }
     return;
   }
@@ -999,11 +1001,13 @@ static void handle_assignment(
 
   taint_svaluet  rvalue = taint_make_bottom();
   {
-    taint_lvalues_sett  rhs;
+    taint_numbered_lvalues_sett  rhs;
     if(!lvsa)
-      collect_access_paths(asgn.rhs(),ns,rhs);
+    {
+      //      collect_access_paths(asgn.rhs(),ns,rhs);
+    }
     else
-      collect_lvsa_access_paths(asgn.rhs(),ns,rhs,*lvsa,Iit);
+      collect_lvsa_access_paths(asgn.rhs(),ns,rhs,*lvsa,Iit,taint_object_numbering);
     for (auto const&  lvalue : rhs)
     {
       auto const  it = a.find(lvalue);
@@ -1012,7 +1016,7 @@ static void handle_assignment(
 
       if (log != nullptr)
       {
-        taint_dump_lvalue_in_html(lvalue,ns,*log);
+        taint_dump_lvalue_in_html(taint_object_numbering[lvalue],ns,*log);
         *log << ", ";
       }
     }
@@ -1022,34 +1026,38 @@ static void handle_assignment(
     *log << "}.</p>\n";
 
   if(!lvsa)
-    assign(result,normalise(asgn.lhs(),ns),rvalue);
+  {
+    //assign(result,normalise(asgn.lhs(),ns),rvalue);
+  }
   else
   {
-    taint_lvalues_sett lhs;
-    collect_lvsa_access_paths(asgn.lhs(),ns,lhs,*lvsa,Iit);
+    taint_numbered_lvalues_sett lhs;
+    collect_lvsa_access_paths(asgn.lhs(),ns,lhs,*lvsa,Iit,taint_object_numbering);
     for(const auto& path : lhs)
     {
-      if(lhs.size()>1 || (lhs.size()==1 && !is_singular_object(path)))
-        maybe_assign(result,normalise(path,ns),rvalue);
+      if(lhs.size()>1 || (lhs.size()==1 && !is_singular_object(taint_object_numbering[path])))
+        maybe_assign(result,path,rvalue);
       else
-        assign(result,normalise(path,ns),rvalue);
+        assign(result,path,rvalue);
     }
   }
 }
 
-taint_map_from_lvalues_to_svaluest  transform(
-    taint_map_from_lvalues_to_svaluest const&  a,
+taint_numbered_lvalue_svalue_mapt  transform(
+    taint_numbered_lvalue_svalue_mapt const&  a,
     instruction_iteratort const& Iit,
     irep_idt const&  caller_ident,
     goto_functionst::function_mapt const&  functions_map,
     database_of_summariest const&  database,
     local_value_set_analysist* lvsa,
     namespacet const&  ns,
-    std::ostream* const  log
+    std::ostream* const  log,
+    object_numberingt& taint_object_numbering,
+    const object_numbers_by_fieldnamet& object_numbers_by_field
     )
 {
   goto_programt::instructiont const&  I=*Iit;
-  taint_map_from_lvalues_to_svaluest  result = a;
+  auto  result = a;
   switch(I.type)
   {
   case ASSIGN:
@@ -1061,26 +1069,26 @@ taint_map_from_lvalues_to_svaluest  transform(
         if(see.get_statement()==ID_nondet)
         {
           if (lvsa == nullptr)
-            assign(result,normalise(asgn.lhs(),ns),
+            assign(result,taint_object_numbering.number(asgn.lhs()),
                    taint_get_symbol_of_NONDET());
           else
           {
-            taint_lvalues_sett lhs;
-            collect_lvsa_access_paths(asgn.lhs(),ns,lhs,*lvsa,Iit);
+            taint_numbered_lvalues_sett lhs;
+            collect_lvsa_access_paths(asgn.lhs(),ns,lhs,*lvsa,Iit,taint_object_numbering);
             for (const auto& path : lhs)
             {
               if (lhs.size() > 1UL)
-                maybe_assign(result,normalise(path,ns),
+                maybe_assign(result,path,
                              taint_get_symbol_of_NONDET());
               else
-                assign(result,normalise(path,ns),
+                assign(result,path,
                        taint_get_symbol_of_NONDET());
             }
           }
           return result;
         }
       }
-      handle_assignment(asgn,a,result,Iit,lvsa,ns,log);
+      handle_assignment(asgn,a,result,Iit,lvsa,ns,log,taint_object_numbering);
     }
     break;
   case FUNCTION_CALL:
@@ -1104,7 +1112,7 @@ taint_map_from_lvalues_to_svaluest  transform(
 
           auto const&  fn_type = functions_map.at(callee_ident).type;
 
-          taint_map_from_lvalues_to_svaluest  substituted_summary;
+          taint_numbered_lvalue_svalue_mapt  substituted_summary;
           {
             std::unordered_map<taint_svaluet::taint_symbolt,taint_svaluet>
                 symbols_substitution;
@@ -1118,20 +1126,23 @@ taint_map_from_lvalues_to_svaluest  transform(
                   ns,
                   lvsa,
                   Iit,
-                  log
+                  log,
+		  taint_object_numbering,
+		  object_numbers_by_field
                   );
             build_substituted_summary(
                   substituted_summary,
                   summary->output(),
                   symbols_substitution,
-                  a,
                   caller_ident,
                   callee_ident,
                   fn_call,
                   fn_type,
                   ns,
-                  log
-                  );
+                  log,
+		  taint_object_numbering,
+		  object_numbers_by_field		  
+		  );
           }
           result = assign(result,substituted_summary);
         }
@@ -1153,24 +1164,24 @@ taint_map_from_lvalues_to_svaluest  transform(
     if (I.code.get_statement() == "set_may")
     {
       assert(I.code.operands().size() == 2UL);
-      std::string const  taint_name = find_taint_value(I.code.op1());
-      if (!taint_name.empty())
+      auto const  taint_name = find_taint_value(I.code.op1());
+      if (taint_name!=invalid_taint)
       {
         taint_svaluet const  rvalue({taint_name},false,false);
-        taint_lvaluet const  lvalue =
-            normalise(find_taint_expression(I.code.op0()),ns);
+        auto const  lvalue =
+	  normalise(find_taint_expression(I.code.op0()),ns);
         if (lvsa == nullptr)
-          assign(result,lvalue,rvalue);
+          assign(result,taint_object_numbering.number(lvalue),rvalue);
         else
-        {
-          taint_lvalues_sett lhs;
-          collect_lvsa_access_paths(lvalue,ns,lhs,*lvsa,Iit);
+	{
+          taint_numbered_lvalues_sett lhs;
+          collect_lvsa_access_paths(lvalue,ns,lhs,*lvsa,Iit,taint_object_numbering);
           for (const auto& path : lhs)
           {
             if (lhs.size() > 1UL)
-              maybe_assign(result,normalise(path,ns),rvalue);
+              maybe_assign(result,path,rvalue);
             else
-              assign(result,normalise(path,ns),rvalue);
+              assign(result,path,rvalue);
           }
         }
       }
@@ -1178,16 +1189,17 @@ taint_map_from_lvalues_to_svaluest  transform(
     else if (I.code.get_statement() == "clear_may")
     {
       assert(I.code.operands().size() == 2UL);
-      std::string const  taint_name = find_taint_value(I.code.op1());
-      if (!taint_name.empty())
+      auto const  taint_name = find_taint_value(I.code.op1());
+      if (taint_name!=invalid_taint)
       {
         taint_lvaluet const  lvalue =
-            normalise(find_taint_expression(I.code.op0()),ns);
+	  normalise(find_taint_expression(I.code.op0()),ns);
         if (lvsa == nullptr)
         {
+	  auto lvalue_number=taint_object_numbering.number(lvalue);
           taint_svaluet rvalue = taint_make_bottom();
           {
-            auto const  it = a.find(lvalue);
+            auto const  it = a.find(lvalue_number);
             if (it != a.end())
             {
               taint_svaluet::expressiont symbols = it->second.expression();
@@ -1196,12 +1208,12 @@ taint_map_from_lvalues_to_svaluest  transform(
                 rvalue = taint_svaluet(symbols,{taint_name},false,false);
             }
           }
-          assign(result,normalise(lvalue,ns),rvalue);
+          assign(result,lvalue_number,rvalue);
         }
         else
         {
-          taint_lvalues_sett lhs;
-          collect_lvsa_access_paths(lvalue,ns,lhs,*lvsa,Iit);
+          taint_numbered_lvalues_sett lhs;
+          collect_lvsa_access_paths(lvalue,ns,lhs,*lvsa,Iit,taint_object_numbering);
           if (lhs.size() == 1UL)
           {
             taint_svaluet rvalue = taint_make_bottom();
@@ -1215,7 +1227,7 @@ taint_map_from_lvalues_to_svaluest  transform(
                   rvalue = taint_svaluet(symbols,{taint_name},false,false);
               }
             }
-            assign(result,normalise(*lhs.cbegin(),ns),rvalue);
+            assign(result,*lhs.cbegin(),rvalue);
           }
         }
       }
@@ -1226,7 +1238,7 @@ taint_map_from_lvalues_to_svaluest  transform(
       code_assignt fake_assignment;
       fake_assignment.lhs()=dereference_exprt(I.code.op0(),I.code.op0().type().subtype());
       fake_assignment.rhs()=constant_exprt("0",I.code.op0().type().subtype());
-      handle_assignment(fake_assignment,a,result,Iit,lvsa,ns,log);
+      handle_assignment(fake_assignment,a,result,Iit,lvsa,ns,log,taint_object_numbering);
     }
     else
       if (log != nullptr)
@@ -1245,7 +1257,7 @@ taint_map_from_lvalues_to_svaluest  transform(
       collect_access_paths(dead.symbol(),ns,lvalues);
       for (auto const&  lvalue : lvalues)
       {
-        erase_dead_lvalue(lvalue,ns,result);
+        erase_dead_lvalue(lvalue,ns,result,taint_object_numbering);
 
         if (log != nullptr)
         {
@@ -1302,31 +1314,41 @@ taint_map_from_lvalues_to_svaluest  transform(
   return result;
 }
 
-
-taint_map_from_lvalues_to_svaluest  join(
-    taint_map_from_lvalues_to_svaluest const&  a,
-    taint_map_from_lvalues_to_svaluest const&  b
-    )
+taint_numbered_lvalue_svalue_mapt join(
+    taint_numbered_lvalue_svalue_mapt const&  a,
+    taint_numbered_lvalue_svalue_mapt const&  b)
 {
-  taint_map_from_lvalues_to_svaluest  result_dict = b;
-  for (auto  a_it = a.cbegin(); a_it != a.cend(); ++a_it)
+  taint_numbered_lvalue_svalue_mapt  result_dict;
+  auto a_it=a.cbegin(), a_end=a.cend();
+  auto b_it=b.cbegin(), b_end=b.cend();
+  while(a_it!=a_end || b_it!=b_end)
   {
-    auto const  r_it = result_dict.find(a_it->first);
-    if (r_it == result_dict.cend())
+    if(a_it!=a_end && b_it!=b_end && a_it->first==b_it->first)
+    {
+      result_dict.insert({a_it->first,join(a_it->second,b_it->second)});
+      ++a_it; ++b_it;
+    }
+    else if(b_it==b_end || (a_it!=a_end && a_it->first < b_it->first))
+    {
       result_dict.insert(*a_it);
+      ++a_it;
+    }
     else
-      r_it->second = join(a_it->second,r_it->second);
+    {
+      result_dict.insert(*b_it);
+      ++b_it;
+    }
   }
-  return taint_map_from_lvalues_to_svaluest{ result_dict };
+  return result_dict;
 }
 
 
-taint_map_from_lvalues_to_svaluest  assign(
-    taint_map_from_lvalues_to_svaluest const&  a,
-    taint_map_from_lvalues_to_svaluest const&  b
+taint_numbered_lvalue_svalue_mapt  assign(
+    taint_numbered_lvalue_svalue_mapt const&  a,
+    taint_numbered_lvalue_svalue_mapt const&  b
     )
 {
-  taint_map_from_lvalues_to_svaluest  result = a;
+  taint_numbered_lvalue_svalue_mapt  result = a;
   for (auto  b_it = b.cbegin(); b_it != b.cend(); ++b_it)
     assign(result,b_it->first,b_it->second);
   return result;
@@ -1336,11 +1358,13 @@ taint_map_from_lvalues_to_svaluest  assign(
 taint_summaryt::taint_summaryt(
     taint_map_from_lvalues_to_svaluest const&  input,
     taint_map_from_lvalues_to_svaluest const&  output,
-    taint_summary_domain_ptrt const  domain
+    const taint_numbered_domaint& domain,
+    const object_numberingt& _numbering
     )
   : m_input(input)
   , m_output(output)
   , m_domain(domain)
+  , numbering(_numbering)
 {
 }
 
@@ -1520,23 +1544,27 @@ taint_summary_ptrt  taint_summarise_function(
         as_string(function_id)
         );
 
-  taint_summary_domain_ptrt  domain = std::make_shared<taint_symmary_domaint>();
+  taint_numbered_domaint domain;
   written_expressionst written_lvalues;
-  
+  object_numberingt taint_object_numbering;
+  object_numbers_by_fieldnamet object_numbers_by_field;
+
   initialise_domain(
         function_id,
         fn_iter->second,
         functions, 
         ns,
         database,
-        *domain,
+        domain,
         written_lvalues,
         lvsa,
-        log
+        log,
+	taint_object_numbering,
+	object_numbers_by_field
         );
 
-  taint_map_from_lvalues_to_svaluest  input =
-      domain->at(fn_iter->second.body.instructions.cbegin());
+  auto  input =
+    domain.at(fn_iter->second.body.instructions.cbegin());
   solver_work_set_t  work_set;
   initialise_workset(fn_iter->second,work_set);
   while (!work_set.empty())
@@ -1546,10 +1574,10 @@ taint_summary_ptrt  taint_summarise_function(
     instruction_iteratort const  src_instr_it = *work_set.cbegin();
     work_set.erase(work_set.cbegin());
 
-    taint_map_from_lvalues_to_svaluest const&  src_value =
-        domain->at(src_instr_it);
+    auto const&  src_value =
+        domain.at(src_instr_it);
 
-    taint_map_from_lvalues_to_svaluest const  transformed =
+    auto const  transformed =
       transform(
           src_value,
           src_instr_it,
@@ -1558,7 +1586,9 @@ taint_summary_ptrt  taint_summarise_function(
           database,
           lvsa,
           ns,
-          log
+          log,
+	  taint_object_numbering,
+	  object_numbers_by_field
           );
 
     goto_programt::const_targetst successors;
@@ -1569,12 +1599,12 @@ taint_summary_ptrt  taint_summarise_function(
       if (*succ_it != fn_iter->second.body.instructions.cend())
       {
         instruction_iteratort const  dst_instr_it = *succ_it;
-        taint_map_from_lvalues_to_svaluest&  dst_value =
-            domain->at(dst_instr_it);
-        taint_map_from_lvalues_to_svaluest const  old_dst_value = dst_value;
+        auto&  dst_value =
+            domain.at(dst_instr_it);
+        auto const  old_dst_value = dst_value;
 
-        if (log != nullptr)
-        {
+	if (log != nullptr)
+	{
           *log << "<h3>Processing transition: "
                << src_instr_it->location_number << " ---[ "
                ;
@@ -1586,20 +1616,20 @@ taint_summary_ptrt  taint_summarise_function(
           *log << " ]---> " << dst_instr_it->location_number << "</h3>\n"
                ;
           *log << "<p>Source value:</p>\n";
-          taint_dump_lvalues_to_svalues_in_html(src_value,ns,*log);
+          taint_dump_numbered_lvalues_to_svalues_as_html(src_value,ns,taint_object_numbering,*log);
           *log << "<p>Old destination value:</p>\n";
-          taint_dump_lvalues_to_svalues_in_html(old_dst_value,ns,*log);
-        }
-
+	  taint_dump_numbered_lvalues_to_svalues_as_html(old_dst_value,ns,taint_object_numbering,*log);
+	}
+	  
         dst_value = join(transformed,old_dst_value);
 
-        if (log != nullptr)
-        {
+	if (log != nullptr)
+	{
           *log << "<p>Transformed value:</p>\n";
-          taint_dump_lvalues_to_svalues_in_html(transformed,ns,*log);
+          taint_dump_numbered_lvalues_to_svalues_as_html(transformed,ns,taint_object_numbering,*log);
           *log << "<p>Resulting destination value:</p>\n";
-          taint_dump_lvalues_to_svalues_in_html(dst_value,ns,*log);
-        }
+          taint_dump_numbered_lvalues_to_svalues_as_html(dst_value,ns,taint_object_numbering,*log);
+	}
 
         if (!(dst_value <= old_dst_value))
         {
@@ -1620,12 +1650,20 @@ taint_summary_ptrt  taint_summarise_function(
         output,
         fn_iter,
         ns,
-        log
+        log,
+	taint_object_numbering
         );
 
   taint_statisticst::instance().end_taint_analysis_of_function(
         input,output,domain
-        );
+  );
 
-  return std::make_shared<taint_summaryt>(input,output,domain);
+  taint_map_from_lvalues_to_svaluest expr_input;
+  for(const auto& p : input)
+    expr_input.insert({taint_object_numbering[p.first],p.second});
+  
+  return std::make_shared<taint_summaryt>(expr_input,
+					  output,
+					  std::move(domain),
+					  std::move(taint_object_numbering));
 }

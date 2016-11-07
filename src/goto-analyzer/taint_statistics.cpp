@@ -232,16 +232,16 @@ void  taint_function_statisticst::begin_taint_summaries()
 }
 
 void  taint_function_statisticst::end_taint_summaries(
-    taint_map_from_lvalues_to_svaluest const&  input,
-    taint_map_from_lvalues_to_svaluest const&  output,
-    taint_summary_domain_ptrt const  domain
+    const taint_numbered_lvalue_svalue_mapt&  input,
+    const taint_map_from_lvalues_to_svaluest&  output,
+    const taint_numbered_domaint& domain
     )
 {
   time_point_end_taint_summaries = get_current_time();
 
   summary_input_size = input.size();
   summary_output_size = output.size();
-  for (auto const&  iit_value : *domain)
+  for (auto const&  iit_value : domain)
   {
     summary_domain_size += iit_value.second.size();
     ++summary_domain_num_abstract_values;
@@ -564,9 +564,9 @@ void  taint_statisticst::begin_taint_analysis_of_function(
 }
 
 void  taint_statisticst::end_taint_analysis_of_function(
-    taint_map_from_lvalues_to_svaluest const&  input,
+    taint_numbered_lvalue_svalue_mapt const&  input,
     taint_map_from_lvalues_to_svaluest const&  output,
-    taint_summary_domain_ptrt const  domain
+    const taint_numbered_domaint& domain
     )
 {
   assert(!current_function_name.empty());

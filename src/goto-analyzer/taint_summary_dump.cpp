@@ -89,6 +89,38 @@ void  taint_dump_lvalues_to_svalues_in_html(
   }
 }
 
+void  taint_dump_numbered_lvalues_to_svalues_as_html(
+    taint_numbered_lvalue_svalue_mapt const&  lvalues_to_svalues,
+    namespacet const&  ns,
+    const object_numberingt& numbering,
+    std::ostream&  ostr
+    )
+{
+  if (lvalues_to_svalues.empty())
+    ostr << "BOTTOM";
+  else
+  {
+    std::map<std::string,unsigned> order;
+    for (auto const&  elem : lvalues_to_svalues)
+    {
+      std::stringstream sstr;
+      const auto& lvalue=numbering[elem.first];
+      taint_dump_lvalue_in_html(lvalue,ns,sstr);
+      order.insert({sstr.str(),elem.first});
+    }
+    ostr << "    <table>\n";
+    for (auto const&  elem : order)
+    {
+      ostr << "      <tr>\n";
+      ostr << "        <td>" << elem.first << "</td>\n";
+      ostr << "        <td>";
+      taint_dump_svalue_in_html(lvalues_to_svalues.at(elem.second),ostr);
+      ostr << "</td>\n";
+      ostr << "      </tr>\n";
+    }
+    ostr << "    </table>\n";
+  }
+}
 
 std::string  taint_dump_in_html(
     object_summaryt const  obj_summary,
@@ -157,63 +189,61 @@ std::string  taint_dump_in_html(
   }
   ostr << "</table>\n";
 
-  if (summary->domain())
+  auto const  fn_it =
+    program.goto_functions.function_map.find(irep_idt(function_id));
+  if (fn_it != program.goto_functions.function_map.cend())
   {
-    auto const  fn_it =
-        program.goto_functions.function_map.find(irep_idt(function_id));
-    if (fn_it != program.goto_functions.function_map.cend())
+    goto_programt const&  fn_body = fn_it->second.body;
+    ostr << "<h3>Domain</h3>\n"
+      "<table>\n"
+      "  <tr>\n"
+      "    <th>Loc</th>\n"
+      "    <th>Targets</th>\n"
+      "    <th>Instruction</th>\n"
+      "    <th>Domain value</th>\n"
+      "  </tr>\n"
+      ;
+    namespacet const  ns(program.symbol_table);
+    for (auto  instr_it = fn_body.instructions.cbegin();
+	 instr_it != fn_body.instructions.cend();
+	 ++instr_it)
     {
-      goto_programt const&  fn_body = fn_it->second.body;
-      ostr << "<h3>Domain</h3>\n"
-              "<table>\n"
-              "  <tr>\n"
-              "    <th>Loc</th>\n"
-              "    <th>Targets</th>\n"
-              "    <th>Instruction</th>\n"
-              "    <th>Domain value</th>\n"
-              "  </tr>\n"
-           ;
-      namespacet const  ns(program.symbol_table);
-      for (auto  instr_it = fn_body.instructions.cbegin();
-          instr_it != fn_body.instructions.cend();
-          ++instr_it)
+      ostr << "  <tr>\n";
+
+      // Dumping program location
+      ostr << "    <td>"
+	   << instr_it->location_number
+	   << "</td>\n"
+	;
+
+      // Dumping targets
+      if (instr_it->is_target())
+	ostr << "    <td>" << instr_it->target_number << "</td>\n";
+      else
+	ostr << "    <td>    </td>\n";
+
+      // Dumping instruction
+      ostr << "    <td>\n";
+      dump_instruction_code_in_html(*instr_it,program,ostr);
+      ostr << "</td>\n";
+
+      // Dumping taint domain
+      auto const  vars_to_values_it = summary->domain().find(instr_it);
+      if (vars_to_values_it != summary->domain().cend())
       {
-        ostr << "  <tr>\n";
-
-        // Dumping program location
-        ostr << "    <td>"
-             << instr_it->location_number
-             << "</td>\n"
-             ;
-
-        // Dumping targets
-        if (instr_it->is_target())
-          ostr << "    <td>" << instr_it->target_number << "</td>\n";
-        else
-          ostr << "    <td>    </td>\n";
-
-        // Dumping instruction
-        ostr << "    <td>\n";
-        dump_instruction_code_in_html(*instr_it,program,ostr);
-        ostr << "</td>\n";
-
-        // Dumping taint domain
-        auto const  vars_to_values_it = summary->domain()->find(instr_it);
-        if (vars_to_values_it != summary->domain()->cend())
-        {
-          ostr << "  <td>\n";
-          taint_dump_lvalues_to_svalues_in_html(
-                vars_to_values_it->second,
-                ns,
-                ostr
-                );
+	ostr << "  <td>\n";
+	taint_dump_numbered_lvalues_to_svalues_as_html(
+					      vars_to_values_it->second,
+					      ns,
+					      summary->domain_numbering(),
+					      ostr
+					      );
           ostr << "  </td>\n";
-        }
-
-        ostr << "  </tr>\n";
       }
-      ostr << "</table>\n";
+
+      ostr << "  </tr>\n";
     }
+    ostr << "</table>\n";
   }
 
   return ""; // no error.

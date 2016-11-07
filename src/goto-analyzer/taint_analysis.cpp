@@ -14,6 +14,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/json.h>
 #include <util/file_util.h>
 #include <util/suffix.h>
+#include <util/arith_tools.h>
+#include <util/string2int.h>
 #include <json/json_parser.h>
 
 #include <ansi-c/string_constant.h>
@@ -104,7 +106,7 @@ protected:
   typedef custom_bitvector_domaint::bit_vectort bit_vectort;  
   typedef custom_bitvector_domaint::vectorst vectorst;
   vectorst substitute_taint(const taint_svaluet& in,
-                            const std::map<std::string,vectorst>& subs);
+                            const std::map<taint_svaluet::taint_symbolt,vectorst>& subs);
 };
 
 /*******************************************************************\
@@ -257,7 +259,7 @@ void taint_analysist::instrument(
                   t->make_other(code_set_may);
                   t->source_location=instruction.source_location;
 
-                  taint_sources[as_string(rule.taint)][as_string(fn_name)]
+                  taint_sources[safe_string2unsigned(as_string(rule.taint))][as_string(fn_name)]
                       .push_back(t);
                 }
                 break;
@@ -273,7 +275,7 @@ void taint_analysist::instrument(
                   t->source_location.set_property_class("taint rule "+id2string(rule.id));
                   t->source_location.set_comment(rule.message);
 
-                  taint_sinks[as_string(rule.taint)][as_string(fn_name)]
+                  taint_sinks[safe_string2unsigned(as_string(rule.taint))][as_string(fn_name)]
                       .push_back(t);
                 }
                 break;
@@ -318,7 +320,7 @@ taint_summary_ptrt bitvector_analysis_with_summariest::get_summary(
 
 custom_bitvector_domaint::vectorst bitvector_analysis_with_summariest::substitute_taint(
   const taint_svaluet& in,
-  const std::map<std::string,vectorst>& subs)
+  const std::map<taint_svaluet::taint_symbolt,vectorst>& subs)
 {
   if(in.is_top())
     return vectorst();
@@ -340,7 +342,7 @@ custom_bitvector_domaint::vectorst bitvector_analysis_with_summariest::substitut
     if(findit==subs.end())
     {
       // This function introduces new taint -- it's a source.
-      string_constantt taint_expr(taint);
+      auto taint_expr=from_integer(taint,string_typet());
       unsigned bit_nr=
         get_bit_nr(taint_expr);
       vec.may_bits|=(1ll<<bit_nr);
@@ -390,7 +392,7 @@ void bitvector_analysis_with_summariest::transform_function_call_stub(
   // The summary should declare a symbol like "Tn" giving a symbolic taint name for each param.
   // Build a map from such symbolic names to actual taint vectors:
   
-  std::map<std::string,vectorst> actual_input_taint;
+  std::map<taint_svaluet::taint_symbolt,vectorst> actual_input_taint;
   for(const auto& input : summary->input())
   {
     auto param_taint_object=input.second;

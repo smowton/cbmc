@@ -38,7 +38,7 @@ typedef std::unordered_map<
         taint_hot_locations_mapt;
 
 typedef std::unordered_map<
-          std::string,  // Name of the taint: 'taint_parse_treet::rulet::taint'
+          taint_svaluet::taint_symbolt,  // Name of the taint: 'taint_parse_treet::rulet::taint'
           taint_hot_locations_mapt
           >
         taint_sources_mapt;
@@ -106,7 +106,7 @@ void taint_recognise_error_traces(
     goto_modelt const&  goto_model,
     call_grapht const&  call_graph,
     database_of_summariest const&  summaries,
-    std::string const&  taint_name,
+    taint_svaluet::taint_symbolt const&  taint_name,
     std::string const&  source_function_name,
     goto_programt::const_targett const source_instruction,
     std::string const&  sink_function_name,

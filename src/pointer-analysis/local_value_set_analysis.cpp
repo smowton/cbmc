@@ -4,6 +4,8 @@
 #include <util/prefix.h>
 #include <util/json_irep.h>
 #include <util/suffix.h>
+#include <util/string2int.h>
+#include <util/arith_tools.h>
 #include <goto-programs/remove_returns.h>
 
 #include <algorithm>
@@ -35,7 +37,8 @@ void local_value_set_analysist::initialize(const goto_programt& fun)
 {
   summarydb.set_message_handler(get_message_handler());
   // TODO: replace this with something less ugly.
-  value_sett::use_malloc_type=true; 
+  value_sett::use_malloc_type=true;
+  value_sett::use_dead_statements=true;
   value_set_analysist::initialize(fun);
 
   if(fun.instructions.size()==0)
@@ -116,10 +119,6 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
       auto& evse=to_external_value_set(assignment.second);
       if(to_constant_expr(evse.label()).get_value()=="external_objects")
       {
-        // external objects without is_modified set represent the possibility
-        // of the field remaining unchanged, and therefore represent no flow.
-        if(!evse.is_modified())
-          continue;
         std::vector<value_sett::entryt*> rhs_entries;
         get_all_field_value_sets(
           id2string(to_external_value_set(assignment.second).access_path_back().label()),
@@ -151,6 +150,10 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
               break;
             }
           }
+	  if(paramidx==(size_t)-1)
+	  {
+	    error() << "Failed to find parameter " << inflow_symbol.name << "(evse label: " << to_constant_expr(evse.label()).get_value() << eom;
+	  }
           assert(paramidx!=(size_t)-1 && "Unknown parameter symbol?");
 	  inflow_expr=fcall.arguments()[paramidx];
         }
@@ -229,13 +232,78 @@ void local_value_set_analysist::save_summary(const goto_programt& goto_program)
   summarydb.save_index();
 }
 
+static void get_reachable_objects(
+  const unsigned long root,
+  const std::map<unsigned long, std::vector<unsigned long> >& edges,
+  std::set<unsigned long>& reachable)
+{
+  if(reachable.insert(root).second)
+  {
+    const auto findit=edges.find(root);
+    if(findit!=edges.end())
+      for(const auto otherend : findit->second)
+	get_reachable_objects(otherend,edges,reachable);
+  }
+}
+
+static void escape_analysis(
+  const std::vector<value_sett::valuest::const_iterator>& values,
+  std::set<unsigned long>& escaped)
+{
+  std::vector<unsigned long> roots;
+  std::map<unsigned long, std::vector<unsigned long> > edges;
+  const std::string dynobj_prefix="value_set::dynamic_object";
+  const auto prefixlen=dynobj_prefix.size();
+
+  // Build a pointer graph of dynamic objects, considering anything reachable
+  // from a global or external value set as a root:
+  for(const auto& entryp : values)
+  {
+    const auto& entry=*entryp;
+    const auto& pointsto=entry.second.object_map.read();
+    auto entryname=id2string(entry.first);
+    bool lhs_dynamic=has_prefix(entryname,dynobj_prefix);
+    unsigned long lhs_number=0;
+    if(lhs_dynamic)
+    {
+      size_t fieldsepidx=entryname.find('.');
+      if(fieldsepidx==std::string::npos)
+	fieldsepidx=entryname.size();
+      lhs_number=safe_string2unsigned(entryname.substr(prefixlen,fieldsepidx-prefixlen));
+    }
+    for(const auto& pointsto_number : pointsto)
+    {
+      const auto& pointsto_expr=value_sett::object_numbering[pointsto_number.first];
+      if(pointsto_expr.id()==ID_dynamic_object)
+      {
+	mp_integer rhs_number;
+	assert(!to_integer(to_dynamic_object_expr(pointsto_expr).instance(),rhs_number));
+	assert(rhs_number.is_long());
+	if(lhs_dynamic)
+	  edges[lhs_number].push_back((unsigned long)rhs_number.to_long());
+	else
+	  roots.push_back((unsigned long)rhs_number.to_long());
+      }
+    }
+  }
+
+  // Find the transitively reachable objects:
+  for(const auto root : roots)
+    get_reachable_objects(root,edges,escaped);
+  
+}
+
 void lvsaa_single_external_set_summaryt::from_final_state(
   const value_sett& final_state, const namespacet& ns, bool export_return_value)
 {
   // Just save a list of fields that may be overwritten by this function, and the values
   // they may be assigned.
-  for(const auto& entry : final_state.values)
+
+  std::vector<value_sett::valuest::const_iterator> to_export;
+  
+  for(auto it=final_state.values.begin(), itend=final_state.values.end(); it!=itend; ++it)
   {
+    const auto& entry=*it;
     const std::string prefix="external_objects";
     const std::string entryname=id2string(entry.first);
     bool export_this_entry=false;
@@ -260,14 +328,44 @@ void lvsaa_single_external_set_summaryt::from_final_state(
         export_this_entry=true;
     }
     if(export_this_entry)
+      to_export.push_back(it);
+  }
+
+  std::set<unsigned long> escaped_dynamic_objects;
+  escape_analysis(to_export,escaped_dynamic_objects);
+
+  for(const auto entryp : to_export)
+  {
+    const auto& entry=*entryp;
+    const auto& pointsto=entry.second.object_map.read();
+    for(const auto& pointsto_number : pointsto)
     {
-      const auto& pointsto=entry.second.object_map.read();
-      for(const auto& pointsto_number : pointsto)
+      const auto& pointsto_expr=final_state.object_numbering[pointsto_number.first];
+      // Remove any subclass qualifiers-- for our purposes, "points to A cast to a B"
+      // is equivalent to just "points to A".
+      const exprt* toexport=&pointsto_expr;
+      while(toexport->id()==ID_member)
+	toexport=&toexport->op0();
+
+      bool export_this_expr=false;
+      if(toexport->id()=="external-value-set" && to_external_value_set(*toexport).is_modified())
+	export_this_expr=true;
+      else if(toexport->id()==ID_dynamic_object)
       {
-        const auto& pointsto_expr=final_state.object_numbering[pointsto_number.first];
-        struct fieldname thisname = {id2string(entry.second.identifier), entry.second.suffix};
-        field_assignments.push_back(std::make_pair(thisname,pointsto_expr));
+	mp_integer object_number;
+	assert(!to_integer(to_dynamic_object_expr(*toexport).instance(),object_number));
+	assert(object_number.is_long());
+	if(escaped_dynamic_objects.count(object_number.to_long()))
+	  export_this_expr=true;
       }
+      else if(toexport->id()==ID_symbol)
+	export_this_expr=true;
+	
+      if(!export_this_expr)
+	continue;
+	
+      struct fieldname thisname = {id2string(entry.second.identifier), entry.second.suffix};
+      field_assignments.push_back(std::make_pair(thisname,*toexport));
     }
   }
 }

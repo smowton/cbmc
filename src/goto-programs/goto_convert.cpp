@@ -121,7 +121,6 @@ void goto_convertt::finish_gotos(goto_programt &dest)
       // appropriate for however many automatic variables leave scope.
       // We don't currently handle variables *entering* scope, which is illegal
       // for C++ non-pod types and impossible in Java in any case.
-      /*
       auto goto_stack=it.second;
       const auto& label_stack=l_it->second.second;
       bool stack_is_prefix=true;
@@ -140,7 +139,7 @@ void goto_convertt::finish_gotos(goto_programt &dest)
         auto unwind_to_size=label_stack.size();
         if(unwind_to_size < goto_stack.size())
         {
-          status() << "Adding goto-destructor code on jump to " << goto_label << eom;
+          //status() << "Adding goto-destructor code on jump to " << goto_label << eom;
           goto_programt destructor_code;
           unwind_destructor_stack(i.code.add_source_location(),unwind_to_size,
                                   destructor_code,goto_stack);
@@ -149,7 +148,6 @@ void goto_convertt::finish_gotos(goto_programt &dest)
           // is std::list.
         }
       }
-      */
     }
     else
     {
@@ -301,7 +299,7 @@ void goto_convertt::goto_convert_rec(
 
   finish_gotos(dest);
   finish_computed_gotos(dest);
-  //finish_guarded_gotos(dest);
+  finish_guarded_gotos(dest);
 }
 
 /*******************************************************************\
@@ -2267,9 +2265,9 @@ void goto_convertt::generate_ifthenelse(
     // if(some) { label: goto somewhere; }
     // Don't perform the transformation here, as code might get inserted into
     // the true case to perform destructors. This will be attempted in finish_guarded_gotos.
-    //is_guarded_goto=true;
-    true_case.instructions.back().guard=guard;
-    dest.destructive_append(true_case);
+    is_guarded_goto=true;
+    //true_case.instructions.back().guard=guard;
+    //dest.destructive_append(true_case);
   }
   
   // similarly, do guarded assertions directly

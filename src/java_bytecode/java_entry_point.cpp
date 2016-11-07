@@ -399,7 +399,7 @@ std::tuple<symbolt, bool, bool> get_main_symbol(symbol_tablet &symbol_table,
     }
     
     // check if it has a body
-    if(symbol.value.is_nil())
+    if(symbol.value.is_nil() && !allow_no_body)
     {
       message.error() << "main method `" << main_class
                       << "' has no body" << messaget::eom;
