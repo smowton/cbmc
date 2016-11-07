@@ -1601,58 +1601,36 @@ taint_summary_ptrt  taint_summarise_function(
             domain.at(dst_instr_it);
         auto const  old_dst_value = dst_value;
 
-	//        if (log != nullptr)
-	//        {
-          std::cout << "<h3>Processing transition: "
+	if (log != nullptr)
+	{
+          *log << "<h3>Processing transition: "
                << src_instr_it->location_number << " ---[ "
                ;
           dump_instruction_code_in_html(
               *src_instr_it,
               instrumented_program,
-              std::cout
+              *log
               );
-          std::cout << " ]---> " << dst_instr_it->location_number << "</h3>\n"
+          *log << " ]---> " << dst_instr_it->location_number << "</h3>\n"
                ;
-          std::cout << "<p>Source value:</p>\n";
-          taint_dump_numbered_lvalues_to_svalues_as_html(src_value,ns,taint_object_numbering,std::cout);
-          std::cout << "<p>Old destination value:</p>\n";
-	  taint_dump_numbered_lvalues_to_svalues_as_html(old_dst_value,ns,taint_object_numbering,std::cout);
-	  //	          }
-
+          *log << "<p>Source value:</p>\n";
+          taint_dump_numbered_lvalues_to_svalues_as_html(src_value,ns,taint_object_numbering,*log);
+          *log << "<p>Old destination value:</p>\n";
+	  taint_dump_numbered_lvalues_to_svalues_as_html(old_dst_value,ns,taint_object_numbering,*log);
+	}
+	  
         dst_value = join(transformed,old_dst_value);
 
-	//        if (log != nullptr)
-	//        {
-          std::cout << "<p>Transformed value:</p>\n";
-          taint_dump_numbered_lvalues_to_svalues_as_html(transformed,ns,taint_object_numbering,std::cout);
-          std::cout << "<p>Resulting destination value:</p>\n";
-          taint_dump_numbered_lvalues_to_svalues_as_html(dst_value,ns,taint_object_numbering,std::cout);
-	  //        }
+	if (log != nullptr)
+	{
+          *log << "<p>Transformed value:</p>\n";
+          taint_dump_numbered_lvalues_to_svalues_as_html(transformed,ns,taint_object_numbering,*log);
+          *log << "<p>Resulting destination value:</p>\n";
+          taint_dump_numbered_lvalues_to_svalues_as_html(dst_value,ns,taint_object_numbering,*log);
+	}
 
         if (!(dst_value <= old_dst_value))
         {
-	  std::cout << "Old:\n";
-	  for(const auto& kv : old_dst_value)
-	  {
-	    std::cout << kv.first << " ->\n";
-	    for(const auto& v2 : kv.second.expression())
-	      std::cout << "  " << v2 << "\n";
-	  }
-
-	  std::cout << "New:\n";
-	  for(const auto& kv : dst_value)
-	  {
-	    std::cout << kv.first << " ->\n";
-	    for(const auto& v2 : kv.second.expression())
-	      std::cout << "  " << v2 << "\n";
-	  }
-
-	  std::cout << (dst_value == old_dst_value) <<
-	    (dst_value <= old_dst_value) <<
-	    (dst_value < old_dst_value) <<
-	    (dst_value >= old_dst_value) <<
-	    (dst_value > old_dst_value) << "\n";
-
           work_set.insert(dst_instr_it);
 
           if (log != nullptr)
