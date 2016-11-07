@@ -483,8 +483,8 @@ int goto_analyzer_parse_optionst::doit()
 
       taint_statisticst::instance().end_loading_taint_summaries_database();
 
-      std::string fname=cmdline.get_value("function");
-
+      std::string fname=cmdline.get_value("taint-summarise-single-function");
+      
       taint_statisticst::instance().begin_callgraph_building();
       status() << "*** Building call-graph." << eom;
 
