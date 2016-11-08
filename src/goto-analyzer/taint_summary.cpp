@@ -112,7 +112,7 @@ static void  initialise_domain(
 
           auto const&  fn_type = functions_map.at(callee_ident).type;
 
-          /* // TODO: this loop should be returned back!
+          //* // TODO: this loop should be returned back!
           for (exprt const&  arg : fn_call.arguments())
           {
             set_of_access_pathst  paths;
@@ -121,7 +121,7 @@ static void  initialise_domain(
               if (!is_pure_local(path,ns) &&
                   !is_return_value_auxiliary(path,ns) &&
                   !is_this(path,ns))
-                environment.insert(
+                environment.insert(taint_object_numbering.number(
                       scope_translation(
                           path,
                           callee_ident,
@@ -130,9 +130,9 @@ static void  initialise_domain(
                           fn_type,
                           ns
                           )
-                      );
+                      ));
           }
-          */
+          // */
 
           taint_summary_ptrt const  summary =
               database.find<taint_summaryt>(callee_ident);
@@ -944,16 +944,20 @@ static void collect_lvsa_access_paths(
 
 static const taint_svaluet::taint_symbolt invalid_taint=(unsigned long)-1;
 
-taint_svaluet::taint_symbolt find_taint_value(const exprt &expr)
+taint_svaluet::taint_symbolt find_taint_value(
+    const exprt &expr,
+    taint_specification_symbol_names_to_svalue_symbols_mapt const&
+        taint_spec_names
+    )
 {
   if (expr.id() == ID_typecast)
-    return find_taint_value(to_typecast_expr(expr).op());
+    return find_taint_value(to_typecast_expr(expr).op(),taint_spec_names);
   else if (expr.id() == ID_address_of)
-    return find_taint_value(to_address_of_expr(expr).object());
+    return find_taint_value(to_address_of_expr(expr).object(),taint_spec_names);
   else if (expr.id() == ID_index)
-    return find_taint_value(to_index_expr(expr).array());
+    return find_taint_value(to_index_expr(expr).array(),taint_spec_names);
   else if (expr.id() == ID_string_constant)
-    return safe_string2unsigned(as_string(expr.get(ID_value)));
+    return taint_spec_names.at(as_string(expr.get(ID_value)));
   else
     return invalid_taint; // ERROR!
 }
@@ -1051,9 +1055,11 @@ taint_numbered_lvalue_svalue_mapt  transform(
     database_of_summariest const&  database,
     local_value_set_analysist* lvsa,
     namespacet const&  ns,
-    std::ostream* const  log,
     object_numberingt& taint_object_numbering,
-    const object_numbers_by_fieldnamet& object_numbers_by_field
+    const object_numbers_by_fieldnamet& object_numbers_by_field,
+    taint_specification_symbol_names_to_svalue_symbols_mapt const&
+        taint_spec_names,
+    std::ostream* const  log
     )
 {
   goto_programt::instructiont const&  I=*Iit;
@@ -1127,8 +1133,8 @@ taint_numbered_lvalue_svalue_mapt  transform(
                   lvsa,
                   Iit,
                   log,
-		  taint_object_numbering,
-		  object_numbers_by_field
+                  taint_object_numbering,
+                  object_numbers_by_field
                   );
             build_substituted_summary(
                   substituted_summary,
@@ -1140,9 +1146,9 @@ taint_numbered_lvalue_svalue_mapt  transform(
                   fn_type,
                   ns,
                   log,
-		  taint_object_numbering,
-		  object_numbers_by_field		  
-		  );
+                  taint_object_numbering,
+                  object_numbers_by_field
+                  );
           }
           result = assign(result,substituted_summary);
         }
@@ -1164,16 +1170,16 @@ taint_numbered_lvalue_svalue_mapt  transform(
     if (I.code.get_statement() == "set_may")
     {
       assert(I.code.operands().size() == 2UL);
-      auto const  taint_name = find_taint_value(I.code.op1());
+      auto const  taint_name = find_taint_value(I.code.op1(),taint_spec_names);
       if (taint_name!=invalid_taint)
       {
         taint_svaluet const  rvalue({taint_name},false,false);
         auto const  lvalue =
-	  normalise(find_taint_expression(I.code.op0()),ns);
+          normalise(find_taint_expression(I.code.op0()),ns);
         if (lvsa == nullptr)
           assign(result,taint_object_numbering.number(lvalue),rvalue);
         else
-	{
+        {
           taint_numbered_lvalues_sett lhs;
           collect_lvsa_access_paths(lvalue,ns,lhs,*lvsa,Iit,taint_object_numbering);
           for (const auto& path : lhs)
@@ -1189,14 +1195,14 @@ taint_numbered_lvalue_svalue_mapt  transform(
     else if (I.code.get_statement() == "clear_may")
     {
       assert(I.code.operands().size() == 2UL);
-      auto const  taint_name = find_taint_value(I.code.op1());
+      auto const  taint_name = find_taint_value(I.code.op1(),taint_spec_names);
       if (taint_name!=invalid_taint)
       {
         taint_lvaluet const  lvalue =
-	  normalise(find_taint_expression(I.code.op0()),ns);
+        normalise(find_taint_expression(I.code.op0()),ns);
         if (lvsa == nullptr)
         {
-	  auto lvalue_number=taint_object_numbering.number(lvalue);
+          auto lvalue_number=taint_object_numbering.number(lvalue);
           taint_svaluet rvalue = taint_make_bottom();
           {
             auto const  it = a.find(lvalue_number);
@@ -1384,10 +1390,12 @@ void  taint_summarise_all_functions(
     goto_modelt const&  instrumented_program,
     database_of_summariest&  summaries_to_compute,
     call_grapht const&  call_graph,
-    std::ostream* const  log,
     local_value_set_analysist::dbt* lvsa_database,
-    message_handlert& msg,
-    double  timeout
+    taint_specification_symbol_names_to_svalue_symbols_mapt const&
+        taint_spec_names,
+    message_handlert&  msg,
+    double  timeout,
+    std::ostream* const  log
     )
 {
   std::vector<irep_idt>  inverted_topological_order;
@@ -1464,9 +1472,10 @@ void  taint_summarise_all_functions(
               fn_name,
               instrumented_program,
               summaries_to_compute,
-              log,
               lvsa_database,
-              msg
+              taint_spec_names,
+              msg,
+              log
               ),
           });
 
@@ -1497,9 +1506,11 @@ taint_summary_ptrt  taint_summarise_function(
     irep_idt const&  function_id,
     goto_modelt const&  instrumented_program,
     database_of_summariest const&  database,
-    std::ostream* const  log,
     local_value_set_analysist::dbt* lvsa_database,
-    message_handlert& msg
+    taint_specification_symbol_names_to_svalue_symbols_mapt const&
+        taint_spec_names,
+    message_handlert& msg,
+    std::ostream* const  log
     )
 {
   if (log != nullptr)
@@ -1586,9 +1597,10 @@ taint_summary_ptrt  taint_summarise_function(
           database,
           lvsa,
           ns,
-          log,
-	  taint_object_numbering,
-	  object_numbers_by_field
+          taint_object_numbering,
+          object_numbers_by_field,
+          taint_spec_names,
+          log
           );
 
     goto_programt::const_targetst successors;

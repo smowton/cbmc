@@ -35,7 +35,8 @@ std::string  taint_analysis_instrument_knowledge(
   std::string const&  taint_file_name,
   message_handlert&  logger,
   taint_sources_mapt&  taint_sources,
-  taint_sinks_mapt&  taint_sinks
+  taint_sinks_mapt&  taint_sinks,
+  taint_specification_symbol_names_to_svalue_symbols_mapt&  taint_spec_names
   );
 
 

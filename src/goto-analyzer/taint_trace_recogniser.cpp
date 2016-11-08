@@ -25,6 +25,8 @@ data stored in the databese of taint summaries.
 #include <iterator>
 #include <cassert>
 
+#include <iostream>
+
 
 class trace_under_constructiont
 {
@@ -437,9 +439,9 @@ void taint_recognise_error_traces(
         const auto& lvalue_svalue =
             domain.at(elem.get_instruction_iterator());
 	object_numberingt::number_type taint_num;
-	bool found=numbering.get_number(taint_expr,taint_num);
+  bool missing=numbering.get_number(taint_expr,taint_num);
 	const auto it=
-	  (!found) ?
+    (missing) ?
 	  lvalue_svalue.end() :
 	  lvalue_svalue.find(taint_num);
         if (it != lvalue_svalue.cend())

@@ -442,6 +442,7 @@ int goto_analyzer_parse_optionst::doit()
     {
       taint_sources_mapt  taint_sources;
       taint_sinks_mapt  taint_sinks;
+      taint_specification_symbol_names_to_svalue_symbols_mapt  taint_spec_names;
 
       taint_statisticst::instance().begin_taint_info_instrumentation();
       status() << "*** Instrumenting GOTO program by taint information." << eom;
@@ -451,7 +452,8 @@ int goto_analyzer_parse_optionst::doit()
           taint_file,
           get_message_handler(),
           taint_sources,
-          taint_sinks
+          taint_sinks,
+          taint_spec_names
           );
 
       taint_statisticst::instance().end_taint_info_instrumentation(
@@ -515,10 +517,11 @@ int goto_analyzer_parse_optionst::doit()
               goto_model,
               summaries,
               call_graph,
-              cmdline.isset("taint-dump-log") ? &log : nullptr,
               lvsa_database_ptr,
+              taint_spec_names,
               get_message_handler(),
-              timeout
+              timeout,
+              cmdline.isset("taint-dump-log") ? &log : nullptr
               );
       }
       else
@@ -527,9 +530,10 @@ int goto_analyzer_parse_optionst::doit()
               fname,
               goto_model,
               summaries,
-              cmdline.isset("taint-dump-log") ? &log : nullptr,
               lvsa_database_ptr,
-              get_message_handler()
+              taint_spec_names,
+              get_message_handler(),
+              cmdline.isset("taint-dump-log") ? &log : nullptr
               );
         summaries.insert(std::make_pair(fname,ret));
       }

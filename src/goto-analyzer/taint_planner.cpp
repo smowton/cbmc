@@ -540,9 +540,10 @@ std::string  taint_plannert::compute_summaries(
               fn_name,
               program,
               *summary_database,
-              log,
               nullptr,
-              get_message_handler()
+              {},
+              get_message_handler(),
+              log
               ),
           });
   }
