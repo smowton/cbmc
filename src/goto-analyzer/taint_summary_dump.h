@@ -55,6 +55,8 @@ Function:
 \*******************************************************************/
 void  taint_dump_svalue_in_html(
     taint_svaluet const&  svalue,
+    taint_svalue_symbols_to_specification_symbols_mapt const&
+        taint_spec_names,
     std::ostream&  ostr
     );
 
@@ -74,6 +76,8 @@ Function:
 void  taint_dump_lvalues_to_svalues_in_html(
     taint_map_from_lvalues_to_svaluest const&  lvalues_to_svalues,
     namespacet const&  ns,
+    taint_svalue_symbols_to_specification_symbols_mapt const&
+        taint_spec_names,
     std::ostream&  ostr
     );
 
@@ -81,6 +85,8 @@ void taint_dump_numbered_lvalues_to_svalues_as_html(
     taint_numbered_lvalue_svalue_mapt const&  lvalues_to_svalues,
     namespacet const&  ns,
     const object_numberingt&,
+    taint_svalue_symbols_to_specification_symbols_mapt const&
+        taint_spec_names,
     std::ostream&  ostr
     );
 
@@ -89,6 +95,8 @@ void taint_dump_numbered_lvalues_to_svalues_changes_as_html(
     taint_numbered_lvalue_svalue_mapt const&  old_lvalues_to_svalues,    
     namespacet const&  ns,
     const object_numberingt&,
+    taint_svalue_symbols_to_specification_symbols_mapt const&
+        taint_spec_names,
     std::ostream&  ostr
     );						    
 
@@ -107,6 +115,8 @@ Function:
 std::string  taint_dump_in_html(
     object_summaryt const  obj_summary,
     goto_modelt const&  program,
+    taint_svalue_symbols_to_specification_symbols_mapt const&
+        taint_spec_names,
     std::ostream&  ostr
     );
 

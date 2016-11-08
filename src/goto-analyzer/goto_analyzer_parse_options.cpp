@@ -336,9 +336,17 @@ int  do_taint_analysis(
           "./dump_taint_planner"
           );
 
+    taint_svalue_symbols_to_specification_symbols_mapt  taint_spec_names_inv;
+    // TODO: compute proper content of taint_spec_names_inv
     dump_in_html(
           *planner.get_top_precision_level()->get_summary_database(),
-          &taint_dump_in_html,
+          std::bind(
+              &taint_dump_in_html,
+              std::placeholders::_1,
+              std::placeholders::_2,
+              std::cref(taint_spec_names_inv),
+              std::placeholders::_3
+              ),
           program,
           call_graph,
           "./dump_top_taint_summaries",
@@ -460,6 +468,10 @@ int goto_analyzer_parse_optionst::doit()
             static_cast<goto_modelt const&>(goto_model),
             taint_sinks
             );
+
+      taint_svalue_symbols_to_specification_symbols_mapt  taint_spec_names_inv;
+      for (auto const&  elem : taint_spec_names)
+        taint_spec_names_inv.insert({elem.second,elem.first});
 
       std::stringstream  log;
 
@@ -584,7 +596,13 @@ int goto_analyzer_parse_optionst::doit()
           status() << "Saving taint summaries in HTML format." << eom;
           dump_in_html(
               summaries,
-              &taint_dump_in_html,
+              std::bind(
+                  &taint_dump_in_html,
+                  std::placeholders::_1,
+                  std::placeholders::_2,
+                  std::cref(taint_spec_names_inv),
+                  std::placeholders::_3
+                  ),
               static_cast<goto_modelt const&>(goto_model),
               call_graph,
               "./dump_taint_summaries_HTML",
@@ -612,6 +630,7 @@ int goto_analyzer_parse_optionst::doit()
           taint_dump_traces_in_html(
               error_traces,
               static_cast<goto_modelt const&>(goto_model),
+              taint_spec_names_inv,
               "./dump_taint_traces_HTML"
               );
         }

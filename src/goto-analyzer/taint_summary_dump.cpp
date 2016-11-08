@@ -32,6 +32,8 @@ void  taint_dump_lvalue_in_html(
 
 void  taint_dump_svalue_in_html(
     taint_svaluet const&  svalue,
+    taint_svalue_symbols_to_specification_symbols_mapt const&
+        taint_spec_names,
     std::ostream&  ostr
     )
 {
@@ -44,7 +46,12 @@ void  taint_dump_svalue_in_html(
     bool first = true;
     for (auto const&  symbol : svalue.expression())
     {
-       ostr << (first ? "" : " <b>&#x2210;</b> ") << symbol;
+       ostr << (first ? "" : " <b>&#x2210;</b> ");
+       auto const  name_it = taint_spec_names.find(symbol);
+       if (name_it != taint_spec_names.cend())
+         ostr << name_it->second;
+       else
+        ostr << "T" << symbol;
        first = false;
     }
     if (!svalue.suppression().empty())
@@ -52,7 +59,12 @@ void  taint_dump_svalue_in_html(
     first = true;
     for (auto const&  symbol : svalue.suppression())
     {
-       ostr << (first ? "" : " <b>&#x2210;</b> ") << symbol;
+       ostr << (first ? "" : " <b>&#x2210;</b> ");
+       auto const  name_it = taint_spec_names.find(symbol);
+       if (name_it != taint_spec_names.cend())
+         ostr << name_it->second;
+       else
+         ostr << "T" << symbol;
        first = false;
     }
   }
@@ -61,6 +73,8 @@ void  taint_dump_svalue_in_html(
 void  taint_dump_lvalues_to_svalues_in_html(
     taint_map_from_lvalues_to_svaluest const&  lvalues_to_svalues,
     namespacet const&  ns,
+    taint_svalue_symbols_to_specification_symbols_mapt const&
+        taint_spec_names,
     std::ostream&  ostr
     )
 {
@@ -81,7 +95,8 @@ void  taint_dump_lvalues_to_svalues_in_html(
       ostr << "      <tr>\n";
       ostr << "        <td>" << elem.first << "</td>\n";
       ostr << "        <td>";
-      taint_dump_svalue_in_html(lvalues_to_svalues.at(elem.second),ostr);
+      taint_dump_svalue_in_html(lvalues_to_svalues.at(elem.second),
+                                taint_spec_names,ostr);
       ostr << "</td>\n";
       ostr << "      </tr>\n";
     }
@@ -93,6 +108,8 @@ void  taint_dump_numbered_lvalues_to_svalues_as_html(
     taint_numbered_lvalue_svalue_mapt const&  lvalues_to_svalues,
     namespacet const&  ns,
     const object_numberingt& numbering,
+    taint_svalue_symbols_to_specification_symbols_mapt const&
+        taint_spec_names,
     std::ostream&  ostr
     )
 {
@@ -114,7 +131,8 @@ void  taint_dump_numbered_lvalues_to_svalues_as_html(
       ostr << "      <tr>\n";
       ostr << "        <td>" << elem.first << "</td>\n";
       ostr << "        <td>";
-      taint_dump_svalue_in_html(lvalues_to_svalues.at(elem.second),ostr);
+      taint_dump_svalue_in_html(lvalues_to_svalues.at(elem.second),
+                                taint_spec_names,ostr);
       ostr << "</td>\n";
       ostr << "      </tr>\n";
     }
@@ -127,6 +145,8 @@ void  taint_dump_numbered_lvalues_to_svalues_changes_as_html(
     taint_numbered_lvalue_svalue_mapt const&  old_lvalues_to_svalues,    
     namespacet const&  ns,
     const object_numberingt& numbering,
+    taint_svalue_symbols_to_specification_symbols_mapt const&
+        taint_spec_names,
     std::ostream&  ostr
     )
 {
@@ -170,7 +190,7 @@ void  taint_dump_numbered_lvalues_to_svalues_changes_as_html(
     ostr << "        <td>";
     auto findit=lvalues_to_svalues.find(elem.second);
     if(findit!=lvalues_to_svalues.end())
-      taint_dump_svalue_in_html(findit->second,ostr);
+      taint_dump_svalue_in_html(findit->second,taint_spec_names,ostr);
     ostr << "</td>\n";
     ostr << "      </tr>\n";
   }
@@ -180,6 +200,8 @@ void  taint_dump_numbered_lvalues_to_svalues_changes_as_html(
 std::string  taint_dump_in_html(
     object_summaryt const  obj_summary,
     goto_modelt const&  program,
+    taint_svalue_symbols_to_specification_symbols_mapt const&
+        taint_spec_names,
     std::ostream&  ostr
     )
 {
@@ -211,7 +233,8 @@ std::string  taint_dump_in_html(
       ostr << "  <tr>\n";
       ostr << "        <td>" << elem.first << "</td>\n";
       ostr << "    <td>";
-      taint_dump_svalue_in_html(summary->input().at(elem.second),ostr);
+      taint_dump_svalue_in_html(summary->input().at(elem.second),
+                                taint_spec_names,ostr);
       ostr <<"</td>\n";
       ostr << "  </tr>\n";
     }
@@ -237,7 +260,8 @@ std::string  taint_dump_in_html(
       ostr << "  <tr>\n";
       ostr << "        <td>" << elem.first << "</td>\n";
       ostr << "    <td>";
-      taint_dump_svalue_in_html(summary->output().at(elem.second),ostr);
+      taint_dump_svalue_in_html(summary->output().at(elem.second),
+                                taint_spec_names,ostr);
       ostr <<"</td>\n";
       ostr << "  </tr>\n";
     }
@@ -287,26 +311,39 @@ std::string  taint_dump_in_html(
       if (vars_to_values_it != summary->domain().cend())
       {
 	ostr << "  <td>\n";
-	// Don't print anything for the first instruction:
-	if(instr_it==fn_body.instructions.cbegin())
-	  continue;
-	// For other instructions, print changes since the last domain snapshot:
-	auto previt=instr_it;
-	do {
-	  --previt;
-	  auto const prevfindit=summary->domain().find(previt);	  
-	  if(prevfindit!=summary->domain().cend())
-	  {
-	    taint_dump_numbered_lvalues_to_svalues_changes_as_html(
-	      vars_to_values_it->second,
-	      prevfindit->second,
-	      ns,
-	      summary->domain_numbering(),
-	      ostr);
-	    break;
-	  }
-	} while(previt!=fn_body.instructions.cbegin());
-
+        if (false) // use full states dump?
+        {
+          taint_dump_numbered_lvalues_to_svalues_as_html(
+                        vars_to_values_it->second,
+                        ns,
+                        summary->domain_numbering(),
+                        taint_spec_names,
+                        ostr
+                        );
+        }
+        else
+        {
+          // Don't print anything for the first instruction:
+          if(instr_it==fn_body.instructions.cbegin())
+            continue;
+          // For other instructions, print changes since the last domain snapshot:
+          auto previt=instr_it;
+          do {
+            --previt;
+            auto const prevfindit=summary->domain().find(previt);
+            if(prevfindit!=summary->domain().cend())
+            {
+              taint_dump_numbered_lvalues_to_svalues_changes_as_html(
+                vars_to_values_it->second,
+                prevfindit->second,
+                ns,
+                summary->domain_numbering(),
+                taint_spec_names,
+                ostr);
+              break;
+            }
+          } while(previt!=fn_body.instructions.cbegin());
+        }
 	ostr << "  </td>\n";
       }
 

@@ -112,7 +112,7 @@ static void  initialise_domain(
 
           auto const&  fn_type = functions_map.at(callee_ident).type;
 
-          //* // TODO: this loop should be returned back!
+          /* // TODO: this loop should be returned back!
           for (exprt const&  arg : fn_call.arguments())
           {
             set_of_access_pathst  paths;
@@ -226,6 +226,7 @@ static void  initialise_domain(
         domain.at(function.body.instructions.cbegin()),
         ns,
 	taint_object_numbering,
+        {}/*TODO*/,
         *log
         );
 
@@ -234,6 +235,7 @@ static void  initialise_domain(
         domain.at(std::prev(function.body.instructions.cend())),
         ns,
 	taint_object_numbering,
+        {}/*TODO*/,
         *log
         );
   }
@@ -520,7 +522,9 @@ static void  build_substituted_summary(
   if (log != nullptr)
   {
     *log << "<p>Substituted summary:</p>\n";
-    taint_dump_numbered_lvalues_to_svalues_as_html(substituted_summary,ns,taint_object_numbering,*log);
+    taint_dump_numbered_lvalues_to_svalues_as_html(substituted_summary,ns,
+                                                   taint_object_numbering,
+                                                   {}/*TODO*/,*log);
   }
 }
 
@@ -569,7 +573,7 @@ static void  build_summary_from_computed_domain(
         *log << "<li>";
         taint_dump_lvalue_in_html(lval,ns,*log);
         *log << " &rarr; ";
-        taint_dump_svalue_in_html(it->second,*log);
+        taint_dump_svalue_in_html(it->second,{}/*TODO*/,*log);
           *log << "</li>\n";
       }
     }
@@ -579,7 +583,7 @@ static void  build_summary_from_computed_domain(
         *log << "<li>!! EXCLUDING !! : ";
         taint_dump_lvalue_in_html(lval,ns,*log);
         *log << " &rarr; ";
-        taint_dump_svalue_in_html(it->second,*log);
+        taint_dump_svalue_in_html(it->second,{}/*TODO*/,*log);
         *log << "</li>\n";
       }
   }
@@ -1633,9 +1637,11 @@ taint_summary_ptrt  taint_summarise_function(
           *log << " ]---> " << dst_instr_it->location_number << "</h3>\n"
                ;
           *log << "<p>Source value:</p>\n";
-          taint_dump_numbered_lvalues_to_svalues_as_html(src_value,ns,taint_object_numbering,*log);
+          taint_dump_numbered_lvalues_to_svalues_as_html(
+                src_value,ns,taint_object_numbering,{}/*TODO*/,*log);
           *log << "<p>Old destination value:</p>\n";
-	  taint_dump_numbered_lvalues_to_svalues_as_html(old_dst_value,ns,taint_object_numbering,*log);
+    taint_dump_numbered_lvalues_to_svalues_as_html(
+          old_dst_value,ns,taint_object_numbering,{}/*TODO*/,*log);
 	}
 	  
         dst_value = join(transformed,old_dst_value);
@@ -1643,9 +1649,11 @@ taint_summary_ptrt  taint_summarise_function(
 	if (log != nullptr)
 	{
           *log << "<p>Transformed value:</p>\n";
-          taint_dump_numbered_lvalues_to_svalues_as_html(transformed,ns,taint_object_numbering,*log);
+          taint_dump_numbered_lvalues_to_svalues_as_html(
+                transformed,ns,taint_object_numbering,{}/*TODO*/,*log);
           *log << "<p>Resulting destination value:</p>\n";
-          taint_dump_numbered_lvalues_to_svalues_as_html(dst_value,ns,taint_object_numbering,*log);
+          taint_dump_numbered_lvalues_to_svalues_as_html(
+                dst_value,ns,taint_object_numbering,{}/*TODO*/,*log);
 	}
 
         if (!(dst_value <= old_dst_value))

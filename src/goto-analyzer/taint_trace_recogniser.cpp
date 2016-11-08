@@ -487,12 +487,15 @@ void taint_recognise_error_traces(
               taint_dump_lvalues_to_svalues_in_html(
                     element.get_map_from_lvalues_to_svalues(),
                     ns,
+                    {}/*TODO*/,
                     *log
                     );
               *log << "    </td>\n"
                       "    <td>\n";
               taint_dump_svalue_in_html(
                   {element.get_symbols(),false,false},
+                  {}, // TODO: here should be propagated and used instance of:
+                      //     taint_svalue_symbols_to_specification_symbols_mapt
                   *log
                   );
               *log << "    </td>\n"

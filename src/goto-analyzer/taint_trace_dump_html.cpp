@@ -23,6 +23,8 @@ Date: Octomber 2016
 void taint_dump_traces_in_html(
     std::vector<taint_tracet> const&  traces,
     goto_modelt const&  goto_model,
+    taint_svalue_symbols_to_specification_symbols_mapt const&
+        taint_spec_names,
     std::string const&  dump_root_directory
     )
 {
@@ -45,6 +47,7 @@ void taint_dump_traces_in_html(
     taint_trace_dump_in_html(
           traces.at(i),
           goto_model,
+          taint_spec_names,
           msgstream() << dump_root_directory << "/trace_" << i
           );
     ostr << "  <tr>\n"
@@ -70,6 +73,8 @@ void taint_dump_traces_in_html(
 void taint_trace_dump_in_html(
     taint_tracet const&  trace,
     goto_modelt const&  goto_model,
+    taint_svalue_symbols_to_specification_symbols_mapt const&
+        taint_spec_names,
     std::string const&  dump_root_directory
     )
 {
@@ -106,12 +111,14 @@ void taint_trace_dump_in_html(
       taint_dump_lvalues_to_svalues_in_html(
             element.get_map_from_lvalues_to_svalues(),
             ns,
+            taint_spec_names,
             ostr
             );
       ostr << "    </td>\n"
               "    <td>\n";
       taint_dump_svalue_in_html(
           {element.get_symbols(),false,false},
+          taint_spec_names,
           ostr
           );
       ostr << "    </td>\n"
