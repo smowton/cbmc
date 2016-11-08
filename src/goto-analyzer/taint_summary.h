@@ -262,31 +262,14 @@ Function:
 exprt find_taint_expression(const exprt &expr);
 
 
-/*******************************************************************\
-
-Function:
-
-  Inputs: See purpose
-
- Outputs: See purpose
-
- Purpose:
-
-
-\*******************************************************************/
 
 typedef std::map<unsigned int,taint_svaluet> taint_numbered_lvalue_svalue_mapt;
 typedef goto_programt::instructiont::const_targett  instruction_iteratort;
-typedef std::unordered_map<instruction_iteratort, taint_numbered_lvalue_svalue_mapt, instruction_iterator_hashert> taint_numbered_domaint;
+typedef std::unordered_map<instruction_iteratort,
+                           taint_numbered_lvalue_svalue_mapt,
+                           instruction_iterator_hashert>
+        taint_numbered_domaint;
 
-taint_numbered_lvalue_svalue_mapt  transform(
-    taint_numbered_lvalue_svalue_mapt const&  a,
-    goto_programt::instructiont const&  I,
-    goto_functionst::function_mapt const&  functions_map,
-    database_of_summariest const&  database,
-    namespacet const&  ns,
-    std::ostream* const  log = nullptr
-    );
 
 
 /*******************************************************************\
@@ -380,6 +363,9 @@ private:
 typedef std::shared_ptr<taint_summaryt const>  taint_summary_ptrt;
 
 
+typedef std::unordered_map<std::string,taint_svaluet::taint_symbolt>
+        taint_specification_symbol_names_to_svalue_symbols_mapt;
+
 
 /*******************************************************************\
 
@@ -397,10 +383,12 @@ void  taint_summarise_all_functions(
     goto_modelt const&  instrumented_program,
     database_of_summariest&  summaries_to_compute,
     call_grapht const&  call_graph,
-    std::ostream* const  log,
     local_value_set_analysist::dbt* lvsa_db,
-    message_handlert&,
-    double  timeout = 60.0
+    taint_specification_symbol_names_to_svalue_symbols_mapt const&
+        taint_spec_names,
+    message_handlert&  msg,
+    double  timeout = 60.0,
+    std::ostream* const  log = nullptr
     );
 
 
@@ -420,9 +408,11 @@ taint_summary_ptrt  taint_summarise_function(
     irep_idt const&  function_id,
     goto_modelt const&  instrumented_program,
     database_of_summariest const&  database,
-    std::ostream* const  log,
     local_value_set_analysist::dbt* lvsa_db,
-    message_handlert&
+    taint_specification_symbol_names_to_svalue_symbols_mapt const&
+        taint_spec_names,
+    message_handlert&  msg,
+    std::ostream* const  log = nullptr
     );
 
 

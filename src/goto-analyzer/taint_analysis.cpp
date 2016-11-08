@@ -69,17 +69,22 @@ protected:
   {
     taint_sources_mapt taint_sources;
     taint_sinks_mapt taint_sinks;
-    instrument(ns,fns,taint_sources,taint_sinks);
+    taint_specification_symbol_names_to_svalue_symbols_mapt  taint_spec_names;
+    instrument(ns,fns,taint_sources,taint_sinks,taint_spec_names);
   }
 
   void instrument(const namespacet &, goto_functionst &,
                   taint_sources_mapt&  taint_sources,
-                  taint_sinks_mapt&  taint_sinks
+                  taint_sinks_mapt&  taint_sinks,
+                  taint_specification_symbol_names_to_svalue_symbols_mapt&
+                      taint_spec_names
                   );
   void instrument(const namespacet &, goto_functionst::goto_functiont &,
                   const irep_idt &fn_name,
                   taint_sources_mapt&  taint_sources,
-                  taint_sinks_mapt&  taint_sinks
+                  taint_sinks_mapt&  taint_sinks,
+                  taint_specification_symbol_names_to_svalue_symbols_mapt&
+                      taint_spec_names
                   );
 };
 
@@ -125,11 +130,13 @@ void taint_analysist::instrument(
   const namespacet &ns,
   goto_functionst &goto_functions,
   taint_sources_mapt&  taint_sources,
-  taint_sinks_mapt&  taint_sinks
+  taint_sinks_mapt&  taint_sinks,
+  taint_specification_symbol_names_to_svalue_symbols_mapt&  taint_spec_names
   )
 {
   for(auto & function : goto_functions.function_map)
-    instrument(ns, function.second, function.first,taint_sources,taint_sinks);
+    instrument(ns, function.second, function.first,
+               taint_sources,taint_sinks,taint_spec_names);
 }
 
 /*******************************************************************\
@@ -149,7 +156,8 @@ void taint_analysist::instrument(
   goto_functionst::goto_functiont &goto_function,
   const irep_idt &fn_name,
   taint_sources_mapt&  taint_sources,
-  taint_sinks_mapt&  taint_sinks
+  taint_sinks_mapt&  taint_sinks,
+  taint_specification_symbol_names_to_svalue_symbols_mapt&  taint_spec_names
   )
 {
   for(goto_programt::instructionst::iterator
@@ -259,7 +267,15 @@ void taint_analysist::instrument(
                   t->make_other(code_set_may);
                   t->source_location=instruction.source_location;
 
-                  taint_sources[safe_string2unsigned(as_string(rule.taint))][as_string(fn_name)]
+                  auto  spec_it =
+                      taint_spec_names.find(as_string(rule.taint));
+                  if (spec_it == taint_spec_names.cend())
+                    spec_it = taint_spec_names.insert({
+                          as_string(rule.taint),
+                          *taint_make_symbol().expression().cbegin()
+                          }).first;
+
+                  taint_sources[spec_it->second][as_string(fn_name)]
                       .push_back(t);
                 }
                 break;
@@ -275,7 +291,15 @@ void taint_analysist::instrument(
                   t->source_location.set_property_class("taint rule "+id2string(rule.id));
                   t->source_location.set_comment(rule.message);
 
-                  taint_sinks[safe_string2unsigned(as_string(rule.taint))][as_string(fn_name)]
+                  auto  spec_it =
+                      taint_spec_names.find(as_string(rule.taint));
+                  if (spec_it == taint_spec_names.cend())
+                    spec_it = taint_spec_names.insert({
+                          as_string(rule.taint),
+                          *taint_make_symbol().expression().cbegin()
+                          }).first;
+
+                  taint_sinks[spec_it->second][as_string(fn_name)]
                       .push_back(t);
                 }
                 break;
@@ -685,17 +709,24 @@ std::string  taint_analysis_instrument_knowledge(
   std::string const&  taint_file_name,
   message_handlert&  logger,
   taint_sources_mapt&  taint_sources,
-  taint_sinks_mapt&  taint_sinks
+  taint_sinks_mapt&  taint_sinks,
+  taint_specification_symbol_names_to_svalue_symbols_mapt&  taint_spec_names
   )
 {
   struct taint_analysis_accessor_t : public taint_analysist {
     taint_parse_treet& get_taint() { return taint; }
     class_hierarchyt& get_class_hierarchy() { return class_hierarchy; }
-    void instrument(namespacet const&  ns, goto_functionst& fns,
-                    taint_sources_mapt&  taint_sources,
-                    taint_sinks_mapt&  taint_sinks
-                    ) {
-      taint_analysist::instrument(ns,fns,taint_sources,taint_sinks);
+    void instrument(
+          namespacet const&  ns,
+          goto_functionst& fns,
+          taint_sources_mapt&  taint_sources,
+          taint_sinks_mapt&  taint_sinks,
+          taint_specification_symbol_names_to_svalue_symbols_mapt&
+              taint_spec_names
+          ) {
+      taint_analysist::instrument(
+            ns,fns,taint_sources,taint_sinks,taint_spec_names
+            );
     }
   };
   taint_analysis_accessor_t  analysis;
@@ -704,7 +735,7 @@ std::string  taint_analysis_instrument_knowledge(
     return "Failed to read taint definition file";
   analysis.get_class_hierarchy()(model.symbol_table);
   analysis.instrument(namespacet(model.symbol_table), model.goto_functions,
-                      taint_sources,taint_sinks);
+                      taint_sources,taint_sinks,taint_spec_names);
   model.goto_functions.update();
   return ""; // Success
 }
