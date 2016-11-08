@@ -139,7 +139,11 @@ Function:
 
 
 \*******************************************************************/
-bool  operator==(taint_svaluet const&  a, taint_svaluet const&  b);
+bool operator==(taint_svaluet const& a, taint_svaluet const& b);
+inline bool operator!=(taint_svaluet const& a, taint_svaluet const& b)
+{
+  return !(a==b);
+}
 
 
 /*******************************************************************\
