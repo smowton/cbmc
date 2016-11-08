@@ -931,6 +931,8 @@ static void collect_lvsa_access_paths(
         if (ident.find(".String.Literal.") != std::string::npos)
           continue;
       }
+      else if(get_underlying_object(transformed_object).id()=="NULL-object")
+	continue;
 
       result.insert(taint_object_numbering.number(transformed_object));
     }
@@ -1420,6 +1422,8 @@ void  taint_summarise_all_functions(
           << messaget::eom; std::cout.flush();
       return;
     }
+
+    /*
 std::string const  fname = as_string(fn_name);
 if (fname.find("java::sun.") == 0UL
     || fname.find("java::jdk.") == 0UL
@@ -1440,6 +1444,7 @@ if (fname.find("java::sun.") == 0UL
   ++skipped;
   continue;
 }
+    */
 
     if(fn_name=="_start")
       continue;
