@@ -122,6 +122,61 @@ void  taint_dump_numbered_lvalues_to_svalues_as_html(
   }
 }
 
+void  taint_dump_numbered_lvalues_to_svalues_changes_as_html(
+    taint_numbered_lvalue_svalue_mapt const&  lvalues_to_svalues,
+    taint_numbered_lvalue_svalue_mapt const&  old_lvalues_to_svalues,    
+    namespacet const&  ns,
+    const object_numberingt& numbering,
+    std::ostream&  ostr
+    )
+{
+  auto newit=lvalues_to_svalues.begin(), newitend=lvalues_to_svalues.end();
+  auto oldit=old_lvalues_to_svalues.begin(), olditend=old_lvalues_to_svalues.end();
+
+  std::map<std::string,unsigned> order;
+  while(newit!=newitend || oldit!=olditend)
+  {
+    unsigned num=(unsigned)-1;
+    if(newit!=newitend && oldit!=olditend && newit->first==oldit->first)
+    {
+      if(newit->second!=oldit->second)
+	num=newit->first;
+      ++newit; ++oldit;
+    }
+    else if(oldit==olditend || (newit!=newitend && newit->first<oldit->first))
+    {
+      num=newit->first;
+      ++newit;
+    }
+    else
+    {
+      num=oldit->first;
+      ++oldit;
+    }
+    if(num!=((unsigned)-1))
+    {
+      std::stringstream sstr;
+      const auto& lvalue=numbering[num];
+      taint_dump_lvalue_in_html(lvalue,ns,sstr);
+      order.insert({sstr.str(),num});
+    }
+  }
+
+  ostr << "    <table>\n";
+  for (auto const&  elem : order)
+  {
+    ostr << "      <tr>\n";
+    ostr << "        <td>" << elem.first << "</td>\n";
+    ostr << "        <td>";
+    auto findit=lvalues_to_svalues.find(elem.second);
+    if(findit!=lvalues_to_svalues.end())
+      taint_dump_svalue_in_html(findit->second,ostr);
+    ostr << "</td>\n";
+    ostr << "      </tr>\n";
+  }
+  ostr << "    </table>\n";
+}
+
 std::string  taint_dump_in_html(
     object_summaryt const  obj_summary,
     goto_modelt const&  program,
@@ -232,13 +287,27 @@ std::string  taint_dump_in_html(
       if (vars_to_values_it != summary->domain().cend())
       {
 	ostr << "  <td>\n";
-	taint_dump_numbered_lvalues_to_svalues_as_html(
-					      vars_to_values_it->second,
-					      ns,
-					      summary->domain_numbering(),
-					      ostr
-					      );
-          ostr << "  </td>\n";
+	// Don't print anything for the first instruction:
+	if(instr_it==fn_body.instructions.cbegin())
+	  continue;
+	// For other instructions, print changes since the last domain snapshot:
+	auto previt=instr_it;
+	do {
+	  --previt;
+	  auto const prevfindit=summary->domain().find(previt);	  
+	  if(prevfindit!=summary->domain().cend())
+	  {
+	    taint_dump_numbered_lvalues_to_svalues_changes_as_html(
+	      vars_to_values_it->second,
+	      prevfindit->second,
+	      ns,
+	      summary->domain_numbering(),
+	      ostr);
+	    break;
+	  }
+	} while(previt!=fn_body.instructions.cbegin());
+
+	ostr << "  </td>\n";
       }
 
       ostr << "  </tr>\n";
