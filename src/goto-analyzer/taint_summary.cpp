@@ -112,7 +112,7 @@ static void  initialise_domain(
 
           auto const&  fn_type = functions_map.at(callee_ident).type;
 
-          //* // TODO: this loop should be returned back!
+          /* // TODO: this loop should be returned back!
           for (exprt const&  arg : fn_call.arguments())
           {
             set_of_access_pathst  paths;
@@ -132,7 +132,7 @@ static void  initialise_domain(
                           )
                       ));
           }
-          // */
+          */
 
           taint_summary_ptrt const  summary =
               database.find<taint_summaryt>(callee_ident);
