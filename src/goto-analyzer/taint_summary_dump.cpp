@@ -202,6 +202,7 @@ std::string  taint_dump_in_html(
     goto_modelt const&  program,
     taint_svalue_symbols_to_specification_symbols_mapt const&
         taint_spec_names,
+    bool const  dump_differce_of_abstract_values,
     std::ostream&  ostr
     )
 {
@@ -311,7 +312,7 @@ std::string  taint_dump_in_html(
       if (vars_to_values_it != summary->domain().cend())
       {
 	ostr << "  <td>\n";
-        if (false) // use full states dump?
+        if (!dump_differce_of_abstract_values)
         {
           taint_dump_numbered_lvalues_to_svalues_as_html(
                         vars_to_values_it->second,

@@ -345,6 +345,7 @@ int  do_taint_analysis(
               std::placeholders::_1,
               std::placeholders::_2,
               std::cref(taint_spec_names_inv),
+              false,
               std::placeholders::_3
               ),
           program,
@@ -591,7 +592,8 @@ int goto_analyzer_parse_optionst::doit()
 
         taint_statisticst::instance().begin_dump_of_taint_html_summaries();
 
-        if (cmdline.isset("taint-dump-html-summaries"))
+        if (cmdline.isset("taint-dump-html-diff-summaries") ||
+            cmdline.isset("taint-dump-html-full-summaries") )
         {
           status() << "Saving taint summaries in HTML format." << eom;
           dump_in_html(
@@ -601,6 +603,7 @@ int goto_analyzer_parse_optionst::doit()
                   std::placeholders::_1,
                   std::placeholders::_2,
                   std::cref(taint_spec_names_inv),
+                  cmdline.isset("taint-dump-html-diff-summaries"),
                   std::placeholders::_3
                   ),
               static_cast<goto_modelt const&>(goto_model),

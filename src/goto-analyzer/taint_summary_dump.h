@@ -117,6 +117,7 @@ std::string  taint_dump_in_html(
     goto_modelt const&  program,
     taint_svalue_symbols_to_specification_symbols_mapt const&
         taint_spec_names,
+    bool const  dump_differce_of_abstract_values,
     std::ostream&  ostr
     );
 
