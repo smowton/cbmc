@@ -760,7 +760,11 @@ void taint_recognise_error_traces(
         }
         for (auto const&  func_loc : possible_callers)
         {
-	  const auto& summary=*summaries.find<taint_summaryt>(func_loc.first);
+          auto const  summary_ptr =
+              summaries.find<taint_summaryt>(func_loc.first);
+          if (!summary_ptr.operator bool())
+            continue;
+    const auto& summary=*summary_ptr;
           const auto& from_lvalues_to_svalues=summary.domain().at(func_loc.second);
 	  const auto& numbering=summary.domain_numbering();
 	  taint_map_from_lvalues_to_svaluest explicit_domain;
