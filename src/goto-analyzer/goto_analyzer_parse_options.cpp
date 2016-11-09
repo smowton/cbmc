@@ -568,7 +568,7 @@ int goto_analyzer_parse_optionst::doit()
                << eom; std::cout.flush();
 
       std::vector<taint_tracet>  error_traces;
-      taint_recognise_error_traces(
+      /*taint_recognise_error_traces(
             error_traces,
             goto_model,
             call_graph,
@@ -576,7 +576,7 @@ int goto_analyzer_parse_optionst::doit()
             taint_sources,
             taint_sinks,
             cmdline.isset("taint-dump-log") ? &log : nullptr
-            );
+            );*/
 
       if (error_traces.empty())
         status() << "The program is free of taint-related issues."
