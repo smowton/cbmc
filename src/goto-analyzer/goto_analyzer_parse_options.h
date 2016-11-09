@@ -44,6 +44,7 @@ class optionst;
   "(lvsa-summary-directory):" \
   "(local-value-set-analysis)(show-value-sets)(lvsa-function):" \
   "(taint-no-aa)" \
+  "(libmodels):" \
   "(taint-dump-html-traces)" \
   "(taint-dump-html-diff-summaries)" \
   "(taint-dump-html-full-summaries)" \

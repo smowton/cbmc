@@ -13,6 +13,7 @@ This module defines interfaces and functionality for taint summaries.
 \*******************************************************************/
 
 #include <goto-analyzer/taint_summary.h>
+#include <goto-analyzer/taint_summary_libmodels.h>
 #include <goto-analyzer/taint_summary_dump.h>
 #include <goto-analyzer/taint_statistics.h>
 #include <summaries/utility.h>
@@ -1412,6 +1413,7 @@ void  taint_summarise_all_functions(
   messaget msgout;
   msgout.set_message_handler(msg);
   size_t processed = 0UL;
+  size_t modelled = 0UL;
   size_t skipped = 0UL;
 
   auto start_time = std::chrono::high_resolution_clock::now();
@@ -1430,40 +1432,35 @@ void  taint_summarise_all_functions(
           << "%] "
           << " TIMEOUT! ("
           << processed << " processed, "
-          << inverted_topological_order.size() - processed << " skipped)."
+          << modelled << " modelled, "
+          << inverted_topological_order.size() - processed - modelled
+          << " skipped)."
           << messaget::eom; std::cout.flush();
       return;
     }
 
-    /*
-std::string const  fname = as_string(fn_name);
-if (fname.find("java::sun.") == 0UL
-    || fname.find("java::jdk.") == 0UL
-    || fname.find("java::sun.") == 0UL
-    || fname.find("java::java.") == 0UL
-    || fname.find("java::javax.") == 0UL
-    )
-{
-  msgout.progress()
-      << "["
-      << std::fixed << std::setprecision(1) << std::setw(5)
-      << (inverted_topological_order.size() == 0UL ? 100.0 :
-            100.0 * (double)(processed + skipped) /
-                    (double)inverted_topological_order.size())
-      << "%] Skipping: "
-      << fn_name
-      << messaget::eom; std::cout.flush();
-  ++skipped;
-  continue;
-}
-    */
-
-    if(fn_name=="_start")
-      continue;
     const goto_functionst::function_mapt& functions_map =
         instrumented_program.goto_functions.function_map;
     auto const  fn_it = functions_map.find(fn_name);
-    if (fn_it != functions_map.cend() && fn_it->second.body_available())
+    if (taint_summary_libmodelst::instance().has_model_of_function(fn_name))
+    {
+      msgout.progress()
+          << "["
+          << std::fixed << std::setprecision(1) << std::setw(5)
+          << (inverted_topological_order.size() == 0UL ? 100.0 :
+                100.0 * (double)(processed + skipped) /
+                        (double)inverted_topological_order.size())
+          << "%] Retrieving model of: "
+          << fn_name
+          << messaget::eom; std::cout.flush();
+      summaries_to_compute.insert({
+          as_string(fn_name),
+          taint_summary_libmodelst::instance().get_model_of_function(fn_name)
+          });
+      ++modelled;
+    }
+    else if (fn_it != functions_map.cend() && fn_it->second.body_available() &&
+             fn_name != "_start")
     {
       msgout.progress()
           << "["
@@ -1498,7 +1495,10 @@ if (fname.find("java::sun.") == 0UL
           << (inverted_topological_order.size() == 0UL ? 100.0 :
                 100.0 * (double)(processed + skipped) /
                         (double)inverted_topological_order.size())
-          << "%] Skipping: "
+          << "%] Skipping"
+          << (fn_it != functions_map.cend() && !fn_it->second.body_available() ?
+                " (function without body)" : "")
+          << ": "
           << fn_name
           << messaget::eom; std::cout.flush();
       ++skipped;
@@ -1507,6 +1507,7 @@ if (fname.find("java::sun.") == 0UL
   msgout.progress()
       << "[100.0%] Taint analysis has finished successfully ("
       << processed << " processed, "
+      << modelled << " modelled, "
       << skipped << " skipped)."
       << messaget::eom; std::cout.flush();
 }

@@ -57,6 +57,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-analyzer/taint_statistics.h>
 #include <goto-analyzer/taint_statistics_dump.h>
 #include <goto-analyzer/taint_summary.h>
+#include <goto-analyzer/taint_summary_libmodels.h>
 #include <goto-analyzer/taint_summary_dump.h>
 #include <goto-analyzer/taint_summary_json.h>
 #include <goto-analyzer/taint_planner.h>
@@ -517,6 +518,18 @@ int goto_analyzer_parse_optionst::doit()
                          .c_str()
                   ) :
               60.0;
+
+      taint_summary_libmodelst::instance().clear();
+      if (cmdline.isset("libmodels"))
+      {
+        status() << "*** Loading library models." << eom;
+        std::string const  error_message =
+            taint_summary_libmodelst::instance().load(
+                  cmdline.get_value("libmodels")
+                  );
+        if (!error_message.empty())
+          status() << "ERROR: " << error_message << eom;
+      }
 
       status() << "*** Starting taint analysis (timeout="
                << std::fixed << std::setprecision(1)
