@@ -697,6 +697,8 @@ goto-analyzer/taint_summary_dump.cpp
 goto-analyzer/taint_summary_dump.h
 goto-analyzer/taint_summary_json.cpp
 goto-analyzer/taint_summary_json.h
+goto-analyzer/taint_summary_libmodels.cpp
+goto-analyzer/taint_summary_libmodels.h
 goto-analyzer/taint_trace_recogniser.cpp
 goto-analyzer/taint_trace_recogniser.h
 goto-analyzer/taint_trace_dump_html.cpp

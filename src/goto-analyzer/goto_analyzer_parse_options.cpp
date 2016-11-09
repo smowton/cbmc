@@ -57,6 +57,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-analyzer/taint_statistics.h>
 #include <goto-analyzer/taint_statistics_dump.h>
 #include <goto-analyzer/taint_summary.h>
+#include <goto-analyzer/taint_summary_libmodels.h>
 #include <goto-analyzer/taint_summary_dump.h>
 #include <goto-analyzer/taint_summary_json.h>
 #include <goto-analyzer/taint_planner.h>
@@ -336,9 +337,18 @@ int  do_taint_analysis(
           "./dump_taint_planner"
           );
 
+    taint_svalue_symbols_to_specification_symbols_mapt  taint_spec_names_inv;
+    // TODO: compute proper content of taint_spec_names_inv
     dump_in_html(
           *planner.get_top_precision_level()->get_summary_database(),
-          &taint_dump_in_html,
+          std::bind(
+              &taint_dump_in_html,
+              std::placeholders::_1,
+              std::placeholders::_2,
+              std::cref(taint_spec_names_inv),
+              false,
+              std::placeholders::_3
+              ),
           program,
           call_graph,
           "./dump_top_taint_summaries",
@@ -461,6 +471,10 @@ int goto_analyzer_parse_optionst::doit()
             taint_sinks
             );
 
+      taint_svalue_symbols_to_specification_symbols_mapt  taint_spec_names_inv;
+      for (auto const&  elem : taint_spec_names)
+        taint_spec_names_inv.insert({elem.second,elem.first});
+
       std::stringstream  log;
 
       std::string json_directory=cmdline.get_value("json");
@@ -504,6 +518,18 @@ int goto_analyzer_parse_optionst::doit()
                          .c_str()
                   ) :
               60.0;
+
+      taint_summary_libmodelst::instance().clear();
+      if (cmdline.isset("libmodels"))
+      {
+        status() << "*** Loading library models." << eom;
+        std::string const  error_message =
+            taint_summary_libmodelst::instance().load(
+                  cmdline.get_value("libmodels")
+                  );
+        if (!error_message.empty())
+          status() << "ERROR: " << error_message << eom;
+      }
 
       status() << "*** Starting taint analysis (timeout="
                << std::fixed << std::setprecision(1)
@@ -579,12 +605,20 @@ int goto_analyzer_parse_optionst::doit()
 
         taint_statisticst::instance().begin_dump_of_taint_html_summaries();
 
-        if (cmdline.isset("taint-dump-html-summaries"))
+        if (cmdline.isset("taint-dump-html-diff-summaries") ||
+            cmdline.isset("taint-dump-html-full-summaries") )
         {
           status() << "Saving taint summaries in HTML format." << eom;
           dump_in_html(
               summaries,
-              &taint_dump_in_html,
+              std::bind(
+                  &taint_dump_in_html,
+                  std::placeholders::_1,
+                  std::placeholders::_2,
+                  std::cref(taint_spec_names_inv),
+                  cmdline.isset("taint-dump-html-diff-summaries"),
+                  std::placeholders::_3
+                  ),
               static_cast<goto_modelt const&>(goto_model),
               call_graph,
               "./dump_taint_summaries_HTML",
@@ -612,6 +646,7 @@ int goto_analyzer_parse_optionst::doit()
           taint_dump_traces_in_html(
               error_traces,
               static_cast<goto_modelt const&>(goto_model),
+              taint_spec_names_inv,
               "./dump_taint_traces_HTML"
               );
         }

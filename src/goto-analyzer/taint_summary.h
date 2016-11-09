@@ -366,6 +366,9 @@ typedef std::shared_ptr<taint_summaryt const>  taint_summary_ptrt;
 typedef std::unordered_map<std::string,taint_svaluet::taint_symbolt>
         taint_specification_symbol_names_to_svalue_symbols_mapt;
 
+typedef std::unordered_map<taint_svaluet::taint_symbolt,std::string>
+        taint_svalue_symbols_to_specification_symbols_mapt;
+
 
 /*******************************************************************\
 

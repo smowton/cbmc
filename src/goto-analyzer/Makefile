@@ -12,7 +12,8 @@ SRC = goto_analyzer_main.cpp goto_analyzer_parse_options.cpp \
       taint_trace_dump_json.cpp \
       taint_statistics.cpp \
       taint_statistics_dump_html.cpp \
-      taint_statistics_dump_json.cpp
+      taint_statistics_dump_json.cpp \
+      taint_summary_libmodels.cpp
 
 OBJ += ../ansi-c/ansi-c$(LIBEXT) \
       ../cpp/cpp$(LIBEXT) \
