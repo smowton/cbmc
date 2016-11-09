@@ -1,24 +1,24 @@
 [
   {
-    "functions": "java.*",
+    "functions": "java::java.*",
     "input": [],
     "output": [],
     "domain": []
   },
   {
-    "functions": "javax.*",
+    "functions": "java::javax.*",
     "input": [],
     "output": [],
     "domain": []
   },
   {
-    "functions": "jdk.*",
+    "functions": "java::jdk.*",
     "input": [],
     "output": [],
     "domain": []
   },
   {
-    "functions": "sun.*",
+    "functions": "java::sun.*",
     "input": [],
     "output": [],
     "domain": []

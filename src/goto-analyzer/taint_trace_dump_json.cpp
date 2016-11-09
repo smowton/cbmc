@@ -21,9 +21,52 @@ Date: Octomber 2016
 #include <fstream>
 
 
+static void  taint_dump_svalue_in_json(
+    taint_svaluet const&  svalue,
+    taint_svalue_symbols_to_specification_symbols_mapt const&
+        taint_spec_names,
+    std::ostream&  ostr
+    )
+{
+  if (svalue.is_top())
+    ostr << "TOP";
+  else if (svalue.is_bottom())
+    ostr << "BOTTOM";
+  else
+  {
+    bool first = true;
+    for (auto const&  symbol : svalue.expression())
+    {
+       ostr << (first ? "" : " U ");
+       auto const  name_it = taint_spec_names.find(symbol);
+       if (name_it != taint_spec_names.cend())
+         ostr << name_it->second;
+       else
+        ostr << "T" << symbol;
+       first = false;
+    }
+    if (!svalue.suppression().empty())
+      ostr << " \\ ";
+    first = true;
+    for (auto const&  symbol : svalue.suppression())
+    {
+       ostr << (first ? "" : " U ");
+       auto const  name_it = taint_spec_names.find(symbol);
+       if (name_it != taint_spec_names.cend())
+         ostr << name_it->second;
+       else
+         ostr << "T" << symbol;
+       first = false;
+    }
+  }
+}
+
+
 void taint_dump_traces_in_json(
     std::vector<taint_tracet> const&  traces,
     goto_modelt const&  goto_model,
+    taint_svalue_symbols_to_specification_symbols_mapt const&
+        taint_spec_names,
     std::string const&  dump_root_directory
     )
 {
@@ -32,6 +75,7 @@ void taint_dump_traces_in_json(
     taint_trace_dump_in_json(
           traces.at(i),
           goto_model,
+          taint_spec_names,
           msgstream() << dump_root_directory << "/trace_" << i << ".json"
           );
 }
@@ -39,6 +83,8 @@ void taint_dump_traces_in_json(
 void taint_trace_dump_in_json(
     taint_tracet const&  trace,
     goto_modelt const&  goto_model,
+    taint_svalue_symbols_to_specification_symbols_mapt const&
+        taint_spec_names,
     std::string const&  dump_file_name
     )
 {
@@ -71,16 +117,13 @@ void taint_trace_dump_in_json(
           json_objectt  value;
           {
             value["name"] = json_stringt("pointer");
-            msgstream  data;
-            {
-              bool first = true;
-              for (auto const&  symbol : lvalue_svalue.second.expression())
-              {
-                 data << (first ? "" : ", ") << symbol;
-                 first = false;
-              }
-            }
-            value["data"] = json_stringt(data);
+            std::stringstream  sstr;
+            taint_dump_svalue_in_json(
+                  {elem.get_symbols(),false,false},
+                  taint_spec_names,
+                  sstr
+                  );
+            value["data"] = json_stringt(sstr.str());
           }
           record["value"] = value;
         }

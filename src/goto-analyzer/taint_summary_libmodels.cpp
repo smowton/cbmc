@@ -14,6 +14,10 @@ of analysed program to the process of taint analysis.
 \*******************************************************************/
 
 #include <goto-analyzer/taint_summary_libmodels.h>
+#include <util/file_util.h>
+#include <util/msgstream.h>
+#include <util/json.h>
+#include <fstream>
 #include <cassert>
 
 
@@ -33,6 +37,15 @@ std::string  taint_summary_libmodelst::load(
     std::string const&  libmodels_json_file_pathname
     )
 {
+  if (!fileutl_file_exists(libmodels_json_file_pathname))
+    return msgstream() << "File '" << libmodels_json_file_pathname
+                       << "' does not exist.";
+  if (fileutl_is_directory(libmodels_json_file_pathname))
+    return msgstream() << "File '" << libmodels_json_file_pathname
+                       << "' is actually a directory.";
+
+
+
   return ""; // No error.
 }
 

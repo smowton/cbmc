@@ -658,6 +658,7 @@ int goto_analyzer_parse_optionst::doit()
         taint_dump_traces_in_json(
             error_traces,
             static_cast<goto_modelt const&>(goto_model),
+            taint_spec_names_inv,
             "./dump_taint_traces_JSON"
             );
 
@@ -681,6 +682,7 @@ int goto_analyzer_parse_optionst::doit()
         taint_dump_traces_in_json(
             error_traces,
             static_cast<goto_modelt const&>(goto_model),
+            taint_spec_names_inv,
             "./dump_taint_traces_JSON"
             );
 
