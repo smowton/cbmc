@@ -1,0 +1,27 @@
+[
+  {
+    "functions": "java::java.*",
+    "input": [],
+    "output": [],
+    "domain": []
+  },
+  {
+    "functions": "java::javax.*",
+    "input": [],
+    "output": [],
+    "domain": []
+  },
+  {
+    "functions": "java::jdk.*",
+    "input": [],
+    "output": [],
+    "domain": []
+  },
+  {
+    "functions": "java::sun.*",
+    "input": [],
+    "output": [],
+    "domain": []
+  },
+]
+

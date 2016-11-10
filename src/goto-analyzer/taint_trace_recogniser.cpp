@@ -375,7 +375,8 @@ void taint_recognise_error_traces(
           );
     bool  may_path_exist = false;
     for (auto const& root_fn_name : call_roots)
-      if (exists_direct_or_indirect_call(
+      if (as_string(root_fn_name) == sink_function_name ||
+          exists_direct_or_indirect_call(
               call_graph,
               root_fn_name,
               sink_function_name
@@ -541,76 +542,82 @@ void taint_recognise_error_traces(
 
           const code_typet& callee_type=
               goto_model.goto_functions.function_map.at(callee_ident).type;
-          const auto& callee_symbol_map=
-              summaries.find<taint_summaryt>(callee_ident)->input();
 
-          for (auto const&  callee_lvalue_svalue : callee_symbol_map)
-            if (is_static(callee_lvalue_svalue.first,ns))
-	    {
-	      object_numberingt::number_type lvalue_number;
-              auto const it =
-		numbering.get_number(callee_lvalue_svalue.first,lvalue_number) ?
-		lvalue_svalue.cend() :
-		lvalue_svalue.find(lvalue_number);
-              if (it != lvalue_svalue.cend())
+          auto const taint_summary_ptr =
+              summaries.find<taint_summaryt>(callee_ident);
+
+          if (taint_summary_ptr.operator bool())
+          {
+            const auto& callee_symbol_map= taint_summary_ptr->input();
+
+            for (auto const&  callee_lvalue_svalue : callee_symbol_map)
+              if (is_static(callee_lvalue_svalue.first,ns))
               {
-                taint_svaluet::expressiont  symbols_intersection;
-                std::set_intersection(
-                      it->second.expression().cbegin(),
-                      it->second.expression().cend(),
-                      trace.stack_top().second.cbegin(),
-                      trace.stack_top().second.cend(),
-                      std::inserter(symbols_intersection,
-                                    symbols_intersection.begin())
-                      );
-                if (!symbols_intersection.empty())
+          object_numberingt::number_type lvalue_number;
+                auto const it =
+      numbering.get_number(callee_lvalue_svalue.first,lvalue_number) ?
+      lvalue_svalue.cend() :
+      lvalue_svalue.find(lvalue_number);
+                if (it != lvalue_svalue.cend())
                 {
-                  from_lvalues_to_svalues.insert({
-                        callee_lvalue_svalue.first,
-                        { symbols_intersection, false, false }
-                        });
-                  symbols.insert(
-                      callee_lvalue_svalue.second.expression().cbegin(),
-                      callee_lvalue_svalue.second.expression().cend()
-                      );
+                  taint_svaluet::expressiont  symbols_intersection;
+                  std::set_intersection(
+                        it->second.expression().cbegin(),
+                        it->second.expression().cend(),
+                        trace.stack_top().second.cbegin(),
+                        trace.stack_top().second.cend(),
+                        std::inserter(symbols_intersection,
+                                      symbols_intersection.begin())
+                        );
+                  if (!symbols_intersection.empty())
+                  {
+                    from_lvalues_to_svalues.insert({
+                          callee_lvalue_svalue.first,
+                          { symbols_intersection, false, false }
+                          });
+                    symbols.insert(
+                        callee_lvalue_svalue.second.expression().cbegin(),
+                        callee_lvalue_svalue.second.expression().cend()
+                        );
+                  }
                 }
               }
-            }
 
-          for (std::size_t  i = 0UL;
-               i < std::min(fn_call.arguments().size(),
-                            callee_type.parameters().size());
-               ++i)
-          {
-            set_of_access_pathst  paths;
-            collect_access_paths(fn_call.arguments().at(i),ns,paths);
-            for (auto const&  path : paths)
+            for (std::size_t  i = 0UL;
+                 i < std::min(fn_call.arguments().size(),
+                              callee_type.parameters().size());
+                 ++i)
             {
-	      object_numberingt::number_type pathnum;
-	      const auto svalue_it=
-		numbering.get_number(path,pathnum) ?
-		lvalue_svalue.cend() :
-		lvalue_svalue.find(pathnum);
-              if (svalue_it != lvalue_svalue.cend())
-                for (auto const&  symbol : svalue_it->second.expression())
-                  if (trace.stack_top().second.count(symbol) != 0UL)
-                  {
-                    std::string const  param_name =
-                        as_string(callee_type.parameters()
-                                             .at(i)
-                                             .get_identifier() );
-                    for (auto const& lvalue_svalue : callee_symbol_map)
-                      if (is_parameter(lvalue_svalue.first,ns)
-                            && name_of_symbol_access_path(lvalue_svalue.first)
-                               == param_name)
-                      {
-                        from_lvalues_to_svalues.insert(lvalue_svalue);
-                        symbols.insert(
-                            lvalue_svalue.second.expression().cbegin(),
-                            lvalue_svalue.second.expression().cend()
-                            );
-                      }
-                  }
+              set_of_access_pathst  paths;
+              collect_access_paths(fn_call.arguments().at(i),ns,paths);
+              for (auto const&  path : paths)
+              {
+          object_numberingt::number_type pathnum;
+          const auto svalue_it=
+      numbering.get_number(path,pathnum) ?
+      lvalue_svalue.cend() :
+      lvalue_svalue.find(pathnum);
+                if (svalue_it != lvalue_svalue.cend())
+                  for (auto const&  symbol : svalue_it->second.expression())
+                    if (trace.stack_top().second.count(symbol) != 0UL)
+                    {
+                      std::string const  param_name =
+                          as_string(callee_type.parameters()
+                                               .at(i)
+                                               .get_identifier() );
+                      for (auto const& lvalue_svalue : callee_symbol_map)
+                        if (is_parameter(lvalue_svalue.first,ns)
+                              && name_of_symbol_access_path(lvalue_svalue.first)
+                                 == param_name)
+                        {
+                          from_lvalues_to_svalues.insert(lvalue_svalue);
+                          symbols.insert(
+                              lvalue_svalue.second.expression().cbegin(),
+                              lvalue_svalue.second.expression().cend()
+                              );
+                        }
+                    }
+              }
             }
           }
         }
