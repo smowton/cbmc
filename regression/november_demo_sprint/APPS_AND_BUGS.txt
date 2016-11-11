@@ -62,7 +62,14 @@ Spring (https://github.com/spring-projects/spring-framework.git)
     <EMPTY>
 
 
-2. C apps
+2. Java apps (general)
+
+Perun (https://github.com/CESNET/perun)
+  commits:
+      TODO!!
+
+
+3. C apps
 
 <TO-BE-ADDED>
 
