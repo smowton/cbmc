@@ -133,7 +133,7 @@ static void  initialise_domain(
                           )
                       ));
           }
-          // */
+          */
 
           taint_summary_ptrt const  summary =
               database.find<taint_summaryt>(callee_ident);
