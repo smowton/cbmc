@@ -4414,6 +4414,9 @@ std::string expr2ct::convert(
     std::string fnresult=convert_function(src, "EXT_VAL_SET", precedence=16);
     if(src.get_bool("modified"))
       fnresult+="<maybe-modified>";
+    fnresult+=" [";
+    fnresult+=type2c(src.type(),ns);
+    fnresult+=']';
     return fnresult;
   }
 
