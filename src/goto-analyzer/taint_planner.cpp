@@ -530,6 +530,10 @@ std::string  taint_plannert::compute_summaries(
         program.goto_functions.function_map;
     auto const  fn_it = functions_map.find(fn_name);
     if (fn_it != functions_map.cend() && fn_it->second.body_available())
+    {
+      object_numberingt  taint_object_numbering;
+      object_numbers_by_fieldnamet  object_numbers_by_field;
+
       summary_database->insert({
           as_string(fn_name),
           taint_summarise_function(
@@ -542,10 +546,13 @@ std::string  taint_plannert::compute_summaries(
               *summary_database,
               nullptr,
               {},
+              taint_object_numbering,
+              object_numbers_by_field,
               get_message_handler(),
               log
               ),
           });
+    }
   }
   return ""; // No error.
 }

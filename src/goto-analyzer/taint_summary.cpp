@@ -33,9 +33,6 @@ This module defines interfaces and functionality for taint summaries.
 
 #include <iostream>
 
-typedef std::set<unsigned int> taint_numbered_lvalues_sett;
-typedef std::map<irep_idt,std::set<unsigned> > object_numbers_by_fieldnamet;
-
 typedef taint_numbered_lvalues_sett written_expressionst;
 
 static void collect_lvsa_access_paths(
@@ -133,7 +130,7 @@ static void  initialise_domain(
                           )
                       ));
           }
-          */
+          //*/
 
           taint_summary_ptrt const  summary =
               database.find<taint_summaryt>(callee_ident);
@@ -160,7 +157,7 @@ static void  initialise_domain(
               else if (!is_parameter(lvalue_svalue.first,ns) &&
                        !is_return_value_auxiliary(lvalue_svalue.first,ns))
 	      {
-		environment.insert(taint_object_numbering.number(lvalue_svalue.first));
+    environment.insert(taint_object_numbering.number(lvalue_svalue.first));
 	      }
 	      if(lvalue_svalue.first.id()=="external-value-set")
 	      {
@@ -305,7 +302,7 @@ static void  erase_dead_lvalue(
   map.erase(num);
 }
 
-static void expand_external_objects(taint_numbered_lvalues_sett& lvalue_set,
+void expand_external_objects(taint_numbered_lvalues_sett& lvalue_set,
                                     const object_numbers_by_fieldnamet& by_fieldname,
 				    const object_numberingt& taint_object_numbering)
 {
@@ -972,7 +969,9 @@ taint_svaluet::taint_symbolt find_taint_value(
 exprt find_taint_expression(const exprt &expr)
 {
   if (expr.id() == ID_dereference)
-    return to_dereference_expr(expr).pointer();
+    return find_taint_expression(to_dereference_expr(expr).pointer());
+  if (expr.id() == ID_typecast)
+    return find_taint_expression(to_typecast_expr(expr).op());
   else
     return expr;
 }
@@ -1400,6 +1399,8 @@ void  taint_summarise_all_functions(
     local_value_set_analysist::dbt* lvsa_database,
     taint_specification_symbol_names_to_svalue_symbols_mapt const&
         taint_spec_names,
+    taint_object_numbering_per_functiont&  taint_object_numbering,
+    object_numbers_by_field_per_functiont&  object_numbers_by_field,
     message_handlert&  msg,
     double  timeout,
     std::ostream* const  log
@@ -1480,6 +1481,8 @@ void  taint_summarise_all_functions(
               summaries_to_compute,
               lvsa_database,
               taint_spec_names,
+              taint_object_numbering[as_string(fn_name)],
+              object_numbers_by_field[as_string(fn_name)],
               msg,
               log
               ),
@@ -1519,6 +1522,8 @@ taint_summary_ptrt  taint_summarise_function(
     local_value_set_analysist::dbt* lvsa_database,
     taint_specification_symbol_names_to_svalue_symbols_mapt const&
         taint_spec_names,
+    object_numberingt&  taint_object_numbering,
+    object_numbers_by_fieldnamet&  object_numbers_by_field,
     message_handlert& msg,
     std::ostream* const  log
     )
@@ -1567,8 +1572,6 @@ taint_summary_ptrt  taint_summarise_function(
 
   taint_numbered_domaint domain;
   written_expressionst written_lvalues;
-  object_numberingt taint_object_numbering;
-  object_numbers_by_fieldnamet object_numbers_by_field;
 
   initialise_domain(
         function_id,

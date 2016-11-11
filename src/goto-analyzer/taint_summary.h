@@ -370,6 +370,14 @@ typedef std::unordered_map<taint_svaluet::taint_symbolt,std::string>
         taint_svalue_symbols_to_specification_symbols_mapt;
 
 
+typedef std::unordered_map<std::string,object_numberingt>
+        taint_object_numbering_per_functiont;
+
+typedef std::map<irep_idt,std::set<unsigned> > object_numbers_by_fieldnamet;
+typedef std::unordered_map<std::string,object_numbers_by_fieldnamet>
+        object_numbers_by_field_per_functiont;
+
+
 /*******************************************************************\
 
 Function:
@@ -389,6 +397,8 @@ void  taint_summarise_all_functions(
     local_value_set_analysist::dbt* lvsa_db,
     taint_specification_symbol_names_to_svalue_symbols_mapt const&
         taint_spec_names,
+    taint_object_numbering_per_functiont&  taint_object_numbering,
+    object_numbers_by_field_per_functiont&  object_numbers_by_field,
     message_handlert&  msg,
     double  timeout = 60.0,
     std::ostream* const  log = nullptr
@@ -414,9 +424,17 @@ taint_summary_ptrt  taint_summarise_function(
     local_value_set_analysist::dbt* lvsa_db,
     taint_specification_symbol_names_to_svalue_symbols_mapt const&
         taint_spec_names,
+    object_numberingt&  taint_object_numbering,
+    object_numbers_by_fieldnamet&  object_numbers_by_field,
     message_handlert&  msg,
     std::ostream* const  log = nullptr
     );
+
+
+typedef std::set<unsigned int> taint_numbered_lvalues_sett;
+void expand_external_objects(taint_numbered_lvalues_sett& lvalue_set,
+                             const object_numbers_by_fieldnamet& by_fieldname,
+                             const object_numberingt& taint_object_numbering);
 
 
 #endif

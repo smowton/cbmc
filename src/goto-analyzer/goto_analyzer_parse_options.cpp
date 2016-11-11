@@ -537,6 +537,10 @@ int goto_analyzer_parse_optionst::doit()
                << "s)..."
                << eom; std::cout.flush();
 
+      taint_object_numbering_per_functiont  taint_object_numbering;
+      object_numbers_by_field_per_functiont  object_numbers_by_field;
+
+
       if(fname=="")
       {
         taint_summarise_all_functions(
@@ -545,6 +549,8 @@ int goto_analyzer_parse_optionst::doit()
               call_graph,
               lvsa_database_ptr,
               taint_spec_names,
+              taint_object_numbering,
+              object_numbers_by_field,
               get_message_handler(),
               timeout,
               cmdline.isset("taint-dump-log") ? &log : nullptr
@@ -558,6 +564,8 @@ int goto_analyzer_parse_optionst::doit()
               summaries,
               lvsa_database_ptr,
               taint_spec_names,
+              taint_object_numbering[fname],
+              object_numbers_by_field[fname],
               get_message_handler(),
               cmdline.isset("taint-dump-log") ? &log : nullptr
               );
@@ -568,15 +576,17 @@ int goto_analyzer_parse_optionst::doit()
                << eom; std::cout.flush();
 
       std::vector<taint_tracet>  error_traces;
-      /*taint_recognise_error_traces(
+      taint_recognise_error_traces(
             error_traces,
             goto_model,
             call_graph,
             summaries,
             taint_sources,
             taint_sinks,
+            taint_object_numbering,
+            object_numbers_by_field,
             cmdline.isset("taint-dump-log") ? &log : nullptr
-            );*/
+            );
 
       if (error_traces.empty())
         status() << "The program is free of taint-related issues."

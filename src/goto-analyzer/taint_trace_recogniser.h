@@ -97,6 +97,8 @@ void taint_recognise_error_traces(
     database_of_summariest const&  summaries,
     taint_sources_mapt const&  taint_sources,
     taint_sinks_mapt const&  taint_sinks,
+    taint_object_numbering_per_functiont&  taint_object_numbering,
+    object_numbers_by_field_per_functiont&  object_numbers_by_field,
     std::stringstream* const  log
     );
 
@@ -111,6 +113,8 @@ void taint_recognise_error_traces(
     goto_programt::const_targett const source_instruction,
     std::string const&  sink_function_name,
     goto_programt::const_targett const sink_instruction,
+    taint_object_numbering_per_functiont&  taint_object_numbering,
+    object_numbers_by_field_per_functiont&  object_numbers_by_field,
     std::stringstream* const  log
     );
 

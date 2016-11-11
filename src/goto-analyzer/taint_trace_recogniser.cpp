@@ -28,6 +28,63 @@ data stored in the databese of taint summaries.
 #include <iostream>
 
 
+static void  dump_trace(taint_tracet const&  trace,
+                        std::string const&  purpose,
+                        namespacet const&  ns,
+                        std::stringstream* const  log
+                        )
+{
+  assert(log != nullptr);
+  *log << "<p>" << purpose << ":</p>\n"
+          "<table>"
+          "  <tr>\n"
+          "    <th>Function</th>\n"
+          "    <th>Location</th>\n"
+          "    <th>Variables</th>\n"
+          "    <th>Symbols</th>\n"
+          "    <th>Message</th>\n"
+          "    <th>Line</th>\n"
+          "    <th>File</th>\n"
+          "    <th>Comment</th>\n"
+          "  </tr>\n"
+          ;
+  for (taint_trace_elementt const&  element : trace)
+  {
+      *log << "  <tr>\n"
+              "    <td>"
+           << to_html_text(element.get_name_of_function()) << "</td>\n"
+              "    <td>"
+           << element.get_instruction_iterator()->location_number
+           << "</td>\n"
+              ;
+      *log << "    <td>\n";
+      taint_dump_lvalues_to_svalues_in_html(
+            element.get_map_from_lvalues_to_svalues(),
+            ns,
+            {}/*TODO*/,
+            *log
+            );
+      *log << "    </td>\n"
+              "    <td>\n";
+      taint_dump_svalue_in_html(
+          {element.get_symbols(),false,false},
+          {}, // TODO: here should be propagated and used instance of:
+              //     taint_svalue_symbols_to_specification_symbols_mapt
+          *log
+          );
+      *log << "    </td>\n"
+              "    <td>" << to_html_text(element.get_message())
+           << "</td>\n"
+              "    <td>" << element.get_line()
+           << "</td>\n"
+              "    <td>" << to_html_text(element.get_file())
+           << "</td>\n"
+              "    <td>" << to_html_text(element.get_code_annotation())
+           << "</td>\n"
+              "  </tr>\n";
+  }
+}
+
 class trace_under_constructiont
 {
 public:
@@ -293,6 +350,8 @@ void taint_recognise_error_traces(
     database_of_summariest const&  summaries,
     taint_sources_mapt const&  taint_sources,
     taint_sinks_mapt const&  taint_sinks,
+    taint_object_numbering_per_functiont&  taint_object_numbering,
+    object_numbers_by_field_per_functiont&  object_numbers_by_field,
     std::stringstream* const  log
     )
 {
@@ -319,6 +378,8 @@ void taint_recognise_error_traces(
                     src_loc,
                     fn_locs.first,
                     loc,
+                    taint_object_numbering,
+                    object_numbers_by_field,
                     log
                     );
       }
@@ -337,6 +398,8 @@ void taint_recognise_error_traces(
     goto_programt::const_targett const source_instruction,
     std::string const&  sink_function_name,
     goto_programt::const_targett const sink_instruction,
+    taint_object_numbering_per_functiont&  taint_object_numbering,
+    object_numbers_by_field_per_functiont&  object_numbers_by_field,
     std::stringstream* const  log
     )
 {
@@ -515,6 +578,11 @@ void taint_recognise_error_traces(
       }
       else
       {
+        if (log != nullptr)
+          dump_trace(processed_traces.front().get_trace(),
+                     "Skipping the following explored path",
+                     ns,
+                     log);
         processed_traces.pop_front();
 
         if (log != nullptr)
@@ -530,7 +598,6 @@ void taint_recognise_error_traces(
       {
         std::string const  callee_ident =
             as_string(to_symbol_expr(fn_call.function()).get_identifier());
-
         taint_map_from_lvalues_to_svaluest  from_lvalues_to_svalues;
         std::unordered_set<taint_svaluet::taint_symbolt>  symbols;
         {
@@ -549,8 +616,54 @@ void taint_recognise_error_traces(
           if (taint_summary_ptr.operator bool())
           {
             const auto& callee_symbol_map= taint_summary_ptr->input();
-
             for (auto const&  callee_lvalue_svalue : callee_symbol_map)
+            {
+              {
+                std::set<taint_svaluet::taint_symbolt>
+                    collected_symbols;
+                {
+                  taint_numbered_lvalues_sett  argument_lvalues;
+                  argument_lvalues.insert(
+                        const_cast<object_numberingt&>(numbering)
+                            .number(callee_lvalue_svalue.first)
+                        );
+                  expand_external_objects(
+                        argument_lvalues,
+                        object_numbers_by_field[elem.get_name_of_function()],
+                        numbering);
+                  for (auto const  number : argument_lvalues)
+                  {
+                    auto const lvalue_it = lvalue_svalue.find(number);
+                    if (lvalue_it != lvalue_svalue.cend())
+                    {
+                      for (auto const  symbol : lvalue_it->second.expression())
+                        collected_symbols.insert(symbol);
+                    }
+                  }
+                }
+
+                taint_svaluet::expressiont  symbols_intersection;
+                std::set_intersection(
+                      collected_symbols.cbegin(),
+                      collected_symbols.cend(),
+                      trace.stack_top().second.cbegin(),
+                      trace.stack_top().second.cend(),
+                      std::inserter(symbols_intersection,
+                                    symbols_intersection.begin())
+                      );
+                if (!symbols_intersection.empty())
+                {
+                  symbols_intersection.insert(
+                        callee_lvalue_svalue.second.expression().cbegin(),
+                        callee_lvalue_svalue.second.expression().cend()
+                        );
+                  from_lvalues_to_svalues.insert(callee_lvalue_svalue);
+                  symbols.insert(
+                      symbols_intersection.cbegin(),
+                      symbols_intersection.cend()
+                      );
+                }
+              }
               if (is_static(callee_lvalue_svalue.first,ns))
               {
           object_numberingt::number_type lvalue_number;
@@ -582,6 +695,7 @@ void taint_recognise_error_traces(
                   }
                 }
               }
+            }
 
             for (std::size_t  i = 0UL;
                  i < std::min(fn_call.arguments().size(),
@@ -638,7 +752,14 @@ void taint_recognise_error_traces(
                 log
                 );
           if (successors.empty())
+          {
+            if (log != nullptr)
+              dump_trace(processed_traces.front().get_trace(),
+                         "Skipping the following explored path",
+                         ns,
+                         log);
             processed_traces.pop_front();
+          }
           else
           {
             assert(successors.size() == 1UL);
@@ -686,7 +807,14 @@ void taint_recognise_error_traces(
               log
               );
         if (successors.empty())
+        {
+          if (log != nullptr)
+            dump_trace(processed_traces.front().get_trace(),
+                       "Skipping the following explored path",
+                       ns,
+                       log);
           processed_traces.pop_front();
+        }
         else
         {
           assert(successors.size() == 1UL);
@@ -714,7 +842,14 @@ void taint_recognise_error_traces(
               log
               );
         if (successors.empty())
+        {
+          if (log != nullptr)
+            dump_trace(processed_traces.front().get_trace(),
+                       "Skipping the following explored path",
+                       ns,
+                       log);
           processed_traces.pop_front();
+        }
         else
         {
           assert(successors.size() == 1UL);
@@ -805,6 +940,13 @@ void taint_recognise_error_traces(
             processed_traces.back().push_back(succ_elem);
           }
         }
+
+        if (processed_traces.size() == 1UL && log != nullptr)
+          dump_trace(processed_traces.front().get_trace(),
+                     "Skipping the following explored path",
+                     ns,
+                     log);
+
         processed_traces.pop_front();
       }
     }
@@ -823,7 +965,14 @@ void taint_recognise_error_traces(
             log
             );
       if (successors.empty())
+      {
+        if (log != nullptr)
+          dump_trace(processed_traces.front().get_trace(),
+                     "Skipping the following explored path",
+                     ns,
+                     log);
         processed_traces.pop_front();
+      }
       else
       {
         for (std::size_t  i = 1UL; i < successors.size(); ++i)
