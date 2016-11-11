@@ -40,12 +40,16 @@ void taint_trace_dump_in_html(
 void taint_dump_traces_in_json(
     std::vector<taint_tracet> const&  traces,
     goto_modelt const&  goto_model,
+    taint_svalue_symbols_to_specification_symbols_mapt const&
+        taint_spec_names,
     std::string const&  dump_root_directory
     );
 
 void taint_trace_dump_in_json(
     taint_tracet const&  trace,
     goto_modelt const&  goto_model,
+    taint_svalue_symbols_to_specification_symbols_mapt const&
+        taint_spec_names,
     std::string const&  dump_file_name
     );
 
