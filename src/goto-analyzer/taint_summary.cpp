@@ -203,7 +203,7 @@ static void  initialise_domain(
     const auto& lvalue=taint_object_numbering[lvaluenum];
     irep_idt fieldname;
     if(lvalue.id()==ID_member)
-      fieldname=to_member_expr(lvalue).get_component_name();
+      fieldname="."+as_string(to_member_expr(lvalue).get_component_name());
     else if(lvalue.id()==ID_dynamic_object)
       fieldname="[]";
     if(fieldname!=irep_idt())
