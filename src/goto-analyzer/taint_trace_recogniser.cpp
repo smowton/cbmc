@@ -598,6 +598,7 @@ void taint_recognise_error_traces(
       {
         std::string const  callee_ident =
             as_string(to_symbol_expr(fn_call.function()).get_identifier());
+	  
         taint_map_from_lvalues_to_svaluest  from_lvalues_to_svalues;
         std::unordered_set<taint_svaluet::taint_symbolt>  symbols;
         {
@@ -735,10 +736,17 @@ void taint_recognise_error_traces(
             }
           }
         }
-        if (symbols.empty())
+
+	bool already_visited=false;
+	const auto& target_fun=goto_model.goto_functions.function_map.at(callee_ident);
+	if(!target_fun.body.instructions.empty())
+	  already_visited=trace.count(callee_ident,target_fun.body.instructions.cbegin());
+	
+        if (symbols.empty() || already_visited)
         {
-          // The callee is not involved in propagation of tainted symbol.
-          // So we skip over it (i.e. we do not step into).
+          // The callee is not involved in propagation of tainted symbol,
+	  // or has already been explored.
+          // Therefore we skip over it (i.e. we do not step into).
           std::vector<taint_trace_elementt>  successors;
           taint_collect_successors_inside_function(
                 goto_model,
