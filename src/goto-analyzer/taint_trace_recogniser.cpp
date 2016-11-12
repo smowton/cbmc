@@ -503,9 +503,9 @@ void taint_recognise_error_traces(
         const auto& lvalue_svalue =
             domain.at(elem.get_instruction_iterator());
 	object_numberingt::number_type taint_num;
-  bool missing=numbering.get_number(taint_expr,taint_num);
+	bool missing=numbering.get_number(taint_expr,taint_num);
 	const auto it=
-    (missing) ?
+	  (missing) ?
 	  lvalue_svalue.end() :
 	  lvalue_svalue.find(taint_num);
         if (it != lvalue_svalue.cend())
@@ -666,11 +666,11 @@ void taint_recognise_error_traces(
               }
               if (is_static(callee_lvalue_svalue.first,ns))
               {
-          object_numberingt::number_type lvalue_number;
+		object_numberingt::number_type lvalue_number;
                 auto const it =
-      numbering.get_number(callee_lvalue_svalue.first,lvalue_number) ?
-      lvalue_svalue.cend() :
-      lvalue_svalue.find(lvalue_number);
+		  numbering.get_number(callee_lvalue_svalue.first,lvalue_number) ?
+		  lvalue_svalue.cend() :
+		  lvalue_svalue.find(lvalue_number);
                 if (it != lvalue_svalue.cend())
                 {
                   taint_svaluet::expressiont  symbols_intersection;
@@ -706,11 +706,11 @@ void taint_recognise_error_traces(
               collect_access_paths(fn_call.arguments().at(i),ns,paths);
               for (auto const&  path : paths)
               {
-          object_numberingt::number_type pathnum;
-          const auto svalue_it=
-      numbering.get_number(path,pathnum) ?
-      lvalue_svalue.cend() :
-      lvalue_svalue.find(pathnum);
+		object_numberingt::number_type pathnum;
+		const auto svalue_it=
+		  numbering.get_number(path,pathnum) ?
+		  lvalue_svalue.cend() :
+		  lvalue_svalue.find(pathnum);
                 if (svalue_it != lvalue_svalue.cend())
                   for (auto const&  symbol : svalue_it->second.expression())
                     if (trace.stack_top().second.count(symbol) != 0UL)
