@@ -322,7 +322,7 @@ void lvsaa_single_external_set_summaryt::from_final_state(
     }
     if(!export_this_entry)
     {
-      const symbolt& sym=ns.lookup(entry.first);
+      const symbolt& sym=ns.lookup(entry.second.identifier);
       if(sym.is_static_lifetime)
         export_this_entry=true;
     }
