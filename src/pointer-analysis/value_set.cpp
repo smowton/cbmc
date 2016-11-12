@@ -471,7 +471,7 @@ static const typet& type_from_suffix(
   while(next_member<suffix.size())
   {
     ret=&ns.follow(*ret);
-    assert(ret->id()==ID_struct);
+    assert(ret->id()==ID_struct || ret->id()==ID_union);
     // TODO: replace this silly string-chewing with a vector of pending members or similar.
     if(suffix[next_member]=='@')
     {
@@ -480,7 +480,7 @@ static const typet& type_from_suffix(
 	return static_cast<const typet&>(get_nil_irep());
       // Otherwise this is the base class. Can't use the method below because it might
       // contain periods.
-      const auto& subclass_comp=to_struct_type(*ret).components()[0];
+      const auto& subclass_comp=to_struct_union_type(*ret).components()[0];
       std::string subclass_name=id2string(subclass_comp.get_name());
       assert(has_infix(suffix,subclass_name,next_member));
       ret=&subclass_comp.type();
@@ -492,7 +492,7 @@ static const typet& type_from_suffix(
       if(member_after==std::string::npos)
 	member_after=suffix.size();
       std::string member=suffix.substr(next_member,member_after-next_member);
-      ret=&to_struct_type(*ret).get_component(member).type();
+      ret=&to_struct_union_type(*ret).get_component(member).type();
       next_member=member_after+1;
     }
   }
