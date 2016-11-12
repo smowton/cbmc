@@ -18,6 +18,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/i2string.h>
 #include <util/prefix.h>
 #include <util/infix.h>
+#include <util/suffix.h>
 #include <util/std_code.h>
 #include <util/arith_tools.h>
 #include <util/pointer_offset_size.h>
@@ -475,6 +476,7 @@ static const typet& type_from_suffix(
     // TODO: replace this silly string-chewing with a vector of pending members or similar.
     if(suffix[next_member]=='@')
     {
+      // This path is (believed to be, supposed to be) Java-specific.
       if(has_infix(suffix,"@lock",next_member) ||
 	 has_infix(suffix,"@class_identifier",next_member))
 	return static_cast<const typet&>(get_nil_irep());
@@ -491,8 +493,23 @@ static const typet& type_from_suffix(
       size_t member_after=suffix.find('.',next_member);
       if(member_after==std::string::npos)
 	member_after=suffix.size();
+      size_t derefs=0;
       std::string member=suffix.substr(next_member,member_after-next_member);
+      while(has_suffix(member,"[]"))
+      {
+	member.resize(member.size()-2);
+	++derefs;
+      }
       ret=&to_struct_union_type(*ret).get_component(member).type();
+      for(; derefs!=0; --derefs)
+      {
+	if(ret->id()==ID_pointer)
+	  ret=&to_pointer_type(*ret).subtype();
+	else if(ret->id()==ID_array)
+	  ret=&to_array_type(*ret).subtype();
+	else
+	  assert(false);
+      }
       next_member=member_after+1;
     }
   }
