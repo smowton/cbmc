@@ -311,7 +311,6 @@ void lvsaa_single_external_set_summaryt::from_final_state(
       export_this_entry=true;
     if((!export_this_entry) && has_prefix(entryname,"value_set::dynamic_object"))
     {
-      // TODO: escape analysis to restrict the set of dynamic objects we export.
       export_this_entry=true;
     }
     if((!export_this_entry) && entryname=="value_set::return_value")
