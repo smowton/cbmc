@@ -14,5 +14,16 @@ Repo URL: https://github.com/cesanta/mongoose
 Commits: 2 472
 Releases: 24
 Contributors: 77
-Files: mongoose.c + mongoose.h (~584.7 KiB)
+Files (master, last commit): mongoose.c + mongoose.h (~584.7 KiB)
+
+What was analysed:
+mongoose.c
+mongoose.h
+  - Functions: 316
+  - MODIFICATIONS PERFORMED IN MONGOOSE'S CODE:
+      Lines added: TODO
+      Lines removed: TODO
+      Lines modified: TODO
+      Description:
+      TODO
 

@@ -13,13 +13,25 @@ Repo URL: https://github.com/sakaiproject/sakai.git
 Commits: 44 635
 Releases: 5
 Contributors: 150
-Java files: 5 657 (~42.8MiB)
+Java files (master, last commit): 5 657 (~42.8MiB)
 
 What was analysed:
 sakai-announcement-tool.war
   - Size: 6 MiB
   - Unpacked: 7.1 MiB
   - Classes: 14 (429.4 KiB) 
+  - MODIFICATIONS PERFORMED IN SAKAI'S CODE:
+      Lines added: TODO
+      Lines removed: TODO
+      Lines modified: TODO
+      Description:
+      Had to write around 20 lines of Java to inject a taint source into
+      the program. And similar for the taint sink source is an InputStream
+      that emits tainted bytes. The sink is an implementation of a
+      data-access-object that checks its String argument for taint. I also had
+      to remove one instance of reflection (replaced with direct invocation).
+      and one instance of propagating taint via the filesystem (replaced with
+      in-memory propagation).
   - Dependent JARs:
       sakai-assignment-bundles-12-SNAPSHOT.jar    (336.5 KiB)
       sakai-assignment-impl-12-SNAPSHOT.jar       (217.1 KiB)
