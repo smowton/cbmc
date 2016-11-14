@@ -1,0 +1,18 @@
+Mongoose
+~~~~~~~~
+
+Mongoose is more than an embedded webserver. It is a multi-protocol embedded
+networking library with functions including TCP, HTTP client and server,
+WebSocket client and server, MQTT client and broker and much more.
+It has been designed for connecting devices and bringing them online.
+On the market since 2004, used by vast number of open source and commercial
+products - it even runs on the International Space station! Mongoose makes
+embedded network programming fast, robust, and easy.
+
+Home web: https://www.cesanta.com/
+Repo URL: https://github.com/cesanta/mongoose
+Commits: 2 472
+Releases: 24
+Contributors: 77
+Files: mongoose.c + mongoose.h (~584.7 KiB)
+

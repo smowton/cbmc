@@ -1,0 +1,36 @@
+Sakai
+~~~~~
+
+Description:
+Sakai is a fully customizable, 100% open source learning management system.
+Sakai is a Java web application running on Apache Tomcat 8.
+Sakai is licensed under the Educational Community License version 2.0
+Sakai is an Apereo Foundation project and follows the Foundation's guidelines
+and requirements for Contributor License Agreements.
+
+Home web: https://www.sakaiproject.org/
+Repo URL: https://github.com/sakaiproject/sakai.git
+Commits: 44 635
+Releases: 5
+Contributors: 150
+Java files: 5 657 (~42.8MiB)
+
+What was analysed:
+sakai-announcement-tool.war
+  - Size: 6 MiB
+  - Unpacked: 7.1 MiB
+  - Classes: 14 (429.4 KiB) 
+  - Dependent JARs:
+      sakai-assignment-bundles-12-SNAPSHOT.jar    (336.5 KiB)
+      sakai-assignment-impl-12-SNAPSHOT.jar       (217.1 KiB)
+      sakai-kernel-storage-util-12-SNAPSHOT.jar   (174.8 KiB)
+      sakai-kernel-util-12-SNAPSHOT.jar           (99.5  KiB)
+      sakai-portal-util-12-SNAPSHOT.jar           (62.6 KiB)
+      sakai-velocity-tool-12-SNAPSHOT.jar         (88.6 KiB)
+  - Rest of ythe analysed code comes from Java standard and other external libs.
+  - number of functions analysed = 1404
+  - Performance peaks: 
+      TIME[17.937183]: java::org.sakaiproject.assignment.tool.AssignmentAction.doUpload_all:(Lorg/sakaiproject/cheftool/RunData;)V
+      TIME[1.450808]: java::org.sakaiproject.assignment.tool.AssignmentAction.uploadAll_parseZipFile:(Lorg/sakaiproject/event/api/SessionState;ZZZZZZLjava/util/HashMap;Lorg/sakaiproject/assignment/api/Assignment;Ljava/io/InputStream;Ljava/lang/String;Ljava/util/HashMap;)Ljava/util/HashMap;
+      other functions was analysed in time <= 1.0sec
+
