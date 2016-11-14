@@ -106,6 +106,10 @@ public:
   typedef std::vector<call_stack_valuet>
           call_stackt;
 
+  struct backtrack_statet {
+    size_t trace_size;
+    call_stackt call_stack;
+  };
 
   explicit trace_under_constructiont(
       taint_trace_elementt const&  element,
@@ -139,10 +143,44 @@ public:
   void  stack_set_top(std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols);
   void  stack_pop();
 
+  backtrack_statet get_backtrack_state() { return { trace.size(), call_stack }; }
+  void backtrack_to_state(const backtrack_statet& state);
+
 private:
   taint_tracet  trace;
   visited_locations_mapt  visited;
   call_stackt  call_stack;
+};
+
+struct backtracking_trace_constructiont {
+
+  std::vector<std::pair<trace_under_constructiont::backtrack_statet, taint_trace_elementt> >
+    pending_backtracks;
+  trace_under_constructiont trace;
+  bool done;
+
+  backtracking_trace_constructiont(const taint_trace_elementt& first_elem, unsigned long first_taint) : trace(first_elem, { first_taint }), done(false) {}
+  
+  void backtrack()
+  {
+    if(!pending_backtracks.size())
+    {
+      done=true;
+      return;
+    }
+    const auto& backtrack_to=pending_backtracks.back();
+    trace.backtrack_to_state(backtrack_to.first);
+    trace.push_back(backtrack_to.second);
+    pending_backtracks.pop_back();
+  }
+
+  void add_pending_backtrack(const taint_trace_elementt& add_element)
+  {
+    pending_backtracks.push_back(std::make_pair(trace.get_backtrack_state(),add_element));
+  }
+
+  bool can_backtrack() { return pending_backtracks.size()!=0; }
+
 };
 
 trace_under_constructiont::trace_under_constructiont(
@@ -153,6 +191,21 @@ trace_under_constructiont::trace_under_constructiont(
   , visited{}
   , call_stack{{std::numeric_limits<std::size_t>::max(),symbols}}
 {}
+
+void trace_under_constructiont::backtrack_to_state(const backtrack_statet& state)
+{
+  call_stack=state.call_stack;
+  assert(state.trace_size <= trace.size());
+  for(size_t idx=state.trace_size, idxlim=trace.size(); idx!=idxlim; ++idx)
+  {
+    const auto& fname=trace.at(idx).get_name_of_function();
+    const auto& institer=trace.at(idx).get_instruction_iterator();
+    assert(visited.at(fname).erase(institer->location_number));
+  }
+  // Use this method because trace_elementt doesn't have a nullary constructor:
+  auto erase_from_it=std::next(trace.begin(),state.trace_size);
+  trace.erase(erase_from_it,trace.end());
+}
 
 std::size_t  trace_under_constructiont::count(
     std::string const&  name_of_function,
@@ -459,10 +512,8 @@ void taint_recognise_error_traces(
   }
 
   namespacet const  ns(goto_model.symbol_table);
-
-  std::deque<trace_under_constructiont>  processed_traces;
+  taint_map_from_lvalues_to_svaluest  from_lvalues_to_svalues;
   {
-    taint_map_from_lvalues_to_svaluest  from_lvalues_to_svalues;
     {
       const auto& summary=*summaries.find<taint_summaryt>(source_function_name);
       const auto& domain=summary.domain();
@@ -474,22 +525,25 @@ void taint_recognise_error_traces(
               { {taint_name}, false, false}
               });
     }
-    processed_traces.push_back(trace_under_constructiont{
-            {
-              source_function_name,
-              source_instruction,
-              from_lvalues_to_svalues,
-              { taint_name },
-              ""
-            },
-            {taint_name}
-        });
   }
-  while (!processed_traces.empty())
+
+  taint_trace_elementt initial_elem=
+    {
+       source_function_name,
+       source_instruction,
+       from_lvalues_to_svalues,
+       { taint_name },
+       ""
+    };
+  backtracking_trace_constructiont bt_trace(initial_elem,taint_name);
+
+  while (!bt_trace.done)
   {
-    trace_under_constructiont&  trace = processed_traces.front();
+    trace_under_constructiont&  trace = bt_trace.trace;
     taint_trace_elementt const&  elem = trace.back();
 
+    std::cout << trace.get_trace().size() << " " << elem.get_name_of_function() << " " << elem.get_instruction_iterator()->location_number << "\n";
+    
     if (elem.get_name_of_function() == sink_function_name &&
         elem.get_instruction_iterator() == sink_instruction)
     {
@@ -521,7 +575,7 @@ void taint_recognise_error_traces(
       if (is_taint_expression_tainted)
       {
         output_traces.push_back(trace.get_trace());
-        processed_traces.pop_front();
+	bt_trace.backtrack();
 
         if (log != nullptr)
         {
@@ -579,11 +633,11 @@ void taint_recognise_error_traces(
       else
       {
         if (log != nullptr)
-          dump_trace(processed_traces.front().get_trace(),
+          dump_trace(trace.get_trace(),
                      "Skipping the following explored path",
                      ns,
                      log);
-        processed_traces.pop_front();
+	bt_trace.backtrack();
 
         if (log != nullptr)
           *log << "<p>No trace is generates as the taint symbol '"
@@ -762,16 +816,16 @@ void taint_recognise_error_traces(
           if (successors.empty())
           {
             if (log != nullptr)
-              dump_trace(processed_traces.front().get_trace(),
+              dump_trace(trace.get_trace(),
                          "Skipping the following explored path",
                          ns,
                          log);
-            processed_traces.pop_front();
+	    bt_trace.backtrack();
           }
           else
           {
             assert(successors.size() == 1UL);
-            processed_traces.front().push_back(successors.front());
+            trace.push_back(successors.front());
           }
         }
         else
@@ -817,16 +871,16 @@ void taint_recognise_error_traces(
         if (successors.empty())
         {
           if (log != nullptr)
-            dump_trace(processed_traces.front().get_trace(),
+            dump_trace(trace.get_trace(),
                        "Skipping the following explored path",
                        ns,
                        log);
-          processed_traces.pop_front();
+          bt_trace.backtrack();
         }
         else
         {
           assert(successors.size() == 1UL);
-          processed_traces.front().push_back(successors.front());
+          trace.push_back(successors.front());
         }
       }
     }
@@ -852,16 +906,16 @@ void taint_recognise_error_traces(
         if (successors.empty())
         {
           if (log != nullptr)
-            dump_trace(processed_traces.front().get_trace(),
+            dump_trace(trace.get_trace(),
                        "Skipping the following explored path",
                        ns,
                        log);
-          processed_traces.pop_front();
+          bt_trace.backtrack();
         }
         else
         {
           assert(successors.size() == 1UL);
-          processed_traces.front().push_back(successors.front());
+          trace.push_back(successors.front());
         }
       }
       else
@@ -944,18 +998,17 @@ void taint_recognise_error_traces(
                 );
           for (taint_trace_elementt const&  succ_elem : successors)
           {
-            processed_traces.push_back(processed_traces.front());
-            processed_traces.back().push_back(succ_elem);
+	    bt_trace.add_pending_backtrack(succ_elem);
           }
         }
 
-        if (processed_traces.size() == 1UL && log != nullptr)
-          dump_trace(processed_traces.front().get_trace(),
+        if ((!bt_trace.can_backtrack()) && log != nullptr)
+          dump_trace(trace.get_trace(),
                      "Skipping the following explored path",
                      ns,
                      log);
 
-        processed_traces.pop_front();
+	bt_trace.backtrack();
       }
     }
     else
@@ -975,20 +1028,17 @@ void taint_recognise_error_traces(
       if (successors.empty())
       {
         if (log != nullptr)
-          dump_trace(processed_traces.front().get_trace(),
+          dump_trace(trace.get_trace(),
                      "Skipping the following explored path",
                      ns,
                      log);
-        processed_traces.pop_front();
+	bt_trace.backtrack();
       }
       else
       {
         for (std::size_t  i = 1UL; i < successors.size(); ++i)
-        {
-          processed_traces.push_back(processed_traces.front());
-          processed_traces.back().push_back(successors.at(i));
-        }
-        processed_traces.front().push_back(successors.front());
+          bt_trace.add_pending_backtrack(successors.at(i));
+        trace.push_back(successors.front());
       }
     }
   }
