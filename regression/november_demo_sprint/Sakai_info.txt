@@ -17,6 +17,7 @@ Java files (master, last commit): 5 657 (~42.8MiB)
 
 What was analysed:
 sakai-announcement-tool.war
+  - Commit: 8550c168cdf16363e864bfdfdbeae96a1e8eac51
   - Size: 6 MiB
   - Unpacked: 7.1 MiB
   - Classes: 14 (429.4 KiB) 

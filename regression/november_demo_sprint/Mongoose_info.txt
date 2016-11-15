@@ -20,6 +20,7 @@ What was analysed:
 mongoose.c
 mongoose.h
   - Functions: 316
+  - Commit: TODO
   - MODIFICATIONS PERFORMED IN MONGOOSE'S CODE:
       Lines added: TODO
       Lines removed: TODO
