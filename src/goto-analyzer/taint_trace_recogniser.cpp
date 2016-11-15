@@ -329,7 +329,7 @@ static exprt taint_find_expression_of_rule(exprt const&  expr)
   {
     if (expr.operands().size() != 2UL)
       return exprt(ID_empty);
-    return find_taint_expression(expr.op0());
+    return expr.op0(); //find_taint_expression(expr.op0());
   }
   for(exprt::operandst::const_iterator it = expr.operands().begin();
       it != expr.operands().end();
@@ -517,6 +517,21 @@ void taint_recognise_error_traces(
               break;
             }
         }
+        else
+        {
+          for (auto const&  elem : lvalue_svalue)
+          {
+//            std::string const&  id = as_string(numbering.at(elem.first).id());
+            if (numbering.at(elem.first).id() == "dynamic_object")
+            {
+              if (trace.stack_top().second.count(taint_name) != 0UL)
+              {
+                is_taint_expression_tainted = true;
+                break;
+              }
+            }
+          }
+        }
       }
       if (is_taint_expression_tainted)
       {
@@ -598,6 +613,12 @@ void taint_recognise_error_traces(
       {
         std::string const  callee_ident =
             as_string(to_symbol_expr(fn_call.function()).get_identifier());
+
+        if (callee_ident == "__DIFFBLUE_ignore_traces")
+        {
+          processed_traces.pop_front();
+          continue;
+        }
 	  
         taint_map_from_lvalues_to_svaluest  from_lvalues_to_svalues;
         std::unordered_set<taint_svaluet::taint_symbolt>  symbols;

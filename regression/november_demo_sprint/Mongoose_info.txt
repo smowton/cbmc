@@ -20,11 +20,15 @@ What was analysed:
 mongoose.c
 mongoose.h
   - Functions: 316
-  - Commit: TODO
+  - Commit: a67323fc1216d955b68c4d87a91fee355adbf6bb
+  - We want to present trace no.: 42  (there were generated 477 traces)
   - MODIFICATIONS PERFORMED IN MONGOOSE'S CODE:
-      Lines added: TODO
-      Lines removed: TODO
-      Lines modified: TODO
+      Lines added: 6 (Instrumentation by CProver's functions)
+      Lines removed: 0
+      Lines modified: 1 (One realloc -> __CPROVER_malloc)
       Description:
-      TODO
+      This is memory leak issue in function "mg_connect_ws_opt" (line 7783).
+      We used intrumented lines to emit, sanitise, and catch tainted data.
+      Memory allocations are sources and returns from the root function (the
+      one above) are sinks.
 
