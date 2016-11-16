@@ -145,22 +145,6 @@ inline bool operator!=(taint_svaluet const& a, taint_svaluet const& b)
   return !(a==b);
 }
 
-
-/*******************************************************************\
-
-Function:
-
-  Inputs: See purpose
-
- Outputs: See purpose
-
- Purpose:
-
-
-\*******************************************************************/
-bool  operator<(taint_svaluet const&  a, taint_svaluet const&  b);
-
-
 /*******************************************************************\
 
 Function:
@@ -202,34 +186,6 @@ typedef std::unordered_map<taint_lvaluet,taint_svaluet,irep_hash,irep_full_eq>
         taint_map_from_lvalues_to_svaluest;
 typedef std::unordered_set<taint_lvaluet,irep_hash,irep_full_eq>
         taint_lvalues_sett;
-
-
-/*******************************************************************\
-
-Function:
-
-  Inputs: See purpose
-
- Outputs: See purpose
-
- Purpose:
-
-
-\*******************************************************************/
-bool  operator==(
-    taint_map_from_lvalues_to_svaluest const&  a,
-    taint_map_from_lvalues_to_svaluest const&  b);
-
-bool  operator<(
-    taint_map_from_lvalues_to_svaluest const&  a,
-    taint_map_from_lvalues_to_svaluest const&  b);
-
-inline bool  operator<=(
-    taint_map_from_lvalues_to_svaluest const&  a,
-    taint_map_from_lvalues_to_svaluest const&  b)
-{
-  return a == b || a < b;
-}
 
 
 /*******************************************************************\

@@ -735,7 +735,7 @@ bool  operator==(taint_svaluet const&  a, taint_svaluet const&  b)
 }
 
 
-bool  operator<(taint_svaluet const&  a, taint_svaluet const&  b)
+static bool  svalue_proper_subset(taint_svaluet const&  a, taint_svaluet const&  b)
 {
   if (a == b)
     return false;
@@ -743,8 +743,9 @@ bool  operator<(taint_svaluet const&  a, taint_svaluet const&  b)
     return false;
   if (a.is_bottom() || b.is_top())
     return true;
-  return std::includes(b.expression().cbegin(),b.expression().cend(),
-                       a.expression().cbegin(),a.expression().cend());
+  return b.expression().size() > a.expression().size() &&
+	       std::includes(b.expression().cbegin(),b.expression().cend(),
+			     a.expression().cbegin(),a.expression().cend());
 }
 
 
@@ -796,25 +797,9 @@ taint_svaluet  suppression(
   return {result_set,result_suppression,false,false};
 }
 
-
-bool  operator==(
-    taint_map_from_lvalues_to_svaluest const&  a,
-    taint_map_from_lvalues_to_svaluest const&  b)
-{
-  auto  a_it = a.cbegin();
-  auto  b_it = b.cbegin();
-  for ( ;
-       a_it != a.cend() && b_it != b.cend() &&
-       a_it->first == b_it->first && a_it->second == b_it->second;
-       ++a_it, ++b_it)
-    ;
-  return a_it == a.cend() && b_it == b.cend();
-}
-
-
-bool  operator<(
-    taint_map_from_lvalues_to_svaluest const&  a,
-    taint_map_from_lvalues_to_svaluest const&  b)
+static bool taint_map_proper_subset(
+    taint_numbered_lvalue_svalue_mapt const&  a,
+    taint_numbered_lvalue_svalue_mapt const&  b)
 {
   if (b.empty())
     return false;
@@ -823,10 +808,17 @@ bool  operator<(
     auto const  b_it = b.find(a_it->first);
     if (b_it == b.cend())
       return false;
-    if (!(a_it->second < b_it->second))
-      return false;
+    if (svalue_proper_subset(a_it->second,b_it->second))
+      return true;
   }
-  return true;
+  return false;
+}
+
+static bool taint_map_subset(
+    taint_numbered_lvalue_svalue_mapt const&  a,
+    taint_numbered_lvalue_svalue_mapt const&  b)
+{
+  return a == b || taint_map_proper_subset(a,b);
 }
 
 static void collect_referee_access_paths(
@@ -1528,6 +1520,7 @@ taint_summary_ptrt  taint_summarise_function(
     std::ostream* const  log
     )
 {
+
   if (log != nullptr)
     *log << "<h2>Called sumfn::taint::taint_summarise_function( "
          << to_html_text(as_string(function_id)) << " )</h2>\n"
@@ -1647,7 +1640,7 @@ taint_summary_ptrt  taint_summarise_function(
     taint_dump_numbered_lvalues_to_svalues_as_html(
           old_dst_value,ns,taint_object_numbering,{}/*TODO*/,*log);
 	}
-	  
+
         dst_value = join(transformed,old_dst_value);
 
 	if (log != nullptr)
@@ -1660,7 +1653,7 @@ taint_summary_ptrt  taint_summarise_function(
                 dst_value,ns,taint_object_numbering,{}/*TODO*/,*log);
 	}
 
-        if (!(dst_value <= old_dst_value))
+        if (!taint_map_subset(dst_value,old_dst_value))
         {
           work_set.insert(dst_instr_it);
 
