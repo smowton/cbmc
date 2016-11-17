@@ -1,0 +1,27 @@
+python
+
+def  diffblue_address_of_value(value):
+    raw_adr = str(value.address)
+    end = raw_adr.find(' ')
+    if end == -1:
+        end = raw_adr.find('<')
+        if end == -1:
+            return raw_adr
+    return raw_adr[0:end]
+
+
+def  diffblue_eval_expr(expr,limit=80):
+    try:
+        res_val = str(gdb.parse_and_eval(expr))
+    except:
+        return "Call 'diffblue_eval_expr(" + expr + ")' has FAILED!"
+    return res_val.replace("\"","\\\"")
+
+
+def qdump__dstring(d, value):
+    adr = diffblue_address_of_value(value)
+    d.putValue(diffblue_eval_expr("as_string(*(dstring*)" + adr + ")"))
+
+
+end
+
