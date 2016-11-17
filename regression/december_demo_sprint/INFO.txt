@@ -1,0 +1,35 @@
+General info
+~~~~~~~~~~~~
+
+The dead-line is December 5th. Although we should consider this date as fixed,
+Daniels also said the presentation may be extended by few days (but definitely
+within the week December 5-9).
+
+We should focus only to Java apps (no C!) and we should only focus on web issues
+(XSS and SQL injection) and nothing else. Moreover, the goal is to show real
+errors, ideally no false positives. Definitelly nothing like Polyspace, or "the
+other tool whose name is some number".
+
+Daniel will provide us some Java packages to be evaluated for the presentation
+(some Amazon's code). Our analysis must be fully automated: User simply uses
+Maven to build his program (which possibly includes automati download and build
+of dependent packages); Then he just runs our analyser on build binaries.
+
+The demo will be LIVE in a sense, that the customer might want to see the
+analysis running (he might be willing to wait for results). In any case
+(i.e. even if he wants to see only outputs), then we have to provide HTML
+output. This is important. Daniel said that they use always use outputs to HTML
+(more precisely browser) and always.
+
+They want to see in output from our analyser global statistics like histograms
+and other forms of charts about what was analysed, how much time we spent where,
+etc.
+
+We will present the demo to Brian Cook (I hope I remembered the name correctly).
+He is very skilled with program analysis (he worked on SLAM). He won't be
+interested too much in shiny graphics output, but HTML is mandatory, and most
+importantly, he is mainly interested in statistics, distributions of
+anything/everything, graphs, etc.
+
+Daniel said that no code clean up till the dead-line of that demo.
+
