@@ -818,15 +818,18 @@ bool  operator<(
 {
   if (b.empty())
     return false;
+  bool has_less = false;
   for (auto  a_it = a.cbegin(); a_it != a.cend(); ++a_it)
   {
     auto const  b_it = b.find(a_it->first);
     if (b_it == b.cend())
       return false;
-    if (!(a_it->second < b_it->second))
+    if (a_it->second < b_it->second)
+      has_less = true;
+    else if (!(a_it->second == b_it->second))
       return false;
   }
-  return true;
+  return has_less;
 }
 
 static void collect_referee_access_paths(
