@@ -920,43 +920,6 @@ void taint_recognise_error_traces(
                 }
               }
             }
-
-            for (std::size_t  i = 0UL;
-                 i < std::min(fn_call.arguments().size(),
-                              callee_type.parameters().size());
-                 ++i)
-            {
-              set_of_access_pathst  paths;
-              collect_access_paths(fn_call.arguments().at(i),ns,paths);
-              for (auto const&  path : paths)
-              {
-		object_numberingt::number_type pathnum;
-		const auto svalue_it=
-		  numbering.get_number(path,pathnum) ?
-		  lvalue_svalue.cend() :
-		  lvalue_svalue.find(pathnum);
-                if (svalue_it != lvalue_svalue.cend())
-                  for (auto const&  symbol : svalue_it->second.expression())
-                    if (trace.stack_top().second.count(symbol) != 0UL)
-                    {
-                      std::string const  param_name =
-                          as_string(callee_type.parameters()
-                                               .at(i)
-                                               .get_identifier() );
-                      for (auto const& lvalue_svalue : callee_symbol_map)
-                        if (is_parameter(lvalue_svalue.first,ns)
-                              && name_of_symbol_access_path(lvalue_svalue.first)
-                                 == param_name)
-                        {
-                          from_lvalues_to_svalues.insert(lvalue_svalue);
-                          symbols.insert(
-                              lvalue_svalue.second.expression().cbegin(),
-                              lvalue_svalue.second.expression().cend()
-                              );
-                        }
-                    }
-              }
-            }
           }
         }
 
