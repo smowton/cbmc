@@ -1,6 +1,8 @@
 General info
 ~~~~~~~~~~~~
 
+17.11.2016]
+
 The dead-line is December 5th. Although we should consider this date as fixed,
 Daniels also said the presentation may be extended by few days (but definitely
 within the week December 5-9).
@@ -32,4 +34,29 @@ importantly, he is mainly interested in statistics, distributions of
 anything/everything, graphs, etc.
 
 Daniel said that no code clean up till the dead-line of that demo.
+
+[18.11.2016]
+
+We should analyse application who use Maven as a build system. So, Sakai is
+actually one of apps we need. Also, the goal is to analyse as many such apps
+as possible. 10, 100, ...
+
+We are NOT allowed to do ANY modifications in those apps.
+
+The goal of the demo is to show two things:
+  1. FULL automation,
+  2. We do better than tool Fortify
+     (in terms of counts of produced reports per app)
+
+It also means that we have to remove all modifications we did to Sakai so far
+and analyse it in original untouched version.
+
+We are not allowed to use tool Fortify ourselves for comparison (due to some
+licensing issues). So, we have to make a list of Java app (build by Maven!)
+and then we pass this list to Daniel, who will send it to some 3rd person who
+will run Fortify on all apps in the list, and then we receive results (counts of
+produced error reports per app) from Daniel. Numbers we produce should be
+(must be) better than Fortify (i.e. lower the count better; but telling 0
+everywhere would look suspicious).
+
 
