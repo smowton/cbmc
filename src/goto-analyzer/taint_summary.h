@@ -25,6 +25,7 @@ This module defines interfaces and functionality for taint summaries.
 #include <pointer-analysis/local_value_set_analysis.h>
 #include <pointer-analysis/object_numbering.h>
 #include <util/irep.h>
+#include <util/overlay_map.h>
 #include <unordered_map>
 #include <unordered_set>
 #include <map>
@@ -32,7 +33,6 @@ This module defines interfaces and functionality for taint summaries.
 #include <functional>
 #include <string>
 #include <iosfwd>
-
 
 /*******************************************************************\
 
@@ -60,6 +60,8 @@ public:
       bool  is_bottom,
       bool  is_top
       );
+
+ taint_svaluet() : m_is_bottom(true), m_is_top(false) {}
 
   taint_svaluet(taint_svaluet const&  other);
   taint_svaluet(taint_svaluet&&  other);
@@ -145,22 +147,6 @@ inline bool operator!=(taint_svaluet const& a, taint_svaluet const& b)
   return !(a==b);
 }
 
-
-/*******************************************************************\
-
-Function:
-
-  Inputs: See purpose
-
- Outputs: See purpose
-
- Purpose:
-
-
-\*******************************************************************/
-bool  operator<(taint_svaluet const&  a, taint_svaluet const&  b);
-
-
 /*******************************************************************\
 
 Function:
@@ -216,34 +202,6 @@ Function:
 
 
 \*******************************************************************/
-bool  operator==(
-    taint_map_from_lvalues_to_svaluest const&  a,
-    taint_map_from_lvalues_to_svaluest const&  b);
-
-bool  operator<(
-    taint_map_from_lvalues_to_svaluest const&  a,
-    taint_map_from_lvalues_to_svaluest const&  b);
-
-inline bool  operator<=(
-    taint_map_from_lvalues_to_svaluest const&  a,
-    taint_map_from_lvalues_to_svaluest const&  b)
-{
-  return a == b || a < b;
-}
-
-
-/*******************************************************************\
-
-Function:
-
-  Inputs: See purpose
-
- Outputs: See purpose
-
- Purpose:
-
-
-\*******************************************************************/
 taint_svaluet::taint_symbolt find_taint_value(const exprt &expr);
 
 
@@ -261,16 +219,12 @@ Function:
 \*******************************************************************/
 exprt find_taint_expression(const exprt &expr);
 
-
-
-typedef std::map<unsigned int,taint_svaluet> taint_numbered_lvalue_svalue_mapt;
+typedef overlay_map<unsigned int, taint_svaluet> taint_numbered_lvalue_svalue_mapt;
 typedef goto_programt::instructiont::const_targett  instruction_iteratort;
 typedef std::unordered_map<instruction_iteratort,
                            taint_numbered_lvalue_svalue_mapt,
                            instruction_iterator_hashert>
         taint_numbered_domaint;
-
-
 
 /*******************************************************************\
 
@@ -338,17 +292,20 @@ public:
 		 const object_numberingt& numbering);
 
   taint_summaryt() {}
+  taint_summaryt(const taint_summaryt&) = delete;
+  taint_summaryt& operator=(const taint_summaryt&) = delete;
 
   std::string  kind() const noexcept;
   std::string  description() const noexcept;
 
-  taint_map_from_lvalues_to_svaluest const&  input() const noexcept
-  { return m_input; }
-  taint_map_from_lvalues_to_svaluest const&  output() const noexcept
-  { return m_output; }
-
+  taint_map_from_lvalues_to_svaluest& input() noexcept { return m_input; }
+  taint_map_from_lvalues_to_svaluest& output() noexcept { return m_output; }
+  taint_numbered_domaint&  domain() noexcept { return m_domain; }
+  object_numberingt& domain_numbering() noexcept { return numbering; }
+  const taint_map_from_lvalues_to_svaluest& input() const noexcept { return m_input; }
+  const taint_map_from_lvalues_to_svaluest& output() const noexcept { return m_output; }
   const taint_numbered_domaint&  domain() const noexcept { return m_domain; }
-  const object_numberingt& domain_numbering() const noexcept { return numbering; }
+  const object_numberingt& domain_numbering() const noexcept { return numbering; }  
 
   json_objectt to_json() const;
   void from_json(const json_objectt&);

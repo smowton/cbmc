@@ -27,6 +27,7 @@ data stored in the databese of taint summaries.
 
 #include <iostream>
 
+static const namespacet* global_ns;
 
 static void  dump_trace(taint_tracet const&  trace,
                         std::string const&  purpose,
@@ -106,6 +107,10 @@ public:
   typedef std::vector<call_stack_valuet>
           call_stackt;
 
+  struct backtrack_statet {
+    size_t trace_size;
+    call_stackt call_stack;
+  };
 
   explicit trace_under_constructiont(
       taint_trace_elementt const&  element,
@@ -139,10 +144,48 @@ public:
   void  stack_set_top(std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols);
   void  stack_pop();
 
+  backtrack_statet get_backtrack_state() { return { trace.size(), call_stack }; }
+  void backtrack_to_state(const backtrack_statet& state);
+
 private:
   taint_tracet  trace;
   visited_locations_mapt  visited;
   call_stackt  call_stack;
+};
+
+struct backtracking_trace_constructiont {
+
+  std::vector<std::pair<trace_under_constructiont::backtrack_statet, taint_trace_elementt> >
+    pending_backtracks;
+  std::vector<std::pair<trace_under_constructiont::backtrack_statet, taint_trace_elementt> >
+    pending_call_backtracks;
+  trace_under_constructiont trace;
+  bool done;
+
+  backtracking_trace_constructiont(const taint_trace_elementt& first_elem, unsigned long first_taint) : trace(first_elem, { first_taint }), done(false) {}
+  
+  void backtrack()
+  {
+    if((!pending_backtracks.size()) && (!pending_call_backtracks.size()))
+    {
+      done=true;
+      return;
+    }
+    auto& take_from=pending_backtracks.size() ? pending_backtracks : pending_call_backtracks;
+    const auto& backtrack_to=take_from.back();
+    trace.backtrack_to_state(backtrack_to.first);
+    trace.push_back(backtrack_to.second);
+    take_from.pop_back();
+  }
+
+  void add_pending_backtrack(const taint_trace_elementt& add_element, bool is_call)
+  {
+    auto& add_to=is_call ? pending_call_backtracks : pending_backtracks;
+    add_to.push_back(std::make_pair(trace.get_backtrack_state(),add_element));
+  }
+
+  bool can_backtrack() { return pending_backtracks.size()!=0 || pending_call_backtracks.size()!=0; }
+
 };
 
 trace_under_constructiont::trace_under_constructiont(
@@ -153,6 +196,21 @@ trace_under_constructiont::trace_under_constructiont(
   , visited{}
   , call_stack{{std::numeric_limits<std::size_t>::max(),symbols}}
 {}
+
+void trace_under_constructiont::backtrack_to_state(const backtrack_statet& state)
+{
+  call_stack=state.call_stack;
+  assert(state.trace_size <= trace.size());
+  for(size_t idx=state.trace_size, idxlim=trace.size(); idx!=idxlim; ++idx)
+  {
+    const auto& fname=trace.at(idx).get_name_of_function();
+    const auto& institer=trace.at(idx).get_instruction_iterator();
+    assert(visited.at(fname).erase(institer->location_number));
+  }
+  // Use this method because trace_elementt doesn't have a nullary constructor:
+  auto erase_from_it=std::next(trace.begin(),state.trace_size);
+  trace.erase(erase_from_it,trace.end());
+}
 
 std::size_t  trace_under_constructiont::count(
     std::string const&  name_of_function,
@@ -342,6 +400,32 @@ static exprt taint_find_expression_of_rule(exprt const&  expr)
   return exprt(ID_empty);
 }
 
+static void populate_distances_to_node(const call_grapht& inverted_cg,
+				       irep_idt fromnode,
+				       std::map<irep_idt, size_t>& result)
+{
+  // inverted_cg, as its name suggests, is the call graph with edges pointing from callee
+  // to caller. Populate 'result' with the smallest number of calls to reach 'fromnode'.
+  // Walk breadth-first to ensure finding the shortest path first (when all edges have cost 1)
+
+  std::vector<irep_idt> worklist;
+  result[fromnode]=0;
+  worklist.push_back(fromnode);
+  for(size_t i=0; i!=worklist.size(); ++i)
+  {
+    auto thiscost=result.at(worklist[i]);
+    auto edges=inverted_cg.out_edges(worklist[i]);
+    for(; edges.first!=edges.second; ++edges.first)
+    {
+      const auto& callername=edges.first->second;
+      auto insit=result.insert(std::make_pair(callername,thiscost+1));
+      if(insit.second)
+	worklist.push_back(callername);
+      // Otherwise there is already a shorter path.
+    }
+  }
+}
+				      
 
 void taint_recognise_error_traces(
     std::vector<taint_tracet>&  output_traces,
@@ -428,6 +512,29 @@ void taint_recognise_error_traces(
   call_grapht  inverted_call_graph;
   compute_inverted_call_graph(call_graph,inverted_call_graph);
 
+  // Get functions that can reach the taint source, and their distances:
+  std::map<irep_idt, size_t> function_downward_distances_to_source;
+  populate_distances_to_node(inverted_call_graph,source_function_name,
+			     function_downward_distances_to_source);
+  // Same but for the sink:
+  std::map<irep_idt, size_t> function_downward_distances_to_sink;
+  populate_distances_to_node(inverted_call_graph,sink_function_name,
+			     function_downward_distances_to_sink);
+  // Get functions reachable from something that can reach the sink:
+  std::map<irep_idt, size_t> function_upward_distances_to_sink;
+  for(const auto& fun : function_downward_distances_to_sink)
+  {
+    std::map<irep_idt, size_t> distance_from_this_root;
+    populate_distances_to_node(call_graph,fun.first,distance_from_this_root);
+    for(const auto& dist : distance_from_this_root)
+    {
+      auto cost=dist.second+fun.second;
+      auto insertit=function_upward_distances_to_sink.insert({dist.first,cost});
+      if((!insertit.second) && cost<insertit.first->second)
+	insertit.first->second=cost;
+    }
+  }
+
   if (source_function_name != sink_function_name)
   {
     std::unordered_set<irep_idt,dstring_hash>  call_roots;
@@ -458,11 +565,12 @@ void taint_recognise_error_traces(
     }
   }
 
+  
+  
   namespacet const  ns(goto_model.symbol_table);
-
-  std::deque<trace_under_constructiont>  processed_traces;
+  global_ns=&ns;
+  taint_map_from_lvalues_to_svaluest  from_lvalues_to_svalues;
   {
-    taint_map_from_lvalues_to_svaluest  from_lvalues_to_svalues;
     {
       const auto& summary=*summaries.find<taint_summaryt>(source_function_name);
       const auto& domain=summary.domain();
@@ -474,22 +582,25 @@ void taint_recognise_error_traces(
               { {taint_name}, false, false}
               });
     }
-    processed_traces.push_back(trace_under_constructiont{
-            {
-              source_function_name,
-              source_instruction,
-              from_lvalues_to_svalues,
-              { taint_name },
-              ""
-            },
-            {taint_name}
-        });
   }
-  while (!processed_traces.empty())
+
+  taint_trace_elementt initial_elem=
+    {
+       source_function_name,
+       source_instruction,
+       from_lvalues_to_svalues,
+       { taint_name },
+       ""
+    };
+  backtracking_trace_constructiont bt_trace(initial_elem,taint_name);
+
+  while (!bt_trace.done)
   {
-    trace_under_constructiont&  trace = processed_traces.front();
+    trace_under_constructiont&  trace = bt_trace.trace;
     taint_trace_elementt const&  elem = trace.back();
 
+    std::cout << trace.get_trace().size() << " " << elem.get_name_of_function() << " " << from_expr(ns,"",elem.get_instruction_iterator()->code) << "\n";
+    
     if (elem.get_name_of_function() == sink_function_name &&
         elem.get_instruction_iterator() == sink_instruction)
     {
@@ -536,7 +647,8 @@ void taint_recognise_error_traces(
       if (is_taint_expression_tainted)
       {
         output_traces.push_back(trace.get_trace());
-        processed_traces.pop_front();
+	std::cout << "BACKTRACK: successful trace (looking for alternatives)\n";
+	bt_trace.backtrack();
 
         if (log != nullptr)
         {
@@ -594,11 +706,12 @@ void taint_recognise_error_traces(
       else
       {
         if (log != nullptr)
-          dump_trace(processed_traces.front().get_trace(),
+          dump_trace(trace.get_trace(),
                      "Skipping the following explored path",
                      ns,
                      log);
-        processed_traces.pop_front();
+	std::cout << "BACKTRACK: sink without appropriate taint\n";
+	bt_trace.backtrack();
 
         if (log != nullptr)
           *log << "<p>No trace is generates as the taint symbol '"
@@ -783,42 +896,102 @@ void taint_recognise_error_traces(
           if (successors.empty())
           {
             if (log != nullptr)
-              dump_trace(processed_traces.front().get_trace(),
+              dump_trace(trace.get_trace(),
                          "Skipping the following explored path",
                          ns,
                          log);
-            processed_traces.pop_front();
+	    std::cout << "BACKTRACK: uninteresting call, no successors\n";
+	    bt_trace.backtrack();
           }
           else
           {
             assert(successors.size() == 1UL);
-            processed_traces.front().push_back(successors.front());
+            trace.push_back(successors.front());
           }
         }
         else
         {
           // The callee is involved in propagation of tainted symbol.
-          // So, we step into it.
+          // So, we may step into it.
           symbols.insert(
-                trace.stack_top().second.cbegin(),
-                trace.stack_top().second.cend()
-                );
+	    trace.stack_top().second.cbegin(),
+	    trace.stack_top().second.cend());
+
+	  // Check if it is desirable to enter this function: does it get us closer
+	  // to the sink?
+	  bool callee_is_closer=false;
+	  auto findit=function_downward_distances_to_sink.find(callee_ident);
+	  if(findit!=function_downward_distances_to_sink.end())
+	  {
+	    size_t mycost=10000;
+	    auto findit2=function_downward_distances_to_sink.find(elem.get_name_of_function());
+	    if(findit2!=function_downward_distances_to_sink.end())
+	      mycost=std::min(findit2->second,mycost);
+	    if(!trace.stack_has_return())
+	    {
+	      // See if just returning is a faster way to the sink:
+	      auto findit3=function_upward_distances_to_sink.find(elem.get_name_of_function());
+	      if(findit3!=function_downward_distances_to_sink.end())
+		mycost=std::min(findit3->second,mycost);		
+	    }
+	    callee_is_closer=(mycost > findit->second);
+	    std::cout << "*** Callee " << callee_ident << " cost " << findit->second << " vs. skip cost " << mycost << "\n";
+	  }
+	  else
+	    std::cout << "*** Callee " << callee_ident << " not on path to sink\n";
+
+	  const auto& fstart=goto_model.goto_functions.function_map.at(callee_ident)
+	    .body.instructions.cbegin();
+	  taint_trace_elementt new_element {
+	    callee_ident,
+	    fstart,
+	    from_lvalues_to_svalues,
+	    taint_svaluet::expressiont(symbols.cbegin(),symbols.cend()),
+            ""
+	  };
+
           trace.stack_push(symbols);
-          trace.push_back({
-                callee_ident,
-                goto_model.goto_functions
-                          .function_map.at(callee_ident)
-                          .body
-                          .instructions
-                          .cbegin(),
-                from_lvalues_to_svalues,
-                taint_svaluet::expressiont(
-                    symbols.cbegin(),
-                    symbols.cend()
-                    ),
-                ""
-                });
-        }
+
+	  if(callee_is_closer)
+	  {
+	    // Enter function right away:
+	    trace.push_back(new_element);
+	  }
+	  else
+	  {
+	    // First try bypassing the function:
+	    bt_trace.add_pending_backtrack(new_element,true);
+	    trace.stack_pop();
+	    // TODO: factor this.
+	    std::vector<taint_trace_elementt>  successors;
+	    taint_collect_successors_inside_function(
+	      goto_model,
+              trace,
+              elem,
+              summaries,
+              taint_name,
+              sink_function_name,
+              sink_instruction,
+              successors,
+              log
+              );
+	    if (successors.empty())
+	    {
+	      if (log != nullptr)
+		dump_trace(trace.get_trace(),
+			   "Skipping the following explored path",
+			   ns,
+			   log);
+	      std::cout << "BACKTRACK: interesting call, no successors\n";
+	      bt_trace.backtrack();
+	    }
+	    else
+	    {
+	      assert(successors.size() == 1UL);
+	      trace.push_back(successors.front());
+	    }
+	  }
+	}
       }
       else
       {
@@ -838,16 +1011,17 @@ void taint_recognise_error_traces(
         if (successors.empty())
         {
           if (log != nullptr)
-            dump_trace(processed_traces.front().get_trace(),
+            dump_trace(trace.get_trace(),
                        "Skipping the following explored path",
                        ns,
                        log);
-          processed_traces.pop_front();
+	  std::cout << "BACKTRACK: call without summary, no successors\n";
+          bt_trace.backtrack();
         }
         else
         {
           assert(successors.size() == 1UL);
-          processed_traces.front().push_back(successors.front());
+          trace.push_back(successors.front());
         }
       }
     }
@@ -873,16 +1047,17 @@ void taint_recognise_error_traces(
         if (successors.empty())
         {
           if (log != nullptr)
-            dump_trace(processed_traces.front().get_trace(),
+            dump_trace(trace.get_trace(),
                        "Skipping the following explored path",
                        ns,
                        log);
-          processed_traces.pop_front();
+	  std::cout << "BACKTRACK: function end (have stack) with no successors\n";
+          bt_trace.backtrack();
         }
         else
         {
           assert(successors.size() == 1UL);
-          processed_traces.front().push_back(successors.front());
+          trace.push_back(successors.front());
         }
       }
       else
@@ -929,13 +1104,43 @@ void taint_recognise_error_traces(
               }
           }
         }
-        for (auto const&  func_loc : possible_callers)
+
+	// When we have a choice of callees, pick first the one that gets closer to
+	// reaching a taint sink.
+	
+	std::vector<std::pair<std::string,goto_programt::const_targett> > sorted_callers(
+	  possible_callers.begin(),possible_callers.end());
+	struct compare_costs {
+	  typedef std::pair<std::string,goto_programt::const_targett> keyt;
+	  const std::map<irep_idt, size_t>& costs;
+	  compare_costs(const std::map<irep_idt, size_t>& _costs) : costs(_costs) {}
+	  bool operator()(const keyt& l, const keyt& r) const
+	  {
+	    const auto findl=costs.find(l.first), findr=costs.find(r.first);
+	    if(findl==costs.end())
+	      return false;
+	    if(findr==costs.end())
+	      return true;
+	    return findl->second<findr->second;
+	  }
+	};
+
+	compare_costs comp(function_upward_distances_to_sink);
+	std::sort(sorted_callers.begin(),sorted_callers.end(),comp);
+
+	std::cout << "*** Return costs:\n";
+	for(const auto& caller : sorted_callers)
+	  std::cout << caller.first << " cost " << (function_upward_distances_to_sink.count(caller.first) ? function_upward_distances_to_sink[caller.first] : 10000) << "\n";
+	
+        for (auto callerit=sorted_callers.rbegin(), callerend=sorted_callers.rend();
+	     callerit!=callerend; ++callerit)
         {
+	  const auto& func_loc=*callerit;
           auto const  summary_ptr =
               summaries.find<taint_summaryt>(func_loc.first);
           if (!summary_ptr.operator bool())
             continue;
-    const auto& summary=*summary_ptr;
+	  const auto& summary=*summary_ptr;
           const auto& from_lvalues_to_svalues=summary.domain().at(func_loc.second);
 	  const auto& numbering=summary.domain_numbering();
 	  taint_map_from_lvalues_to_svaluest explicit_domain;
@@ -965,18 +1170,19 @@ void taint_recognise_error_traces(
                 );
           for (taint_trace_elementt const&  succ_elem : successors)
           {
-            processed_traces.push_back(processed_traces.front());
-            processed_traces.back().push_back(succ_elem);
+	    bt_trace.add_pending_backtrack(succ_elem,false);
           }
         }
 
-        if (processed_traces.size() == 1UL && log != nullptr)
-          dump_trace(processed_traces.front().get_trace(),
+        if ((!bt_trace.can_backtrack()) && log != nullptr)
+          dump_trace(trace.get_trace(),
                      "Skipping the following explored path",
                      ns,
                      log);
+	if(!bt_trace.can_backtrack())
+	  std::cout << "BACKTRACK: function end, no callers\n";
 
-        processed_traces.pop_front();
+	bt_trace.backtrack();
       }
     }
     else
@@ -996,20 +1202,18 @@ void taint_recognise_error_traces(
       if (successors.empty())
       {
         if (log != nullptr)
-          dump_trace(processed_traces.front().get_trace(),
+          dump_trace(trace.get_trace(),
                      "Skipping the following explored path",
                      ns,
                      log);
-        processed_traces.pop_front();
+	std::cout << "BACKTRACK: Normal inst no successors\n";
+	bt_trace.backtrack();
       }
       else
       {
         for (std::size_t  i = 1UL; i < successors.size(); ++i)
-        {
-          processed_traces.push_back(processed_traces.front());
-          processed_traces.back().push_back(successors.at(i));
-        }
-        processed_traces.front().push_back(successors.front());
+          bt_trace.add_pending_backtrack(successors.at(i),false);
+        trace.push_back(successors.front());
       }
     }
   }

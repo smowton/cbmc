@@ -192,7 +192,33 @@ static void  initialise_domain(
   for (auto  it = std::next(function.body.instructions.cbegin());
        it != function.body.instructions.cend();
        ++it)
+  {
     domain.insert({it,others_map});
+  }
+
+  std::map<goto_programt::const_targett, goto_programt::const_targetst> inst_predecessors;
+  for(auto it=function.body.instructions.cbegin(),itend=function.body.instructions.cend();
+      it!=itend;++it)
+  {
+    goto_programt::const_targetst succs;
+    function.body.get_successors(it,succs);
+    for(auto succit : succs)
+      inst_predecessors[succit].push_back(it);
+  }
+
+  // Now that all maps have been created, replace those with a unique predecessor
+  // with a reference to that predecessor.
+  for (auto  it = std::next(function.body.instructions.cbegin());
+       it != function.body.instructions.cend();
+       ++it)
+  {
+    auto findit=inst_predecessors.find(it);
+    if(findit!=inst_predecessors.end() &&
+       findit->second.size()==1 &&
+       findit->second.back()!=function.body.instructions.cbegin() &&
+       domain.at(findit->second.back()).map_depth()<10)
+      domain.at(it).set_base(&domain.at(findit->second.back()));
+  }
 
   // Now populate object-numbers-by-field, which maps field names mentioned in
   // child call summaries onto the set of value-numbers at local scope referring to the
@@ -604,7 +630,7 @@ static void  assign(
       map.insert({lvalue,svalue});
   }
   else
-    it->second = svalue;
+    map[lvalue]=svalue;
 }
 
 static void  maybe_assign(
@@ -620,7 +646,7 @@ static void  maybe_assign(
       map.insert({lvalue,svalue});
   }
   else
-    it->second = join(it->second,svalue);
+    map[lvalue]=join(it->second,svalue);
 }
 
 taint_svaluet  taint_make_symbol()
@@ -735,7 +761,7 @@ bool  operator==(taint_svaluet const&  a, taint_svaluet const&  b)
 }
 
 
-bool  operator<(taint_svaluet const&  a, taint_svaluet const&  b)
+static bool  svalue_proper_subset(taint_svaluet const&  a, taint_svaluet const&  b)
 {
   if (a == b)
     return false;
@@ -743,8 +769,9 @@ bool  operator<(taint_svaluet const&  a, taint_svaluet const&  b)
     return false;
   if (a.is_bottom() || b.is_top())
     return true;
-  return std::includes(b.expression().cbegin(),b.expression().cend(),
-                       a.expression().cbegin(),a.expression().cend());
+  return b.expression().size() > a.expression().size() &&
+	       std::includes(b.expression().cbegin(),b.expression().cend(),
+			     a.expression().cbegin(),a.expression().cend());
 }
 
 
@@ -796,40 +823,32 @@ taint_svaluet  suppression(
   return {result_set,result_suppression,false,false};
 }
 
-
-bool  operator==(
-    taint_map_from_lvalues_to_svaluest const&  a,
-    taint_map_from_lvalues_to_svaluest const&  b)
-{
-  auto  a_it = a.cbegin();
-  auto  b_it = b.cbegin();
-  for ( ;
-       a_it != a.cend() && b_it != b.cend() &&
-       a_it->first == b_it->first && a_it->second == b_it->second;
-       ++a_it, ++b_it)
-    ;
-  return a_it == a.cend() && b_it == b.cend();
-}
-
-
-bool  operator<(
-    taint_map_from_lvalues_to_svaluest const&  a,
-    taint_map_from_lvalues_to_svaluest const&  b)
+static bool taint_map_proper_subset(
+    taint_numbered_lvalue_svalue_mapt const&  a,
+    taint_numbered_lvalue_svalue_mapt const&  b)
 {
   if (b.empty())
     return false;
-  bool has_less = false;
+  bool common_base=a.get_base()==b.get_base();
   for (auto  a_it = a.cbegin(); a_it != a.cend(); ++a_it)
   {
     auto const  b_it = b.find(a_it->first);
     if (b_it == b.cend())
       return false;
-    if (a_it->second < b_it->second)
-      has_less = true;
-    else if (!(a_it->second == b_it->second))
-      return false;
+    // Necessarily equal?
+    if(common_base && a_it.points_to_base() && b_it.points_to_base())
+      continue;
+    if (svalue_proper_subset(a_it->second,b_it->second))
+      return true;
   }
-  return has_less;
+  return false;
+}
+
+static bool taint_map_subset(
+    taint_numbered_lvalue_svalue_mapt const&  a,
+    taint_numbered_lvalue_svalue_mapt const&  b)
+{
+  return a == b || taint_map_proper_subset(a,b);
 }
 
 static void collect_referee_access_paths(
@@ -1072,7 +1091,9 @@ taint_numbered_lvalue_svalue_mapt  transform(
     )
 {
   goto_programt::instructiont const&  I=*Iit;
-  auto  result = a;
+  taint_numbered_lvalue_svalue_mapt result;
+  // Take a cheap read-only view of the incoming domain:
+  result.set_base(&a);
   switch(I.type)
   {
   case ASSIGN:
@@ -1334,13 +1355,30 @@ taint_numbered_lvalue_svalue_mapt join(
     taint_numbered_lvalue_svalue_mapt const&  b)
 {
   taint_numbered_lvalue_svalue_mapt  result_dict;
-  auto a_it=a.cbegin(), a_end=a.cend();
-  auto b_it=b.cbegin(), b_end=b.cend();
+  if(a.get_base()==b.get_base())
+  {
+    result_dict.set_base(a.get_base());
+    if(a.removed_key_valid || b.removed_key_valid)
+    {
+      // DEAD statement. Effects cannot change.
+      if(a.removed_key_valid && b.removed_key_valid)
+	assert(a.removed_key == b.removed_key);
+      result_dict.erase(a.removed_key_valid ? a.removed_key : b.removed_key);
+      return result_dict;
+    }
+  }
+  taint_numbered_lvalue_svalue_mapt::const_iterator a_it,a_end,b_it,b_end;
+  a_it=a.cbegin();
+  a_end=a.cend();
+  b_it=b.cbegin();
+  b_end=b.cend();    
   while(a_it!=a_end || b_it!=b_end)
   {
     if(a_it!=a_end && b_it!=b_end && a_it->first==b_it->first)
     {
-      result_dict.insert({a_it->first,join(a_it->second,b_it->second)});
+      // Implicitly copied by sharing the underlying map?
+      if(!(result_dict.get_base() && a_it.points_to_base() && b_it.points_to_base()))
+	result_dict.insert({a_it->first,join(a_it->second,b_it->second)});
       ++a_it; ++b_it;
     }
     else if(b_it==b_end || (a_it!=a_end && a_it->first < b_it->first))
@@ -1531,6 +1569,7 @@ taint_summary_ptrt  taint_summarise_function(
     std::ostream* const  log
     )
 {
+
   if (log != nullptr)
     *log << "<h2>Called sumfn::taint::taint_summarise_function( "
          << to_html_text(as_string(function_id)) << " )</h2>\n"
@@ -1573,7 +1612,10 @@ taint_summary_ptrt  taint_summarise_function(
         as_string(function_id)
         );
 
-  taint_numbered_domaint domain;
+  auto resultp=std::make_shared<taint_summaryt>();
+  auto& result=*resultp;
+  auto& domain=result.domain();
+
   written_expressionst written_lvalues;
 
   initialise_domain(
@@ -1650,7 +1692,7 @@ taint_summary_ptrt  taint_summarise_function(
     taint_dump_numbered_lvalues_to_svalues_as_html(
           old_dst_value,ns,taint_object_numbering,{}/*TODO*/,*log);
 	}
-	  
+
         dst_value = join(transformed,old_dst_value);
 
 	if (log != nullptr)
@@ -1663,7 +1705,7 @@ taint_summary_ptrt  taint_summarise_function(
                 dst_value,ns,taint_object_numbering,{}/*TODO*/,*log);
 	}
 
-        if (!(dst_value <= old_dst_value))
+        if (!taint_map_subset(dst_value,old_dst_value))
         {
           work_set.insert(dst_instr_it);
 
@@ -1675,7 +1717,7 @@ taint_summary_ptrt  taint_summarise_function(
       }
   }
 
-  taint_map_from_lvalues_to_svaluest  output;
+  taint_map_from_lvalues_to_svaluest& output=result.output();
   build_summary_from_computed_domain(
         domain,
         written_lvalues,
@@ -1690,12 +1732,13 @@ taint_summary_ptrt  taint_summarise_function(
         input,output,domain
   );
 
-  taint_map_from_lvalues_to_svaluest expr_input;
+  auto& expr_input=result.input();
   for(const auto& p : input)
     expr_input.insert({taint_object_numbering[p.first],p.second});
+
+  result.domain_numbering()=taint_object_numbering;
   
-  return std::make_shared<taint_summaryt>(expr_input,
-					  output,
-					  std::move(domain),
-					  std::move(taint_object_numbering));
+  return resultp;
+
 }
+
