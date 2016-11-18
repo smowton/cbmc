@@ -100,6 +100,10 @@ static void  initialise_domain(
           collect_access_paths(asgn.rhs(),ns,environment);*/
         }
       }
+      else if (it->type == ASSERT)
+      {
+	collect_lvsa_access_paths(it->guard,ns,environment,*lvsa,it,taint_object_numbering);
+      }
       else if (it->type == FUNCTION_CALL)
       {
         code_function_callt const&  fn_call = to_code_function_call(it->code);
