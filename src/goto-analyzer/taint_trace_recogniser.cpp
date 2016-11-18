@@ -425,6 +425,105 @@ static void populate_distances_to_node(const call_grapht& inverted_cg,
     }
   }
 }
+
+static bool root_cost_lt(const std::pair<instruction_iteratort,size_t>& a,
+			 const std::pair<instruction_iteratort,size_t>& b)
+{
+  return a.second<b.second;
+}
+
+static void populate_local_distances_to_taint_sink(
+  const goto_programt& prog,
+  std::map<instruction_iteratort, size_t>& costs,
+  const std::map<irep_idt, size_t>& call_cost_to_sink,
+  size_t return_cost_to_sink)
+{
+  // Calls with a path to the taint sink, and the function end, have costs given
+  // by call_cost_to_sink and return_cost_to_sink respectively. All other instructions
+  // get a shortest path length (measured in instructions) to reach the nearest sink.
+
+  std::map<instruction_iteratort, std::list<instruction_iteratort> > preds;
+  for(auto it=prog.instructions.begin(),itend=prog.instructions.end(); it!=itend; ++it)
+  {
+    std::list<instruction_iteratort> succs;
+    prog.get_successors(it,succs);
+    for(auto succ : succs)
+      preds[succ].push_back(it);    
+  }
+  
+  std::vector<instruction_iteratort> worklist;
+  std::vector<std::pair<instruction_iteratort,size_t> > roots;
+
+  // call_ and return_cost_to_sink measure cost in number of calls
+  // whereas we measure instructions. Use a guess of 20 instructions
+  // traversed per function for now (consider improving this later).
+  if(return_cost_to_sink != (size_t)-1)
+    roots.push_back({std::prev(prog.instructions.end()),return_cost_to_sink*20});
+
+  for(auto it=prog.instructions.begin(),itend=prog.instructions.end(); it!=itend; ++it)
+  {
+    if(it->type==FUNCTION_CALL)
+    {
+      const auto& callee=to_code_function_call(it->code).function();
+      if(callee.id()==ID_symbol)
+      {
+	auto findit=call_cost_to_sink.find(to_symbol_expr(callee).get_identifier());
+	if(findit!=call_cost_to_sink.end())
+	  roots.push_back({it,(findit->second)*20});
+      }
+    }
+  }
+
+  if(roots.empty())
+    return;
+  
+  std::sort(roots.begin(),roots.end(),root_cost_lt);
+
+  worklist.push_back(roots[0].first);
+  costs[roots[0].first]=roots[0].second;
+  size_t rootidx=1;
+
+  // Roots are kept out of the map such that only instructions with their final cost
+  // appear in the result map at any point.
+  // Since all costs are one instruction, we can do a simple breadth-first, cheapest-root-first
+  // walk to assign costs:
+
+  for(size_t i=0;i!=worklist.size();++i)
+  {
+    const instruction_iteratort* thisinstp=&worklist[i];
+    auto thiscost=costs.at(*thisinstp);
+    // See if a root has lower cost than this worklist entry; if so process it first:
+    if(rootidx<roots.size())
+    {
+      const auto& nextroot=roots[rootidx];
+      if(nextroot.second==thiscost && !costs.count(nextroot.first))
+      {
+	if(costs.insert(nextroot).second)
+	{
+	  --i;
+	  thisinstp=&nextroot.first;
+	  thiscost=nextroot.second;
+	}
+	++rootidx;
+	// Otherwise we already encountered the root with lower cost by another path.
+      }
+    }
+
+    const auto& thisinst=*thisinstp;
+    auto findpred=preds.find(thisinst);
+    if(findpred!=preds.end())
+    {
+      const auto& instpreds=findpred->second;
+      for(const auto& pred : instpreds)
+      {
+	auto insit=costs.insert({pred,thiscost+1});
+	if(insit.second)
+	  worklist.push_back(pred);
+	// Otherwise we already found a shorter path for this instruction.
+      }
+    }
+  }
+}
 				      
 
 void taint_recognise_error_traces(
@@ -594,12 +693,23 @@ void taint_recognise_error_traces(
     };
   backtracking_trace_constructiont bt_trace(initial_elem,taint_name);
 
+  // Entries with key.second set are used when a function has a stack (i.e. when returning
+  // to get towards the sink is not viable because our caller already decided to enter
+  // this function).
+  std::map<std::pair<irep_idt,bool>, std::map<instruction_iteratort, size_t> >
+    local_costs_to_reach_sink;
+
   while (!bt_trace.done)
   {
     trace_under_constructiont&  trace = bt_trace.trace;
     taint_trace_elementt const&  elem = trace.back();
 
     std::cout << trace.get_trace().size() << " " << elem.get_name_of_function() << " " << from_expr(ns,"",elem.get_instruction_iterator()->code) << "\n";
+
+    if(trace.get_trace().size()==255)
+    {
+      std::cout << "HERE\n";
+    }
     
     if (elem.get_name_of_function() == sink_function_name &&
         elem.get_instruction_iterator() == sink_instruction)
@@ -1190,6 +1300,51 @@ void taint_recognise_error_traces(
       }
       else
       {
+
+	if(successors.size()>1)
+	{
+
+	  bool have_definite_caller=trace.stack_has_return();
+	  const auto& thisfun=irep_idt(elem.get_name_of_function());
+	  auto insit=local_costs_to_reach_sink.insert({{thisfun,have_definite_caller},{}});
+	  if(insit.second)
+	  {
+	    const auto& fn = goto_model.goto_functions.function_map.at(thisfun);
+	    auto return_cost=have_definite_caller ?
+	      10000 : function_upward_distances_to_sink.at(thisfun);
+	    populate_local_distances_to_taint_sink(fn.body,insit.first->second,
+						   function_downward_distances_to_sink,
+						   return_cost);
+	  }
+
+	  struct compare_local_costs {
+	    const std::map<instruction_iteratort, size_t>& costs;
+	    compare_local_costs(const std::map<instruction_iteratort, size_t>& _costs) :
+	      costs(_costs) {}
+	    bool operator()(const taint_trace_elementt& l, const taint_trace_elementt& r) const
+	    {
+	      const auto findl=costs.find(l.get_instruction_iterator()),
+		findr=costs.find(r.get_instruction_iterator());
+	      if(findl==costs.end())
+		return false;
+	      if(findr==costs.end())
+		return true;
+	      return findl->second<findr->second;
+	    }
+	  };
+	  
+	  compare_local_costs comp(insit.first->second);
+	  std::sort(successors.begin(),successors.end(),comp);
+	  std::cout << "Conditional branch costs:\n";
+	  for(const auto& succ : successors)
+	  {
+	    auto succit=succ.get_instruction_iterator();
+	    std::cout << from_expr(ns,"",succit->code) << ": " <<
+	      (insit.first->second.count(succit) ? insit.first->second.at(succit) : 10000) << "\n";
+	  }
+
+	}
+	
         for (std::size_t  i = 1UL; i < successors.size(); ++i)
           bt_trace.add_pending_backtrack(successors.at(i),false);
         trace.push_back(successors.front());
