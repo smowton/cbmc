@@ -110,28 +110,6 @@ static void  initialise_domain(
 
           auto const&  fn_type = functions_map.at(callee_ident).type;
 
-          /* // TODO: this loop should be returned back!
-          for (exprt const&  arg : fn_call.arguments())
-          {
-            set_of_access_pathst  paths;
-            collect_access_paths(arg,ns,paths);
-            for (auto const&  path : paths)
-              if (!is_pure_local(path,ns) &&
-                  !is_return_value_auxiliary(path,ns) &&
-                  !is_this(path,ns))
-                environment.insert(taint_object_numbering.number(
-                      scope_translation(
-                          path,
-                          callee_ident,
-                          function_id,
-                          fn_call,
-                          fn_type,
-                          ns
-                          )
-                      ));
-          }
-          //*/
-
           taint_summary_ptrt const  summary =
               database.find<taint_summaryt>(callee_ident);
           if (summary.operator bool())
