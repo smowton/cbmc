@@ -5,8 +5,13 @@
   <property name="classes.dir"   value="${root.dir}"/>
         
   <target name="compile">
+    <antcall target="clean" />
     <mkdir dir="${classes.dir}"/>
     <javac srcdir="${src.dir}" destdir="${classes.dir}" includeantruntime="false" debug="on" />
+  </target>
+
+  <target name="clean">
+    <delete file="./Test.class"/>
   </target>
 
 </project>

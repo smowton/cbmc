@@ -5,7 +5,7 @@
   <property name="classes.dir"   value="${root.dir}"/>
         
   <target name="compile">
-      <antcall target="clean" />
+    <antcall target="clean" />
     <mkdir dir="${classes.dir}"/>
     <javac srcdir="${src.dir}" destdir="${classes.dir}" includeantruntime="false" debug="on" />
   </target>
@@ -13,6 +13,8 @@
   <target name="clean">
     <delete file="./Main.class"/>
     <delete file="./Other.class"/>
+    <delete file="./OtherBase1.class"/>
+    <delete file="./OtherBase2.class"/>
   </target>
 
 

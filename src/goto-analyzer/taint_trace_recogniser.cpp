@@ -727,11 +727,11 @@ void taint_recognise_error_traces(
         std::string const  callee_ident =
             as_string(to_symbol_expr(fn_call.function()).get_identifier());
 
-        if (callee_ident == "__DIFFBLUE_ignore_traces")
-        {
-          processed_traces.pop_front();
-          continue;
-        }
+//        if (callee_ident == "__DIFFBLUE_ignore_traces")
+//        {
+//          processed_traces.pop_front();
+//          continue;
+//        }
 	  
         taint_map_from_lvalues_to_svaluest  from_lvalues_to_svalues;
         std::unordered_set<taint_svaluet::taint_symbolt>  symbols;
