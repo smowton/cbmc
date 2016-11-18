@@ -17,6 +17,7 @@ data stored in the databese of taint summaries.
 #include <goto-analyzer/taint_summary.h>
 #include <goto-analyzer/taint_summary_dump.h>
 #include <goto-analyzer/taint_statistics.h>
+#include <util/parameter_indices.h>
 #include <util/msgstream.h>
 #include <unordered_set>
 #include <deque>
@@ -535,6 +536,7 @@ void taint_recognise_error_traces(
     taint_sinks_mapt const&  taint_sinks,
     taint_object_numbering_per_functiont&  taint_object_numbering,
     object_numbers_by_field_per_functiont&  object_numbers_by_field,
+    const formals_to_actuals_mapt& formals_to_actuals,
     std::stringstream* const  log
     )
 {
@@ -563,6 +565,7 @@ void taint_recognise_error_traces(
                     loc,
                     taint_object_numbering,
                     object_numbers_by_field,
+		    formals_to_actuals,
                     log
                     );
       }
@@ -583,6 +586,7 @@ void taint_recognise_error_traces(
     goto_programt::const_targett const sink_instruction,
     taint_object_numbering_per_functiont&  taint_object_numbering,
     object_numbers_by_field_per_functiont&  object_numbers_by_field,
+    const formals_to_actuals_mapt& formals_to_actuals,
     std::stringstream* const  log
     )
 {
@@ -703,6 +707,7 @@ void taint_recognise_error_traces(
   {
     trace_under_constructiont&  trace = bt_trace.trace;
     taint_trace_elementt const&  elem = trace.back();
+    const auto& local_numbering=taint_object_numbering.at(elem.get_name_of_function());
 
     std::cout << trace.get_trace().size() << " " << elem.get_name_of_function() << " " << from_expr(ns,"",elem.get_instruction_iterator()->code) << "\n";
 
@@ -837,24 +842,46 @@ void taint_recognise_error_traces(
           auto const taint_summary_ptr =
               summaries.find<taint_summaryt>(callee_ident);
 
+
           if (taint_summary_ptr.operator bool())
           {
             const auto& callee_symbol_map= taint_summary_ptr->input();
-            for (auto const&  callee_lvalue_svalue : callee_symbol_map)
+	    auto param_indices=get_parameter_indices(callee_type);
+	    
+	    for (auto const&  callee_lvalue_svalue : callee_symbol_map)
             {
               {
                 std::set<taint_svaluet::taint_symbolt>
                     collected_symbols;
                 {
                   taint_numbered_lvalues_sett  argument_lvalues;
-                  argument_lvalues.insert(
-                        const_cast<object_numberingt&>(numbering)
-                            .number(callee_lvalue_svalue.first)
-                        );
-                  expand_external_objects(
-                        argument_lvalues,
-                        object_numbers_by_field[elem.get_name_of_function()],
-                        numbering);
+
+		  if(is_parameter(callee_lvalue_svalue.first,ns))
+		  {
+		    // Replace with actual(s):
+		    const auto& actuals_list=
+		      formals_to_actuals.at({elem.get_name_of_function(),
+			                     elem.get_instruction_iterator()});
+		    const auto& paramsym=
+		      to_symbol_expr(callee_lvalue_svalue.first).get_identifier();
+		    
+		    for(const auto number : actuals_list[param_indices[paramsym]])
+		    {
+		      std::cout << "Actual parameter for " << from_expr(ns,"",callee_lvalue_svalue.first) << ": " << from_expr(ns,"",local_numbering[number]) << "\n";
+		      argument_lvalues.insert(number);
+		    }
+		  }
+		  else
+		  {
+		    // Find number, and expand external object references if necessary:
+		    unsigned number;
+		    assert(!local_numbering.get_number(callee_lvalue_svalue.first,number));
+		    argument_lvalues.insert(number);
+		    expand_external_objects(
+			argument_lvalues,
+			object_numbers_by_field[elem.get_name_of_function()],
+                        local_numbering);
+		  }
                   for (auto const  number : argument_lvalues)
                   {
                     auto const lvalue_it = lvalue_svalue.find(number);
