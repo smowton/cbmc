@@ -897,13 +897,18 @@ static exprt transform_external_objects(const exprt& e)
 }
 
 static void collect_lvsa_access_paths(
-  exprt const& e,
+  exprt const& querye_in,
   namespacet const& ns,
   taint_numbered_lvalues_sett& result,
   local_value_set_analysist& lvsa,
   instruction_iteratort const& instit,
   object_numberingt& taint_object_numbering)
 {
+  const exprt* querye=&querye_in;
+  while(querye->id()==ID_typecast)
+    querye=&querye->op0();
+  const exprt& e = *querye;
+  
   if(e.id()==ID_symbol ||
      e.id()==ID_index ||
      e.id()==ID_member ||
