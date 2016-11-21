@@ -779,7 +779,10 @@ int goto_analyzer_parse_optionst::doit()
         value_set_analysis.set_message_handler(get_message_handler());
         value_set_analysis(gf.body);
 	if(cmdline.isset("show-value-sets"))
+        {
+          status() << "*** function " << fname << eom;
 	  show_value_sets(get_ui(), gf.body, value_set_analysis);
+        }
 	else
 	  progress() << processed << "/" << total_funcs << " functions analysed" << eom;
         if(dbpath.size()!=0)
