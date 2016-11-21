@@ -420,6 +420,25 @@ Function: value_sett::get_value_set
 
 \*******************************************************************/
 
+std::pair<value_sett::valuest::iterator,bool>
+value_sett::init_external_value_set(const external_value_set_exprt& evse)
+{
+
+  std::string basename=evse.get_access_path_basename();
+  std::string access_path_suffix=id2string(evse.access_path_back().label());
+  std::string entryname=basename+access_path_suffix;
+        
+  entryt entry(basename,access_path_suffix);
+
+  auto insert_result=values.insert(std::make_pair(irep_idt(entryname),entry));
+
+  if(insert_result.second)
+    insert(insert_result.first->second.object_map,evse);
+
+  return insert_result;
+
+}
+
 void value_sett::get_value_set(
   const exprt &expr,
   value_setst::valuest &dest,
@@ -1008,18 +1027,9 @@ void value_sett::get_value_set_rec(
       new_ext_set.extend_access_path(newentry);
       new_ext_set.type()=field_type.subtype();
 
-      std::string basename=new_ext_set.get_access_path_basename();
-      std::string entryname=basename+access_path_suffix;
-        
-      entryt entry(basename,access_path_suffix);
-
       // TODO: figure out how to do this sort of on-demand-insert
       // without such ugly const hacking:
-      auto insert_result=const_cast<valuest&>(values).
-        insert(std::make_pair(irep_idt(entryname),entry));
-
-      if(insert_result.second)
-        insert(insert_result.first->second.object_map,new_ext_set);
+      auto insert_result=(const_cast<value_sett*>(this))->init_external_value_set(new_ext_set);
 
       make_union(dest,insert_result.first->second.object_map);
       

@@ -6,6 +6,7 @@
 #include <util/suffix.h>
 #include <util/string2int.h>
 #include <util/arith_tools.h>
+#include <util/std_expr.h>
 #include <goto-programs/remove_returns.h>
 
 #include <algorithm>
@@ -106,6 +107,7 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
 
   auto& valuesets=static_cast<value_set_domaint&>(state).value_set;
   std::map<exprt, value_sett::object_mapt> pre_call_rhs_value_sets;
+  const std::string external_objects_basename="external_objects";
 
   for(const auto& assignment : call_summary.field_assignments)
   {
@@ -117,13 +119,16 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
     if(assignment.second.id()=="external-value-set")
     {
       auto& evse=to_external_value_set(assignment.second);
-      if(to_constant_expr(evse.label()).get_value()=="external_objects")
+      if(to_constant_expr(evse.label()).get_value()==external_objects_basename)
       {
         std::vector<value_sett::entryt*> rhs_entries;
-        get_all_field_value_sets(
-          id2string(to_external_value_set(assignment.second).access_path_back().label()),
-          valuesets,
-          rhs_entries);
+        // Force creation of a corresponding external set in this domain, representing
+        // objects that existing before *this* functions is entered:
+        valuesets.init_external_value_set(evse);
+        std::string suffix=
+          id2string(
+            to_external_value_set(assignment.second).access_path_back().label());
+        get_all_field_value_sets(suffix,valuesets,rhs_entries);
         for(const auto& rhs_entry : rhs_entries)
           valuesets.make_union(rhs_map,rhs_entry->object_map);
       }
@@ -171,7 +176,6 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
   }
 
   // OK, read all the RHS sets, now assign to the LHS symbols:
-  const std::string external_objects_basename="external_objects";
   
   for(const auto& assignment : call_summary.field_assignments)
   {
@@ -180,6 +184,13 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
     if(assignment.first.basename==external_objects_basename)
     {
       std::vector<value_sett::entryt*> lhs_entries;
+      // Force creation of an external-value-set object representing the case
+      // where our callee writes to objects created before *this* function was entered.
+      constant_exprt basename_expr(external_objects_basename,string_typet());
+      external_value_set_exprt new_evse(assignment.second.type(),basename_expr,
+                                        LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET,false);
+      new_evse.extend_access_path(access_path_entry_exprt(assignment.first.fieldname,"",""));
+      valuesets.init_external_value_set(new_evse);
       get_all_field_value_sets(assignment.first.fieldname,valuesets,lhs_entries);
       for(auto lhs_entry : lhs_entries)
         valuesets.make_union(lhs_entry->object_map,rhs_values);
@@ -347,8 +358,17 @@ void lvsaa_single_external_set_summaryt::from_final_state(
 	toexport=&toexport->op0();
 
       bool export_this_expr=false;
-      if(toexport->id()=="external-value-set" && to_external_value_set(*toexport).is_modified())
-	export_this_expr=true;
+      if(toexport->id()=="external-value-set")
+      {
+        // The is_modified tag is only used for the case where an ext-value-set
+        // is written to another one, to disambiguate the case of some_ext.x = some_ext.x
+        // (with possible side-effects) from the case where it some_ext.x is read-only.
+        // Otherwise the tag is meaningless and the entry should always be exported.
+        if(to_external_value_set(*toexport).is_modified())
+          export_this_expr=true;
+        else if(!has_prefix(id2string(entry.first),"external_objects"))
+          export_this_expr=true;
+      }
       else if(toexport->id()==ID_dynamic_object)
       {
 	mp_integer object_number;

@@ -17,6 +17,7 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "object_numbering.h"
 #include "value_sets.h"
+#include "external_value_set_expr.h"
 
 class namespacet;
 
@@ -203,7 +204,10 @@ public:
     object_mapt &dest,
     const namespacet &ns,
     bool is_simplified) const;
- 
+
+  std::pair<valuest::iterator,bool> init_external_value_set(
+    const external_value_set_exprt& evse);
+  
 protected:
   void get_value_set_rec(
     const exprt &expr,
@@ -244,6 +248,7 @@ protected:
     const exprt &src, 
     const irep_idt &component_name,
     const namespacet &ns);
+
 };
 
 #endif
