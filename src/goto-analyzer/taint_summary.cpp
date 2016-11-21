@@ -23,6 +23,7 @@ This module defines interfaces and functionality for taint summaries.
 #include <util/file_util.h>
 #include <util/msgstream.h>
 #include <util/string2int.h>
+#include <util/parameter_indices.h>
 #include <analyses/ai.h>
 #include <vector>
 #include <algorithm>
@@ -100,6 +101,10 @@ static void  initialise_domain(
           collect_access_paths(asgn.rhs(),ns,environment);*/
         }
       }
+      else if (it->type == ASSERT)
+      {
+	collect_lvsa_access_paths(it->guard,ns,environment,*lvsa,it,taint_object_numbering);
+      }
       else if (it->type == FUNCTION_CALL)
       {
         code_function_callt const&  fn_call = to_code_function_call(it->code);
@@ -109,28 +114,6 @@ static void  initialise_domain(
               as_string(to_symbol_expr(fn_call.function()).get_identifier());
 
           auto const&  fn_type = functions_map.at(callee_ident).type;
-
-          /* // TODO: this loop should be returned back!
-          for (exprt const&  arg : fn_call.arguments())
-          {
-            set_of_access_pathst  paths;
-            collect_access_paths(arg,ns,paths);
-            for (auto const&  path : paths)
-              if (!is_pure_local(path,ns) &&
-                  !is_return_value_auxiliary(path,ns) &&
-                  !is_this(path,ns))
-                environment.insert(taint_object_numbering.number(
-                      scope_translation(
-                          path,
-                          callee_ident,
-                          function_id,
-                          fn_call,
-                          fn_type,
-                          ns
-                          )
-                      ));
-          }
-          //*/
 
           taint_summary_ptrt const  summary =
               database.find<taint_summaryt>(callee_ident);
@@ -367,7 +350,6 @@ void expand_external_objects(taint_numbered_lvalues_sett& lvalue_set,
   for(const auto& key : new_keys)
     lvalue_set.insert(key);
 }
-  
 
 /*******************************************************************\
 
@@ -401,12 +383,7 @@ static void  build_symbols_substitution(
     *log << "<p>Building 'symbols substitution map':</p>\n"
             "<ul>\n";
 
-  std::unordered_map<std::string,std::size_t>  parameter_indices;
-  for (std::size_t  i = 0UL; i != fn_type.parameters().size(); ++i)
-    parameter_indices.insert({
-          as_string(fn_type.parameters().at(i).get_identifier()),
-          i
-          });
+  auto parameter_indices=get_parameter_indices(fn_type);
 
   std::string const  callee_ident =
       as_string(to_symbol_expr(fn_call.function()).get_identifier());
@@ -920,13 +897,18 @@ static exprt transform_external_objects(const exprt& e)
 }
 
 static void collect_lvsa_access_paths(
-  exprt const& e,
+  exprt const& querye_in,
   namespacet const& ns,
   taint_numbered_lvalues_sett& result,
   local_value_set_analysist& lvsa,
   instruction_iteratort const& instit,
   object_numberingt& taint_object_numbering)
 {
+  const exprt* querye=&querye_in;
+  while(querye->id()==ID_typecast)
+    querye=&querye->op0();
+  const exprt& e = *querye;
+  
   if(e.id()==ID_symbol ||
      e.id()==ID_index ||
      e.id()==ID_member ||
@@ -1431,7 +1413,29 @@ std::string  taint_summaryt::description() const noexcept
   return "Function summary of taint analysis of java web applications.";
 }
 
-
+static void populate_formals_to_actuals(
+    local_value_set_analysist& lvsa,
+    const irep_idt& fname,
+    const goto_programt& prog,
+    const namespacet& ns,
+    object_numberingt& taint_object_numbering,
+    formals_to_actuals_mapt& formals_to_actuals)
+{
+  for(auto instit=prog.instructions.begin(),instend=prog.instructions.end();
+      instit!=instend; ++instit)
+  {
+    if(instit->type!=FUNCTION_CALL)
+      continue;
+    auto& actuals=formals_to_actuals[{fname,instit}];
+    const auto& fcall=to_code_function_call(instit->code);
+    for(const auto& arg : fcall.arguments())
+    {
+      actuals.push_back({});
+      collect_lvsa_access_paths(arg,ns,actuals.back(),lvsa,instit,taint_object_numbering);
+      std::cout << "Function " << fname << " call " << from_expr(ns,"",instit->code) << " has " << actuals.back().size() << " actuals\n";
+    }
+  }
+}
 
 void  taint_summarise_all_functions(
     goto_modelt const&  instrumented_program,
@@ -1442,6 +1446,7 @@ void  taint_summarise_all_functions(
         taint_spec_names,
     taint_object_numbering_per_functiont&  taint_object_numbering,
     object_numbers_by_field_per_functiont&  object_numbers_by_field,
+    formals_to_actuals_mapt& formals_to_actuals,
     message_handlert&  msg,
     double  timeout,
     std::ostream* const  log
@@ -1524,6 +1529,7 @@ void  taint_summarise_all_functions(
               taint_spec_names,
               taint_object_numbering[as_string(fn_name)],
               object_numbers_by_field[as_string(fn_name)],
+	      formals_to_actuals,
               msg,
               log
               ),
@@ -1565,6 +1571,7 @@ taint_summary_ptrt  taint_summarise_function(
         taint_spec_names,
     object_numberingt&  taint_object_numbering,
     object_numbers_by_fieldnamet&  object_numbers_by_field,
+    formals_to_actuals_mapt& formals_to_actuals,
     message_handlert& msg,
     std::ostream* const  log
     )
@@ -1601,6 +1608,9 @@ taint_summary_ptrt  taint_summarise_function(
     // Retain this summary for use analysing callers.
     lvsainst.save_summary(fn_iter->second.body);
   }
+
+  populate_formals_to_actuals(lvsainst,fn_iter->first,fn_iter->second.body,
+			      ns,taint_object_numbering,formals_to_actuals);
 
   taint_statisticst::instance().end_lvsa_analysis_of_function(
         lvsainst.nsteps,

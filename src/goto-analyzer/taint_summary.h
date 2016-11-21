@@ -334,6 +334,11 @@ typedef std::map<irep_idt,std::set<unsigned> > object_numbers_by_fieldnamet;
 typedef std::unordered_map<std::string,object_numbers_by_fieldnamet>
         object_numbers_by_field_per_functiont;
 
+// A map from <function, instruction> (a callsite) to parameter number to actual arguments,
+// expressed as indices into the caller's object numbering map (object_numberingt)
+typedef std::map<std::pair<irep_idt, instruction_iteratort>, std::vector<std::set<unsigned> > >
+  formals_to_actuals_mapt;
+
 
 /*******************************************************************\
 
@@ -356,6 +361,7 @@ void  taint_summarise_all_functions(
         taint_spec_names,
     taint_object_numbering_per_functiont&  taint_object_numbering,
     object_numbers_by_field_per_functiont&  object_numbers_by_field,
+    formals_to_actuals_mapt&,
     message_handlert&  msg,
     double  timeout = 60.0,
     std::ostream* const  log = nullptr
@@ -383,6 +389,7 @@ taint_summary_ptrt  taint_summarise_function(
         taint_spec_names,
     object_numberingt&  taint_object_numbering,
     object_numbers_by_fieldnamet&  object_numbers_by_field,
+    formals_to_actuals_mapt&,    
     message_handlert&  msg,
     std::ostream* const  log = nullptr
     );

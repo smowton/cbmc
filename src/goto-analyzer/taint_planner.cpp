@@ -534,6 +534,7 @@ std::string  taint_plannert::compute_summaries(
       object_numberingt  taint_object_numbering;
       object_numbers_by_fieldnamet  object_numbers_by_field;
 
+      // TODO: reintroduce or just delete this
       summary_database->insert({
           as_string(fn_name),
           taint_summarise_function(

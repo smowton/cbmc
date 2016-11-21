@@ -60,8 +60,6 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-analyzer/taint_summary_libmodels.h>
 #include <goto-analyzer/taint_summary_dump.h>
 #include <goto-analyzer/taint_summary_json.h>
-#include <goto-analyzer/taint_planner.h>
-#include <goto-analyzer/taint_planner_dump.h>
 #include <goto-analyzer/taint_trace_recogniser.h>
 #include <goto-analyzer/taint_trace_dump.h>
 
@@ -298,6 +296,7 @@ Function: do_taint_analysis
 It performs the whole taint analysis. The planner has already read the initial plan.
 
 \*******************************************************************/
+/*
 int  do_taint_analysis(
   goto_modelt&  program,
   jsont& plan,
@@ -367,6 +366,7 @@ int  do_taint_analysis(
 
   return 1;
 }
+*/
 
 /*******************************************************************\
 
@@ -413,6 +413,7 @@ int goto_analyzer_parse_optionst::doit()
 
   // Hack for entry point set in a taint-analysis plan (must set 'main' before
   // main frontend parsers are run)
+  /*
   jsont taint_analysis_plan;
   if(cmdline.isset("taint-analysis"))
   {
@@ -424,6 +425,7 @@ int goto_analyzer_parse_optionst::doit()
     cmdline.set("function",entry_point);
     config.main=entry_point;
   }
+  */
 
   if(goto_model(cmdline.args))
     return 6;
@@ -435,9 +437,11 @@ int goto_analyzer_parse_optionst::doit()
 
   if (cmdline.isset("run-pointsto-temp-analyser"))
     return run_pointsto_temp_analyser(goto_model,cmdline,get_message_handler());
+  /*
   else if (cmdline.isset("taint-analysis"))
     return do_taint_analysis(goto_model,taint_analysis_plan,cmdline,
                              get_message_handler());
+  */
   else if(cmdline.isset("taint"))
   {
     std::string taint_file=cmdline.get_value("taint");
@@ -539,7 +543,7 @@ int goto_analyzer_parse_optionst::doit()
 
       taint_object_numbering_per_functiont  taint_object_numbering;
       object_numbers_by_field_per_functiont  object_numbers_by_field;
-
+      formals_to_actuals_mapt formals_to_actuals;
 
       if(fname=="")
       {
@@ -551,6 +555,7 @@ int goto_analyzer_parse_optionst::doit()
               taint_spec_names,
               taint_object_numbering,
               object_numbers_by_field,
+	      formals_to_actuals,
               get_message_handler(),
               timeout,
               cmdline.isset("taint-dump-log") ? &log : nullptr
@@ -566,6 +571,7 @@ int goto_analyzer_parse_optionst::doit()
               taint_spec_names,
               taint_object_numbering[fname],
               object_numbers_by_field[fname],
+	      formals_to_actuals,
               get_message_handler(),
               cmdline.isset("taint-dump-log") ? &log : nullptr
               );
@@ -585,6 +591,7 @@ int goto_analyzer_parse_optionst::doit()
             taint_sinks,
             taint_object_numbering,
             object_numbers_by_field,
+	    formals_to_actuals,
             cmdline.isset("taint-dump-log") ? &log : nullptr
             );
 
