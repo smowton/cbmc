@@ -27,7 +27,7 @@ overlay_map() : base_map(0),removed_key_valid(false) {}
 
   const V& at(K key) const
   {
-    if(key==removed_key)
+    if(removed_key_valid && key==removed_key)
       throw "overlay_map::at against deleted key";
     else if(!base_map)
       return local_map.at(key);
