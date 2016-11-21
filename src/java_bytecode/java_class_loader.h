@@ -37,7 +37,6 @@ public:
   
   jar_poolt jar_pool;
 
-protected:
   class jar_map_entryt
   {
   public:
@@ -55,6 +54,8 @@ protected:
   typedef std::map<irep_idt, jar_map_entryt> jar_mapt;
   jar_mapt jar_map;
   
+protected:
+
   void read_jar_file(const irep_idt &);
 
   // get a parse tree for given class
