@@ -1706,14 +1706,19 @@ taint_summary_ptrt  taint_summarise_function(
           old_dst_value,ns,taint_object_numbering,{}/*TODO*/,*log);
 	}
 
-        if(inst_predecessors.at(dst_instr_it).size()==1)
+        // First instruction is a loop head in this case,
+        // since callers are also predecessors.
+        if(dst_instr_it!=function.body.instructions.begin() &&
+           inst_predecessors.at(dst_instr_it).size()==1)
         {
           dst_value=std::move(transformed);
           if(dst_value.map_depth()>=10)
             dst_value.flatten();
         }
         else
+        {
           dst_value=join(transformed,old_dst_value);
+        }
 
 	if (log != nullptr)
 	{
