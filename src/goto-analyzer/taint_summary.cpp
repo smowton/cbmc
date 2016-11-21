@@ -1423,7 +1423,6 @@ static void populate_formals_to_actuals(
     {
       actuals.push_back({});
       collect_lvsa_access_paths(arg,ns,actuals.back(),lvsa,instit,taint_object_numbering);
-      std::cout << "Function " << fname << " call " << from_expr(ns,"",instit->code) << " has " << actuals.back().size() << " actuals\n";
     }
   }
 }
@@ -1708,7 +1707,11 @@ taint_summary_ptrt  taint_summarise_function(
 	}
 
         if(inst_predecessors.at(dst_instr_it).size()==1)
+        {
           dst_value=std::move(transformed);
+          if(dst_value.map_depth()>=10)
+            dst_value.flatten();
+        }
         else
           dst_value=join(transformed,old_dst_value);
 
