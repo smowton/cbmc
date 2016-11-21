@@ -74,7 +74,8 @@ static void  initialise_domain(
     local_value_set_analysist* lvsa,
     std::ostream* const  log,
     object_numberingt& taint_object_numbering,
-    object_numbers_by_fieldnamet& object_numbers_by_field
+    object_numbers_by_fieldnamet& object_numbers_by_field,
+    const std::map<goto_programt::const_targett, goto_programt::const_targetst>& inst_predecessors
     )
 {
   // TODO: Improve this to only count as inputs those values which may be read
@@ -177,16 +178,6 @@ static void  initialise_domain(
        ++it)
   {
     domain.insert({it,others_map});
-  }
-
-  std::map<goto_programt::const_targett, goto_programt::const_targetst> inst_predecessors;
-  for(auto it=function.body.instructions.cbegin(),itend=function.body.instructions.cend();
-      it!=itend;++it)
-  {
-    goto_programt::const_targetst succs;
-    function.body.get_successors(it,succs);
-    for(auto succit : succs)
-      inst_predecessors[succit].push_back(it);
   }
 
   // Now that all maps have been created, replace those with a unique predecessor
@@ -1628,6 +1619,17 @@ taint_summary_ptrt  taint_summarise_function(
 
   written_expressionst written_lvalues;
 
+  const auto& function=fn_iter->second;
+  std::map<goto_programt::const_targett, goto_programt::const_targetst> inst_predecessors;
+  for(auto it=function.body.instructions.cbegin(),itend=function.body.instructions.cend();
+      it!=itend;++it)
+  {
+    goto_programt::const_targetst succs;
+    function.body.get_successors(it,succs);
+    for(auto succit : succs)
+      inst_predecessors[succit].push_back(it);
+  }
+
   initialise_domain(
         function_id,
         fn_iter->second,
@@ -1639,7 +1641,8 @@ taint_summary_ptrt  taint_summarise_function(
         lvsa,
         log,
 	taint_object_numbering,
-	object_numbers_by_field
+	object_numbers_by_field,
+        inst_predecessors
         );
 
   auto  input =
@@ -1681,6 +1684,7 @@ taint_summary_ptrt  taint_summarise_function(
         instruction_iteratort const  dst_instr_it = *succ_it;
         auto&  dst_value =
             domain.at(dst_instr_it);
+
         auto const  old_dst_value = dst_value;
 
 	if (log != nullptr)
@@ -1703,7 +1707,10 @@ taint_summary_ptrt  taint_summarise_function(
           old_dst_value,ns,taint_object_numbering,{}/*TODO*/,*log);
 	}
 
-        dst_value = join(transformed,old_dst_value);
+        if(inst_predecessors.at(dst_instr_it).size()==1)
+          dst_value=std::move(transformed);
+        else
+          dst_value=join(transformed,old_dst_value);
 
 	if (log != nullptr)
 	{
