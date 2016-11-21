@@ -23,6 +23,15 @@ src/ansi-c/gcc_builtin_headers_power.inc
 src/util/irep_ids.h
 src/util/irep_ids.inc
 
+# regression evaluation binaries
+regression/december_demo_sprint/goto-analyzer/openjdk-8-rt.jar-unpacked/*
+regression/december_demo_sprint/goto-analyzer/openjdk-8-rt.jar-unpacked-PRUNED/*
+regression/december_demo_sprint/goto-analyzer/temp/*
+regression/december_demo_sprint/Openolat/BENCHMARK/*
+regression/december_demo_sprint/Openolat/APP/Openolat/*
+regression/december_demo_sprint/Sakai/BENCHMARK/*
+regression/december_demo_sprint/Sakai/APP/Sakai/*
+
 # regression/test files
 *.out
 regression/ansi-c/tests.log
