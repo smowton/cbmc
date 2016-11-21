@@ -67,6 +67,7 @@ public:
   
 protected:
   irep_idt main_class;
+  std::vector<irep_idt> main_jar_classes;
   java_class_loadert java_class_loader;
   bool assume_inputs_non_null;
   bool disable_runtime_checks;

@@ -27,7 +27,7 @@ overlay_map() : base_map(0),removed_key_valid(false) {}
 
   const V& at(K key) const
   {
-    if(key==removed_key)
+    if(removed_key_valid && key==removed_key)
       throw "overlay_map::at against deleted key";
     else if(!base_map)
       return local_map.at(key);
@@ -234,9 +234,12 @@ overlay_map() : base_map(0),removed_key_valid(false) {}
       if(basemapitp)
       {
 	auto& basemapit=*basemapitp;
-	if((!basemapit.is_end()) &&
-	   (localmapit==localmapend || basemapit->first<localmapit->first))
-	  return *basemapit;
+	if(!basemapit.is_end())
+        {
+          const auto& baseentry=*basemapit;
+          if(localmapit==localmapend || baseentry.first<localmapit->first)
+            return baseentry;
+        }
       }
       return *localmapit;
     }
@@ -363,6 +366,17 @@ overlay_map() : base_map(0),removed_key_valid(false) {}
   }
 
   size_t map_depth() const { return 1 + (base_map ? base_map->map_depth() : 0); }
+
+  void flatten()
+  {
+    // If this is an overlay map, flatten the base map into the local and unref it.
+    if(!base_map)
+      return;
+    overlay_map<K,V> flattened;
+    for(const auto& kv : *this)
+      flattened.insert(kv);
+    *this=std::move(flattened);        
+  }
 
 };
 
