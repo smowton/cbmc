@@ -122,15 +122,15 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
       if(to_constant_expr(evse.label()).get_value()==external_objects_basename)
       {
         std::vector<value_sett::entryt*> rhs_entries;
-        // Force creation of a corresponding external set in this domain, representing
-        // objects that existing before *this* functions is entered:
-        valuesets.init_external_value_set(evse);
         std::string suffix=
           id2string(
             to_external_value_set(assignment.second).access_path_back().label());
         get_all_field_value_sets(suffix,valuesets,rhs_entries);
         for(const auto& rhs_entry : rhs_entries)
           valuesets.make_union(rhs_map,rhs_entry->object_map);
+        // Also add the external set itself, representing the possibility that the read
+        // comes from outside *this* function as well:
+        valuesets.insert(rhs_map,evse);
       }
       else {
         // This should be an external value set assigned to initialise some global or parameter.
@@ -184,13 +184,11 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
     if(assignment.first.basename==external_objects_basename)
     {
       std::vector<value_sett::entryt*> lhs_entries;
-      // Force creation of an external-value-set object representing the case
-      // where our callee writes to objects created before *this* function was entered.
-      constant_exprt basename_expr(external_objects_basename,string_typet());
-      external_value_set_exprt new_evse(assignment.second.type(),basename_expr,
-                                        LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET,false);
-      new_evse.extend_access_path(access_path_entry_exprt(assignment.first.fieldname,"",""));
-      valuesets.init_external_value_set(new_evse);
+      // Also assign to the external set itself, representing a write to an object
+      // outside this scope:
+      value_sett::entryt entry(assignment.first.basename,assignment.first.fieldname);
+      auto wholename=assignment.first.basename+assignment.first.fieldname;
+      valuesets.values.insert({irep_idt(wholename),entry});      
       get_all_field_value_sets(assignment.first.fieldname,valuesets,lhs_entries);
       for(auto lhs_entry : lhs_entries)
         valuesets.make_union(lhs_entry->object_map,rhs_values);
