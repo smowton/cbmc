@@ -103,7 +103,9 @@ public:
     object_mapt object_map;
     idt identifier;
     std::string suffix;
-    
+    // Only used for external value set, giving
+    // the struct type this field belongs to, if suffix is a struct field.
+    typet declared_on_type;
     entryt()
     {
     }
@@ -113,6 +115,14 @@ public:
       suffix(_suffix)
     {
     }
+
+    entryt(const idt &_identifier, const std::string &_suffix, const typet& _type):
+      identifier(_identifier),
+      suffix(_suffix),
+      declared_on_type(_type)
+    {
+    }
+    
   };
   
   typedef std::set<exprt> expr_sett;

@@ -1,6 +1,8 @@
 #ifndef EXTERNAL_VALUE_SET_H
 #define EXTERNAL_VALUE_SET_H
 
+#include <util/std_expr.h>
+
 // An access path entry, indicating that an external object was accessed using e.g.
 // member-x--of-dereference (represented "->x") at function f location (instruction offset) z.
 
@@ -12,16 +14,18 @@ class access_path_entry_exprt : public exprt
   inline access_path_entry_exprt():exprt("access-path-entry") {}
   inline access_path_entry_exprt(const irep_idt& label,
                                  const irep_idt& function,
-                                 const irep_idt& loc)
+                                 const irep_idt& loc,
+				 const typet& declared_on_type)
     :exprt("access-path-entry")
   {
     set_label(label);
     set("access-path-function", function);
     set("access-path-loc", loc);
+    add("declared-on-type", declared_on_type);
   }
 
  static access_path_entry_exprt get_loop_tag() {
-   return access_path_entry_exprt(ACCESS_PATH_LOOP_TAG, "", "");
+   return access_path_entry_exprt(ACCESS_PATH_LOOP_TAG, "", "", typet());
  }
   
   inline irep_idt label() const { return get("access-path-label"); }
@@ -29,6 +33,10 @@ class access_path_entry_exprt : public exprt
   inline irep_idt function() const { return get("access-path-function"); }
   inline irep_idt loc() const { return get("access-path-loc"); }
   inline bool is_loop() const { return label()==ACCESS_PATH_LOOP_TAG; }
+  inline const typet& declared_on_type() const
+  {
+    return static_cast<const typet&>(find("declared-on-type"));
+  }
 };
 
 static inline access_path_entry_exprt& to_access_path_entry(exprt& e) {
@@ -104,10 +112,22 @@ class external_value_set_exprt : public exprt
       ret+=id2string(access_path_entry(i).label());
     return ret;
   }
-  std::string get_access_path_basename() const
+
+  std::string type_to_basename(const typet& type) const
+  {
+    if(type.id()!=ID_struct)
+      return "";
+    std::string tag=id2string(to_struct_type(type).get_tag());
+    for(auto& c : tag)
+      if(c=='.')
+	c='_';
+    return '_'+tag;
+  }
+  
+  std::string get_access_path_basename(const typet& declared_on_type) const
   {
     if(analysis_mode()==LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET)
-      return "external_objects";    
+      return "external_objects"+type_to_basename(declared_on_type);    
     assert(access_path_size()!=0);
     std::string ret=id2string(to_constant_expr(label()).get_value());
     for(size_t i=0,ilim=access_path_size()-1; i!=ilim; ++i)

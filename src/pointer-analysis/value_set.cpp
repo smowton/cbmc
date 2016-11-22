@@ -465,7 +465,7 @@ void value_sett::get_value_set(
 }
 
 static const typet& type_from_suffix(
-  const typet& original_type, const std::string& suffix, const namespacet& ns)
+  const typet& original_type, const std::string& suffix, const namespacet& ns, typet& parent_type)
 {
   const typet* ret=&original_type;
   size_t next_member=1;
@@ -500,6 +500,7 @@ static const typet& type_from_suffix(
 	member.resize(member.size()-2);
 	++derefs;
       }
+      parent_type=*ret;
       ret=&to_struct_union_type(*ret).get_component(member).type();
       for(; derefs!=0; --derefs)
       {
@@ -994,7 +995,8 @@ void value_sett::get_value_set_rec(
     // It points to another external value set representing an access path;
     // if it hasn't been initialised yet, do so now.
 
-    const typet& field_type=type_from_suffix(expr.type(),suffix,ns);
+    typet declared_on_type;
+    const typet& field_type=type_from_suffix(expr.type(),suffix,ns,declared_on_type);
     if(field_type.id()==ID_pointer)
     {
 
@@ -1003,15 +1005,16 @@ void value_sett::get_value_set_rec(
         "[]" :
         suffix;
       const auto& extinit=to_external_value_set(expr);
-      access_path_entry_exprt newentry(access_path_suffix,function,i2string(location_number));
+      access_path_entry_exprt newentry(access_path_suffix,function,
+				       i2string(location_number),declared_on_type);
       external_value_set_exprt new_ext_set=extinit;
       new_ext_set.extend_access_path(newentry);
       new_ext_set.type()=field_type.subtype();
 
-      std::string basename=new_ext_set.get_access_path_basename();
+      std::string basename=new_ext_set.get_access_path_basename(declared_on_type);
       std::string entryname=basename+access_path_suffix;
         
-      entryt entry(basename,access_path_suffix);
+      entryt entry(basename,access_path_suffix,declared_on_type);
 
       // TODO: figure out how to do this sort of on-demand-insert
       // without such ugly const hacking:
@@ -1600,8 +1603,10 @@ void value_sett::assign_rec(
   if(lhs.id()==ID_symbol)
   {
     const irep_idt &identifier=to_symbol_expr(lhs).get_identifier();
-    
-    entryt &e=get_entry(entryt(identifier, suffix), lhs.type(), ns);
+
+    typet declared_on_type;
+    type_from_suffix(lhs.type(),suffix,ns,declared_on_type);
+    entryt &e=get_entry(entryt(identifier, suffix, declared_on_type), lhs.type(), ns);
     
     if(add_to_sets)
       make_union(e.object_map, values_rhs);
@@ -1616,8 +1621,10 @@ void value_sett::assign_rec(
     const std::string name=
       "value_set::dynamic_object"+
       dynamic_object.instance().get_string(ID_value);
-      
-    entryt &e=get_entry(entryt(name, suffix), lhs.type(), ns);
+
+    typet declared_on_type;
+    type_from_suffix(lhs.type(),suffix,ns,declared_on_type);
+    entryt &e=get_entry(entryt(name, suffix, declared_on_type), lhs.type(), ns);
 
     make_union(e.object_map, values_rhs);
   }
@@ -1625,19 +1632,21 @@ void value_sett::assign_rec(
   {
     // Write through an opaque external value set.
     const auto& evsi=to_external_value_set(lhs);
-    const typet& field_type=type_from_suffix(lhs.type(),suffix,ns);
+    typet declared_on_type;
+    const typet& field_type=type_from_suffix(lhs.type(),suffix,ns,declared_on_type);
     std::string access_path_suffix=
       suffix == "" ?
       "[]" :
       suffix;
-    access_path_entry_exprt newentry(access_path_suffix,function,i2string(location_number));
+    access_path_entry_exprt newentry(access_path_suffix,function,
+				     i2string(location_number),declared_on_type);
     external_value_set_exprt new_ext_set=evsi;
     new_ext_set.extend_access_path(newentry);
     
-    const std::string basename=new_ext_set.get_access_path_basename();
+    const std::string basename=new_ext_set.get_access_path_basename(declared_on_type);
     std::string entryname=basename+access_path_suffix;
     
-    entryt entry(basename,access_path_suffix);
+    entryt entry(basename,access_path_suffix,declared_on_type);
 
     auto insert_result=const_cast<valuest&>(values).
       insert(std::make_pair(irep_idt(entryname),entry));
