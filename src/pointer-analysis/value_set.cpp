@@ -465,8 +465,13 @@ void value_sett::get_value_set(
 }
 
 static const typet& type_from_suffix(
-  const typet& original_type, const std::string& suffix, const namespacet& ns, typet& parent_type)
+  const typet& original_type,
+  const std::string& suffix,
+  const namespacet& ns,
+  typet& parent_type,
+  std::string& suffix_without_subtypes)
 {
+  suffix_without_subtypes=suffix;
   const typet* ret=&original_type;
   size_t next_member=1;
   while(next_member<suffix.size())
@@ -487,6 +492,7 @@ static const typet& type_from_suffix(
       assert(has_infix(suffix,subclass_name,next_member));
       ret=&subclass_comp.type();
       next_member+=(subclass_name.size()+1);
+      suffix_without_subtypes=suffix.substr(next_member-1);
     }
     else
     {
@@ -996,14 +1002,16 @@ void value_sett::get_value_set_rec(
     // if it hasn't been initialised yet, do so now.
 
     typet declared_on_type;
-    const typet& field_type=type_from_suffix(expr.type(),suffix,ns,declared_on_type);
+    std::string suffix_without_subtype;
+    const typet& field_type=type_from_suffix(expr.type(),suffix,ns,
+					     declared_on_type,suffix_without_subtype);
     if(field_type.id()==ID_pointer)
     {
 
       std::string access_path_suffix=
-        suffix == "" ?
+        suffix_without_subtype == "" ?
         "[]" :
-        suffix;
+        suffix_without_subtype;
       const auto& extinit=to_external_value_set(expr);
       access_path_entry_exprt newentry(access_path_suffix,function,
 				       i2string(location_number),declared_on_type);
@@ -1605,7 +1613,8 @@ void value_sett::assign_rec(
     const irep_idt &identifier=to_symbol_expr(lhs).get_identifier();
 
     typet declared_on_type;
-    type_from_suffix(lhs.type(),suffix,ns,declared_on_type);
+    std::string suffix_without_subtype_ignored;
+    type_from_suffix(lhs.type(),suffix,ns,declared_on_type,suffix_without_subtype_ignored);
     entryt &e=get_entry(entryt(identifier, suffix, declared_on_type), lhs.type(), ns);
     
     if(add_to_sets)
@@ -1623,7 +1632,8 @@ void value_sett::assign_rec(
       dynamic_object.instance().get_string(ID_value);
 
     typet declared_on_type;
-    type_from_suffix(lhs.type(),suffix,ns,declared_on_type);
+    std::string suffix_without_subtype_ignored;
+    type_from_suffix(lhs.type(),suffix,ns,declared_on_type,suffix_without_subtype_ignored);
     entryt &e=get_entry(entryt(name, suffix, declared_on_type), lhs.type(), ns);
 
     make_union(e.object_map, values_rhs);
@@ -1633,11 +1643,13 @@ void value_sett::assign_rec(
     // Write through an opaque external value set.
     const auto& evsi=to_external_value_set(lhs);
     typet declared_on_type;
-    const typet& field_type=type_from_suffix(lhs.type(),suffix,ns,declared_on_type);
+    std::string suffix_without_subtype;
+    const typet& field_type=type_from_suffix(lhs.type(),suffix,ns,
+					     declared_on_type,suffix_without_subtype);
     std::string access_path_suffix=
-      suffix == "" ?
+      suffix_without_subtype == "" ?
       "[]" :
-      suffix;
+      suffix_without_subtype;
     access_path_entry_exprt newentry(access_path_suffix,function,
 				     i2string(location_number),declared_on_type);
     external_value_set_exprt new_ext_set=evsi;
