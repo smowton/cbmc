@@ -1,0 +1,26 @@
+[
+  {
+    "id": "source_0_X1",
+    "kind": "source",
+    "where": "return_value",
+    "taint": "X1",
+    "function": "Other.source"
+  },
+  {
+    "id": "sink_0_X1",
+    "kind": "sanitizer",
+    "where": "return_value",
+    "taint": "X1",
+    "function": "Main.taint_sanitiser_X1_retval",
+    "message": "sanitize(X1)"
+  },
+  {
+    "id": "sink_0_X1",
+    "kind": "sink",
+    "where": "parameter1",
+    "taint": "X1",
+    "function": "Main.taint_sink_X1_arg_0",
+    "message": "sink(X1)"
+  }
+]
+

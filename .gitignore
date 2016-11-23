@@ -24,13 +24,37 @@ src/util/irep_ids.h
 src/util/irep_ids.inc
 
 # regression evaluation binaries
-regression/december_demo_sprint/goto-analyzer/openjdk-8-rt.jar-unpacked/*
-regression/december_demo_sprint/goto-analyzer/openjdk-8-rt.jar-unpacked-PRUNED/*
+regression/december_demo_sprint/goto-analyzer/.idea/*
+regression/december_demo_sprint/goto-analyzer/scripts/*.class
+regression/december_demo_sprint/goto-analyzer/data/openjdk-8-rt.jar-unpacked/*
+regression/december_demo_sprint/goto-analyzer/data/openjdk-8-rt.jar-unpacked-PRUNED/*
 regression/december_demo_sprint/goto-analyzer/temp/*
-regression/december_demo_sprint/Openolat/BENCHMARK/*
+regression/december_demo_sprint/TRAINING/taint_traces_01/APP/taint_traces_01/classes/*
+regression/december_demo_sprint/TRAINING/taint_traces_01/BENCHMARK/*
+regression/december_demo_sprint/TRAINING/taint_traces_01/BENCHMARK_EXT/*
+regression/december_demo_sprint/TRAINING/taint_traces_01/RESULTS/*
+regression/december_demo_sprint/TRAINING/taint_traces_02/APP/taint_traces_02/classes/*
+regression/december_demo_sprint/TRAINING/taint_traces_02/BENCHMARK/*
+regression/december_demo_sprint/TRAINING/taint_traces_02/BENCHMARK_EXT/*
+regression/december_demo_sprint/TRAINING/taint_traces_02/RESULTS/*
+regression/december_demo_sprint/TRAINING/taint_traces_03/APP/taint_traces_03/classes/*
+regression/december_demo_sprint/TRAINING/taint_traces_03/BENCHMARK/*
+regression/december_demo_sprint/TRAINING/taint_traces_03/BENCHMARK_EXT/*
+regression/december_demo_sprint/TRAINING/taint_traces_03/RESULTS/*
+regression/december_demo_sprint/TRAINING/taint_traces_04/APP/taint_traces_04/classes/*
+regression/december_demo_sprint/TRAINING/taint_traces_04/BENCHMARK/*
+regression/december_demo_sprint/TRAINING/taint_traces_04/BENCHMARK_EXT/*
+regression/december_demo_sprint/TRAINING/taint_traces_04/RESULTS/*
+regression/december_demo_sprint/TRAINING/taint_traces_05/APP/taint_traces_05/classes/*
+regression/december_demo_sprint/TRAINING/taint_traces_05/BENCHMARK/*
+regression/december_demo_sprint/TRAINING/taint_traces_05/BENCHMARK_EXT/*
+regression/december_demo_sprint/TRAINING/taint_traces_01/RESULTS/*
 regression/december_demo_sprint/Openolat/APP/Openolat/*
-regression/december_demo_sprint/Sakai/BENCHMARK/*
+regression/december_demo_sprint/Openolat/BENCHMARK/*
+regression/december_demo_sprint/Openolat/BENCHMARK_EXT/*
 regression/december_demo_sprint/Sakai/APP/Sakai/*
+regression/december_demo_sprint/Sakai/BENCHMARK/*
+regression/december_demo_sprint/Sakai/BENCHMARK_EXT/*
 
 # regression/test files
 *.out

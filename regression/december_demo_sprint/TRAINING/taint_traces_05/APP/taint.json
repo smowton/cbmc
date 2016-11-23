@@ -1,0 +1,18 @@
+[
+  {
+    "id": "my_source",
+    "kind": "source",
+    "where": "return_value",
+    "taint": "X1",
+    "function": "TaintSource.get_tainted_int"
+  },
+  {
+    "id": "my_sink",
+    "kind": "sink",
+    "where": "parameter1",
+    "taint": "X1",
+    "function": "TaintSink.receive_taint",
+    "message": "Unescaped HTML written to DAO"
+  }
+]
+
