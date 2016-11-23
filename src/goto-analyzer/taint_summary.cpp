@@ -864,7 +864,7 @@ static exprt transform_external_objects(const exprt& e)
     // Note this means we use externals("x") to mean "any x field" whereas LVSA uses it to mean
     // deref(any x field)
     auto evs_copy=to_external_value_set(get_underlying_object(e));
-    access_path_entry_exprt new_entry("."+id2string(to_member_expr(e).get_component_name()),"","");
+    access_path_entry_exprt new_entry("."+id2string(to_member_expr(e).get_component_name()),"","",typet());
     evs_copy.extend_access_path(new_entry);
     evs_copy.label()=constant_exprt("external_objects",string_typet());
     evs_copy.type()=e.type();
@@ -876,7 +876,7 @@ static exprt transform_external_objects(const exprt& e)
     // Similarly, deref(any external), without a member operator, is assumed to be an array access,
     // and is rewritten to (any array)
     auto evs_copy=to_external_value_set(e);
-    access_path_entry_exprt new_entry("[]","","");
+    access_path_entry_exprt new_entry("[]","","",typet());
     evs_copy.extend_access_path(new_entry);
     evs_copy.label()=constant_exprt("external_objects",string_typet());
     evs_copy.type()=e.type();

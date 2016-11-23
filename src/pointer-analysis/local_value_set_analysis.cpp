@@ -76,6 +76,7 @@ void local_value_set_analysist::initialize(const goto_programt& fun)
 
 static void get_all_field_value_sets(
   const std::string& fieldname,
+  const typet& declared_on_type,
   value_sett& state,
   std::vector<value_sett::entryt*>& entrylist)
 {
@@ -84,7 +85,15 @@ static void get_all_field_value_sets(
   for(auto& entry : state.values)
   {
     if(entry.second.suffix==fieldname)
-      entrylist.push_back(&entry.second);
+    {
+      bool include_this=false;
+      if(declared_on_type.id()==ID_nil)
+	include_this=true;
+      else if(entry.second.declared_on_type==declared_on_type)
+	include_this=true;
+      if(include_this)
+	entrylist.push_back(&entry.second);
+    }
   }
 }
 
@@ -119,13 +128,16 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
     if(assignment.second.id()=="external-value-set")
     {
       auto& evse=to_external_value_set(assignment.second);
-      if(to_constant_expr(evse.label()).get_value()==external_objects_basename)
+      if(has_prefix(id2string(to_constant_expr(evse.label()).get_value()),"external_objects"))
       {
         std::vector<value_sett::entryt*> rhs_entries;
-        std::string suffix=
-          id2string(
-            to_external_value_set(assignment.second).access_path_back().label());
-        get_all_field_value_sets(suffix,valuesets,rhs_entries);
+	const auto& evse=to_external_value_set(assignment.second);
+	const auto& apback=evse.access_path_back();
+        get_all_field_value_sets(
+          id2string(apback.label()),
+	  apback.declared_on_type(),
+          valuesets,
+          rhs_entries);
         for(const auto& rhs_entry : rhs_entries)
           valuesets.make_union(rhs_map,rhs_entry->object_map);
         // Also add the external set itself, representing the possibility that the read
@@ -176,20 +188,24 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
   }
 
   // OK, read all the RHS sets, now assign to the LHS symbols:
+  const std::string external_objects_basename_prefix="external_objects";
   
   for(const auto& assignment : call_summary.field_assignments)
   {
     const auto& rhs_values=pre_call_rhs_value_sets.at(assignment.second);
     
-    if(assignment.first.basename==external_objects_basename)
+    if(has_prefix(assignment.first.basename,external_objects_basename_prefix))
     {
       std::vector<value_sett::entryt*> lhs_entries;
       // Also assign to the external set itself, representing a write to an object
       // outside this scope:
-      value_sett::entryt entry(assignment.first.basename,assignment.first.fieldname);
+      value_sett::entryt entry(assignment.first.basename,
+                               assignment.first.fieldname,
+                               assignment.first.declared_on_type);
       auto wholename=assignment.first.basename+assignment.first.fieldname;
       valuesets.values.insert({irep_idt(wholename),entry});      
-      get_all_field_value_sets(assignment.first.fieldname,valuesets,lhs_entries);
+      get_all_field_value_sets(assignment.first.fieldname,assignment.first.declared_on_type,
+			       valuesets,lhs_entries);
       for(auto lhs_entry : lhs_entries)
         valuesets.make_union(lhs_entry->object_map,rhs_values);
     }
@@ -381,7 +397,9 @@ void lvsaa_single_external_set_summaryt::from_final_state(
       if(!export_this_expr)
 	continue;
 	
-      struct fieldname thisname = {id2string(entry.second.identifier), entry.second.suffix};
+      struct fieldname thisname = {id2string(entry.second.identifier),
+				   entry.second.suffix,
+				   entry.second.declared_on_type};
       field_assignments.push_back(std::make_pair(thisname,*toexport));
     }
   }

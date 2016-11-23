@@ -424,8 +424,9 @@ std::pair<value_sett::valuest::iterator,bool>
 value_sett::init_external_value_set(const external_value_set_exprt& evse)
 {
 
-  std::string basename=evse.get_access_path_basename();
-  std::string access_path_suffix=id2string(evse.access_path_back().label());
+  const auto& apback=evse.access_path_back();
+  std::string basename=evse.get_access_path_basename(apback.declared_on_type());
+  std::string access_path_suffix=id2string(apback.label());
   std::string entryname=basename+access_path_suffix;
         
   entryt entry(basename,access_path_suffix);
@@ -484,8 +485,13 @@ void value_sett::get_value_set(
 }
 
 static const typet& type_from_suffix(
-  const typet& original_type, const std::string& suffix, const namespacet& ns)
+  const typet& original_type,
+  const std::string& suffix,
+  const namespacet& ns,
+  typet& parent_type,
+  std::string& suffix_without_subtypes)
 {
+  suffix_without_subtypes=suffix;
   const typet* ret=&original_type;
   size_t next_member=1;
   while(next_member<suffix.size())
@@ -506,6 +512,7 @@ static const typet& type_from_suffix(
       assert(has_infix(suffix,subclass_name,next_member));
       ret=&subclass_comp.type();
       next_member+=(subclass_name.size()+1);
+      suffix_without_subtypes=suffix.substr(next_member-1);
     }
     else
     {
@@ -519,6 +526,7 @@ static const typet& type_from_suffix(
 	member.resize(member.size()-2);
 	++derefs;
       }
+      parent_type=*ret;
       ret=&to_struct_union_type(*ret).get_component(member).type();
       for(; derefs!=0; --derefs)
       {
@@ -1013,16 +1021,20 @@ void value_sett::get_value_set_rec(
     // It points to another external value set representing an access path;
     // if it hasn't been initialised yet, do so now.
 
-    const typet& field_type=type_from_suffix(expr.type(),suffix,ns);
+    typet declared_on_type;
+    std::string suffix_without_subtype;
+    const typet& field_type=type_from_suffix(expr.type(),suffix,ns,
+					     declared_on_type,suffix_without_subtype);
     if(field_type.id()==ID_pointer)
     {
 
       std::string access_path_suffix=
-        suffix == "" ?
+        suffix_without_subtype == "" ?
         "[]" :
-        suffix;
+        suffix_without_subtype;
       const auto& extinit=to_external_value_set(expr);
-      access_path_entry_exprt newentry(access_path_suffix,function,i2string(location_number));
+      access_path_entry_exprt newentry(access_path_suffix,function,
+				       i2string(location_number),declared_on_type);
       external_value_set_exprt new_ext_set=extinit;
       new_ext_set.extend_access_path(newentry);
       new_ext_set.type()=field_type.subtype();
@@ -1610,8 +1622,11 @@ void value_sett::assign_rec(
   if(lhs.id()==ID_symbol)
   {
     const irep_idt &identifier=to_symbol_expr(lhs).get_identifier();
-    
-    entryt &e=get_entry(entryt(identifier, suffix), lhs.type(), ns);
+
+    typet declared_on_type;
+    std::string suffix_without_subtype_ignored;
+    type_from_suffix(lhs.type(),suffix,ns,declared_on_type,suffix_without_subtype_ignored);
+    entryt &e=get_entry(entryt(identifier, suffix, declared_on_type), lhs.type(), ns);
     
     if(add_to_sets)
       make_union(e.object_map, values_rhs);
@@ -1626,8 +1641,11 @@ void value_sett::assign_rec(
     const std::string name=
       "value_set::dynamic_object"+
       dynamic_object.instance().get_string(ID_value);
-      
-    entryt &e=get_entry(entryt(name, suffix), lhs.type(), ns);
+
+    typet declared_on_type;
+    std::string suffix_without_subtype_ignored;
+    type_from_suffix(lhs.type(),suffix,ns,declared_on_type,suffix_without_subtype_ignored);
+    entryt &e=get_entry(entryt(name, suffix, declared_on_type), lhs.type(), ns);
 
     make_union(e.object_map, values_rhs);
   }
@@ -1635,19 +1653,23 @@ void value_sett::assign_rec(
   {
     // Write through an opaque external value set.
     const auto& evsi=to_external_value_set(lhs);
-    const typet& field_type=type_from_suffix(lhs.type(),suffix,ns);
+    typet declared_on_type;
+    std::string suffix_without_subtype;
+    const typet& field_type=type_from_suffix(lhs.type(),suffix,ns,
+					     declared_on_type,suffix_without_subtype);
     std::string access_path_suffix=
-      suffix == "" ?
+      suffix_without_subtype == "" ?
       "[]" :
-      suffix;
-    access_path_entry_exprt newentry(access_path_suffix,function,i2string(location_number));
+      suffix_without_subtype;
+    access_path_entry_exprt newentry(access_path_suffix,function,
+				     i2string(location_number),declared_on_type);
     external_value_set_exprt new_ext_set=evsi;
     new_ext_set.extend_access_path(newentry);
     
-    const std::string basename=new_ext_set.get_access_path_basename();
+    const std::string basename=new_ext_set.get_access_path_basename(declared_on_type);
     std::string entryname=basename+access_path_suffix;
     
-    entryt entry(basename,access_path_suffix);
+    entryt entry(basename,access_path_suffix,declared_on_type);
 
     auto insert_result=const_cast<valuest&>(values).
       insert(std::make_pair(irep_idt(entryname),entry));
