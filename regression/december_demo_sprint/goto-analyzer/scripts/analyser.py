@@ -28,7 +28,7 @@ def exists_java_script():
 
 def build_java_script():
     old_cwd = os.getcwd()
-    os.chdir(__get_my_dir() + "/scripts")
+    os.chdir(__get_my_dir())
     os.system("ant")
     os.chdir(old_cwd)
 

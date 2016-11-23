@@ -35,7 +35,7 @@ def unpack_war_file(war_file,unpack_dir):
     os.chdir(unpack_dir)
     os.system(
         "jar "
-        "xvf " +
+        "xf " +
         war_file
         )
     os.chdir(old_cwd)
@@ -50,8 +50,8 @@ def build_class_files_hierarchy(app_build_dir,out_root_dir,temp_dir):
                     os.path.join(temp_dir,"__diffblue_full_class_name_parser__.class"))
     old_cwd = os.getcwd()
     os.chdir(temp_dir)
-    prefixes = []
-    failed = []
+    # prefixes = []
+    # failed = []
     clss = {}
     collect_class_files(app_build_dir,clss)
     for fname in clss.keys():
@@ -68,21 +68,26 @@ def build_class_files_hierarchy(app_build_dir,out_root_dir,temp_dir):
                 with open(os.path.splitext(fname)[0] + ".CLASSNAME.txt", "r") as full_name_file:
                     class_packages_path = full_name_file.read().replace('\n', '')
             if len(class_packages_path) == 0:
-                failed.append(os.path.abspath(os.path.join(fdir,fname)))
+                print("FAIL: " + os.path.abspath(os.path.join(fdir,fname)))
+            # failed.append(os.path.abspath(os.path.join(fdir,fname)))
             else:
-                prefixes.append(os.path.abspath(os.path.join(fdir,class_packages_path)))
-                class_dst_dir = os.path.abspath(os.path.join(out_root_dir,class_packages_path))
+                last_slash_pos = max(class_packages_path.rfind("/"),class_packages_path.rfind("\\"))
+                if last_slash_pos == -1:
+                    last_slash_pos = 0
+                pure_packages_path = class_packages_path[:last_slash_pos]
+                # prefixes.append(os.path.abspath(os.path.join(fdir,pure_packages_path)))
+                class_dst_dir = os.path.abspath(os.path.join(out_root_dir,pure_packages_path))
                 if not os.path.exists(class_dst_dir):
                     os.makedirs(class_dst_dir)
                 shutil.copyfile(os.path.join(fdir,fname),os.path.join(class_dst_dir,fname))
-    common_prefix = os.path.commonprefix(prefixes)
-    for fail in failed:
-        fail_common_prefix = os.path.commonprefix([fail,common_prefix])
-        print("FAIL: " + fail)
-        print("FAIL prefix: " + fail_common_prefix)
-        fixed = os.path.abspath(os.path.join(out_root_dir,fail[len(fail_common_prefix):]))
-        print("FIXED: " + fixed)
-        shutil.copyfile(fail, fixed)
+    # common_prefix = os.path.commonprefix(prefixes)
+    # for fail in failed:
+    #     fail_common_prefix = os.path.commonprefix([fail,common_prefix])
+    #     print("FAIL: " + fail)
+    #     print("FAIL prefix: " + fail_common_prefix)
+    #     fixed = os.path.abspath(os.path.join(out_root_dir,fail[len(fail_common_prefix):]))
+    #     print("FIXED: " + fixed)
+    #     shutil.copyfile(fail, fixed)
     os.chdir(old_cwd)
 
 
@@ -92,7 +97,7 @@ def pack_classes_to_jar(classes_dir,dst_file):
     old_cwd = os.getcwd()
     os.chdir(classes_dir)
     os.system(
-        "jar cvf \""
+        "jar cf \""
         + dst_file + "\" ."
         )
     os.chdir(old_cwd)
@@ -120,30 +125,31 @@ def build_jars_configuration(binaries_dir,temp_dir):
             war_tmp_root = os.path.join(temp_dir,fname + "." + str(temp_dirs_counter))
             temp_dirs_counter = temp_dirs_counter + 1
 
-            print("Unpacking " + war_file)
+            print("  Processing WAR file: " + war_file)
+            print("    Unpacking...")
             unpack_dir = war_tmp_root + ".UNPACK.dir"
             unpack_war_file(war_file,unpack_dir)
 
-            print("Collecting JAR files...")
+            print("    Collecting JARs...")
             collect_jar_files(unpack_dir, jars)
 
-            print("Copying class files...")
+            print("    Copying classes...")
             class_dir = war_tmp_root + ".CLASSES.dir"
             class_temp_dir = war_tmp_root + ".TEMP.dir"
             build_class_files_hierarchy(unpack_dir,class_dir,class_temp_dir)
 
             root_jar_fname = war_tmp_root + ".PACK.dir/" + os.path.splitext(fname)[0] + ".jar"
-            print("Packing classes to JAR file " + root_jar_fname)
+            print("    Packing classes: " + root_jar_fname)
             pack_classes_to_jar(class_dir,root_jar_fname)
             root_jars.append(root_jar_fname)
     collect_jar_files(binaries_dir,jars)
 
-    print("Saving config file 'jars.json'...")
-    config = { "wars": root_jars, "jars": [] }
+    print("  Saving config file 'jars.json'.")
+    config = { "wars": sorted(root_jars), "jars": [] }
     for fname in jars.keys():
         for fdir in jars[fname]:
             config["jars"].append(os.path.abspath(os.path.join(fdir,fname)))
-
+    config["jars"] = sorted(config["jars"])
     config_file_pathname = os.path.abspath(os.path.join(temp_dir,"jars.json"))
     config_file = open(config_file_pathname, "w")
     config_file.write(json.dumps(config,sort_keys=True,indent=4))
