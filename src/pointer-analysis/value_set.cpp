@@ -429,7 +429,7 @@ value_sett::init_external_value_set(const external_value_set_exprt& evse)
   std::string access_path_suffix=id2string(apback.label());
   std::string entryname=basename+access_path_suffix;
         
-  entryt entry(basename,access_path_suffix);
+  entryt entry(basename,access_path_suffix,apback.declared_on_type());
 
   auto insert_result=values.insert(std::make_pair(irep_idt(entryname),entry));
 

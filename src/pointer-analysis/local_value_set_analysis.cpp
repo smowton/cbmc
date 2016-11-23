@@ -116,7 +116,7 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
 
   auto& valuesets=static_cast<value_set_domaint&>(state).value_set;
   std::map<exprt, value_sett::object_mapt> pre_call_rhs_value_sets;
-  const std::string external_objects_basename="external_objects";
+  const std::string external_objects_basename_prefix="external_objects";
 
   for(const auto& assignment : call_summary.field_assignments)
   {
@@ -133,6 +133,7 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
         std::vector<value_sett::entryt*> rhs_entries;
 	const auto& evse=to_external_value_set(assignment.second);
 	const auto& apback=evse.access_path_back();
+        
         get_all_field_value_sets(
           id2string(apback.label()),
 	  apback.declared_on_type(),
@@ -188,7 +189,6 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
   }
 
   // OK, read all the RHS sets, now assign to the LHS symbols:
-  const std::string external_objects_basename_prefix="external_objects";
   
   for(const auto& assignment : call_summary.field_assignments)
   {
@@ -199,11 +199,14 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
       std::vector<value_sett::entryt*> lhs_entries;
       // Also assign to the external set itself, representing a write to an object
       // outside this scope:
-      value_sett::entryt entry(assignment.first.basename,
-                               assignment.first.fieldname,
-                               assignment.first.declared_on_type);
-      auto wholename=assignment.first.basename+assignment.first.fieldname;
-      valuesets.values.insert({irep_idt(wholename),entry});      
+      const auto& first_rhs_expr=value_sett::object_numbering[rhs_values.read().begin()->first];
+      constant_exprt initial_evse_label(assignment.first.basename,string_typet());
+      external_value_set_exprt initial_evse(first_rhs_expr.type(),initial_evse_label,
+                                            LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET,false);
+      access_path_entry_exprt initial_ape(assignment.first.fieldname,"","",
+                                          assignment.first.declared_on_type);
+      initial_evse.extend_access_path(initial_ape);
+      valuesets.init_external_value_set(initial_evse);
       get_all_field_value_sets(assignment.first.fieldname,assignment.first.declared_on_type,
 			       valuesets,lhs_entries);
       for(auto lhs_entry : lhs_entries)
