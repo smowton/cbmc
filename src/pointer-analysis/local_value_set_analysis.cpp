@@ -86,6 +86,9 @@ static void get_all_field_value_sets(
   {
     if(entry.second.suffix==fieldname)
     {
+      // Never conflate two different ext-val-sets this way:
+      if(has_prefix(id2string(entry.first),"external_objects"))
+        continue;
       bool include_this=false;
       if(declared_on_type.id()==ID_nil)
 	include_this=true;
@@ -199,9 +202,23 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
       std::vector<value_sett::entryt*> lhs_entries;
       // Also assign to the external set itself, representing a write to an object
       // outside this scope:
-      const auto& first_rhs_expr=value_sett::object_numbering[rhs_values.read().begin()->first];
+      typet rhs_type;
+      for(const auto& v : rhs_values.read())
+      {
+        const auto& e=value_sett::object_numbering[v.first];
+        if(e.type()!=typet())
+        {
+          rhs_type=e.type();
+          break;
+        }
+      }
+      // If all assignments were unknown-object tokens then we have no information
+      // about this LHS here:
+      if(rhs_type==typet())
+        continue;
+      assert(rhs_type!=typet());
       constant_exprt initial_evse_label(assignment.first.basename,string_typet());
-      external_value_set_exprt initial_evse(first_rhs_expr.type(),initial_evse_label,
+      external_value_set_exprt initial_evse(rhs_type,initial_evse_label,
                                             LOCAL_VALUE_SET_ANALYSIS_SINGLE_EXTERNAL_SET,false);
       access_path_entry_exprt initial_ape(assignment.first.fieldname,"","",
                                           assignment.first.declared_on_type);
@@ -209,6 +226,9 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
       valuesets.init_external_value_set(initial_evse);
       get_all_field_value_sets(assignment.first.fieldname,assignment.first.declared_on_type,
 			       valuesets,lhs_entries);
+      // Also write to the external value set itself:
+      lhs_entries.push_back(&valuesets.values.at(
+        assignment.first.basename+assignment.first.fieldname));
       for(auto lhs_entry : lhs_entries)
         valuesets.make_union(lhs_entry->object_map,rhs_values);
     }
