@@ -24,9 +24,11 @@ def parse_cmd_line():
     parser.add_argument("-S", "--sources-dir", type=str,
                          help="A root directory of source code of the analysed Java web application.")
     parser.add_argument("-B", "--binaries-dir", type=str,
-                         help="A root directory of built binaries (WAR/JAR/CLASS files) of the analysed Java web application.")
+                         help="A root directory of built binaries (WAR/JAR/CLASS files) of the analysed Java web "
+                              "application.")
     parser.add_argument("-T", "--temp-dir", type=str,
-                         help="A directory which the analyser may use for creating, deleting, writing, and reading temporary files.")
+                         help="A directory which the analyser may use for creating, deleting, writing, and reading "
+                              "temporary files.")
     parser.add_argument("-R", "--results-dir", type=str,
                          help="A directory into which all results from the analysis will be stored.")
     parser.add_argument("--rebuild", action="store_true",
@@ -89,7 +91,7 @@ def __main():
 
     overall_perf = {}
 
-    if cmdline.rebuild is not None:
+    if cmdline.rebuild:
         if os.path.exists(cmdline.temp_dir):
             print("Deleting " + cmdline.temp_dir)
             shutil.rmtree(cmdline.temp_dir)
@@ -109,8 +111,33 @@ def __main():
         print("Building configuration of JAR files to analyse:")
         scripts.mkbench.build_jars_configuration(cmdline.binaries_dir,cmdline.temp_dir)
 
-    print("Starting 'goto-analyser' on TODO!")
+    jars_cfg_fname = os.path.abspath(os.path.join(cmdline.temp_dir,"jars.json"))
+    print("Loading config file " + jars_cfg_fname)
+    jars_cfg_file = open(jars_cfg_fname, "r")
+    jars_cfg = json.load(jars_cfg_file)
+    jars_cfg_file.close()
 
+    roots_cfg_fname = os.path.abspath(os.path.join(cmdline.spec_dir,"roots.json"))
+    if not os.path.exists(roots_cfg_fname):
+        print("ERROR: The root-functions config file does not exist: " + roots_cfg_fname)
+        print("Analysis was stopped.")
+        return
+    print("Loading root-functions config file " + roots_cfg_fname)
+    roots_cfg_file = open(roots_cfg_fname, "r")
+    roots_fn_list = json.load(roots_cfg_file)
+    roots_cfg_file.close()
+
+    taint_json_fname = os.path.abspath(os.path.join(cmdline.spec_dir,"taint.json"))
+    dirs_counter = 0
+    for root_fn in roots_fn_list:
+        root_jar = scripts.analyser.find_jar_containing_root_function(root_fn,jars_cfg)
+        if len(root_jar) == 0:
+            print("ERROR: The root function '" + root_fn + "' does not appear in any of the JAR files. Skipping this "
+                                                           "configuration.")
+        else:
+            results_dir = os.path.abspath(os.path.join(cmdline.results_dir,
+                                                       root_fn + "." + str(dirs_counter) + ".RESULTS.dir"))
+            scripts.analyser.run_goto_analyser(root_fn,root_jar,jars_cfg,taint_json_fname,results_dir)
 
     print("Saving results into directory: " + cmdline.results_dir)
     if not os.path.exists(cmdline.results_dir):

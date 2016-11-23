@@ -61,7 +61,7 @@ regression/december_demo_sprint/Openolat/RESULTS.aux/*
 regression/december_demo_sprint/Sakai/APP/Sakai/*
 regression/december_demo_sprint/Sakai/BENCHMARK/*
 regression/december_demo_sprint/Sakai/BENCHMARK_EXT/*
-regression/december_demo_sprint/Openolat/RESULTS.aux/*
+regression/december_demo_sprint/Sakai/RESULTS.aux/*
 
 # regression/test files
 *.out
