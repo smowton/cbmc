@@ -51,7 +51,7 @@ def __main():
         if cmdline.temp_dir is None:
             cmdline.temp_dir = os.path.abspath(os.path.join(cmdline.evaluation_dir,"BENCHMARK_EXT"))
         if cmdline.results_dir is None:
-            cmdline.results_dir = os.path.abspath(os.path.join(cmdline.evaluation_dir, "RESULTS"))
+            cmdline.results_dir = os.path.abspath(os.path.join(cmdline.evaluation_dir, "RESULTS.aux"))
 
     if cmdline.spec_dir is None:
         print("ERROR: Directory containing specification files was not specified.")
