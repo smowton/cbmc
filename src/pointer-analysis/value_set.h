@@ -39,6 +39,7 @@ public:
   // TODO: figure out a less awful way to get configuration state into value-set.
   static bool use_malloc_type;
   static bool use_dead_statements;
+  static bool keep_identical_structs;
 
   typedef irep_idt idt;
   
@@ -165,6 +166,8 @@ public:
   
   // true = added s.th. new
   bool make_union(object_mapt &dest, const object_mapt &src) const;
+
+  void make_union_adjusting_evs_types(object_mapt &dest, const object_mapt &src, const typet&) const;  
 
   // true = added s.th. new
   bool make_union(const valuest &new_values);

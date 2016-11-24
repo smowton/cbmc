@@ -12,6 +12,7 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <util/symbol_table.h>
 #include <util/simplify_expr.h>
+#include <util/simplify_expr_class.h>
 #include <util/expr_util.h>
 #include <util/base_type.h>
 #include <util/std_expr.h>
@@ -316,6 +317,30 @@ bool value_sett::make_union(const value_sett::valuest &new_values)
   return result;
 }
 
+void value_sett::make_union_adjusting_evs_types(
+  object_mapt& dest,
+  const object_mapt& src,
+  const typet& new_evs_type) const
+{
+  for(const auto& num : src.read())
+  {
+    const auto& e=object_numbering[num.first];
+    const exprt* underlying=&e;
+    while(underlying->id()==ID_member)
+      underlying=&underlying->op0();
+    if(underlying->id()=="external-value-set")
+    {
+      external_value_set_exprt evse_copy=to_external_value_set(*underlying);
+      evse_copy.type()=new_evs_type;
+      insert(dest,evse_copy,num.second);
+    }
+    else
+    {
+      insert(dest,num.first,num.second);
+    }
+  }
+}
+
 /*******************************************************************\
 
 Function: value_sett::make_union
@@ -479,7 +504,12 @@ void value_sett::get_value_set(
   bool is_simplified) const
 {
   exprt tmp(expr);
-  if(!is_simplified) simplify(tmp, ns);
+  if(!is_simplified)
+  {
+    simplify_exprt s(ns);
+    s.keep_identical_structs=keep_identical_structs;
+    s.simplify(tmp);
+  }
 
   get_value_set_rec(tmp, dest, "", tmp.type(), ns);
 }
@@ -733,22 +763,8 @@ void value_sett::get_value_set_rec(
       // pointer-to-pointer -- we just ignore these
       object_mapt tmp;
       get_value_set_rec(expr.op0(), tmp, suffix, original_type, ns);
-      // ...except to fix up the types of external objects as they pass through:
-      for(const auto& num : tmp.read())
-      {
-        const auto& e=object_numbering[num.first];
-	const exprt* underlying=&e;
-	while(underlying->id()==ID_member)
-	  underlying=&underlying->op0();
-        if(underlying->id()=="external-value-set")
-        {
-          external_value_set_exprt evse_copy=to_external_value_set(*underlying);
-          evse_copy.type()=expr.type().subtype();
-          insert(dest,evse_copy,num.second);
-        }
-        else
-          insert(dest,num.first,num.second);
-      }
+      // ...except to fix up the types of external objects as they pass through:      
+      make_union_adjusting_evs_types(dest,tmp,expr.type().subtype());
     }
     else if(op_type.id()==ID_unsignedbv ||
             op_type.id()==ID_signedbv)
@@ -1038,7 +1054,7 @@ void value_sett::get_value_set_rec(
       external_value_set_exprt new_ext_set=extinit;
       new_ext_set.extend_access_path(newentry);
       new_ext_set.type()=field_type.subtype();
-
+      
       // TODO: figure out how to do this sort of on-demand-insert
       // without such ugly const hacking:
       auto insert_result=(const_cast<value_sett*>(this))->init_external_value_set(new_ext_set);
@@ -1490,8 +1506,55 @@ void value_sett::assign(
     // basic type
     object_mapt values_rhs;
     get_value_set(rhs, values_rhs, ns, is_simplified);
+
+    // Special case: if an ext-val-set with modified=false is written,
+    // set modified=true before inserting, to represent the fact that
+    // <some external>.x = <some external>.x might have a side-effect if
+    // the two externals differ, and generally differentiates an
+    // initialiser from an external set that has been read from somewhere
+    // and then written.
+
+    std::vector<std::pair<unsigned, exprt> > replacements;
+    for(const auto& obj : values_rhs.read())
+    {
+      const exprt& objexpr=object_numbering[obj.first];
+      if(objexpr.id()=="external-value-set")
+      {
+        external_value_set_exprt mod(
+          to_external_value_set(objexpr).as_modified());
+        replacements.push_back({obj.first,mod});
+      }
+    }
+
+    for(const auto& kv : replacements)
+    {
+      values_rhs.write().erase(kv.first);
+      insert(values_rhs,kv.second);
+    }
+
+#if 0
+    // Check that external-value-set types are being properly adjusted:
+    for(const auto& kv : values_rhs.read())
+    {
+      const auto& rhs_expr=value_sett::object_numbering[kv.first];
+      if(lhs.type().id()==ID_pointer &&
+         rhs_expr.id()=="external-value-set" &&
+         ns.follow(rhs_expr.type())!=ns.follow(lhs.type().subtype()) &&
+         rhs_expr.type()!=void_typet() &&
+         lhs.type().subtype()!=void_typet())
+      {
+        for(const auto& kv : values_rhs.read())
+        {
+          const auto& rhs_expr=value_sett::object_numbering[kv.first];
+          std::cout << "RHS: " << from_expr(ns,"",rhs_expr) << "\n";
+        }
+        assert(false);
+      }
+    }
+#endif
     
     assign_rec(lhs, values_rhs, "", ns, add_to_sets);
+    
   }
 }
 
@@ -1680,24 +1743,6 @@ void value_sett::assign_rec(
     {
       new_ext_set.type()=field_type.subtype();
       insert(lhs_entry.object_map,new_ext_set);
-    }
-
-    // Special case: if an ext-val-set with modified=false is written,
-    // set modified=true before inserting, to represent the fact that
-    // <some external>.x = <some external>.x might have a side-effect if
-    // the two externals differ.
-
-    for(const auto& obj : values_rhs.read())
-    {
-      const exprt& objexpr=object_numbering[obj.first];
-      if(objexpr.id()=="external-value-set")
-      {
-        external_value_set_exprt mod(
-          to_external_value_set(objexpr).as_modified());
-        insert(lhs_entry.object_map,mod,obj.second);
-      }
-      else
-        insert(lhs_entry.object_map,obj.first,obj.second);
     }
   }
   else if(lhs.id()==ID_dereference)
@@ -2124,3 +2169,4 @@ exprt value_sett::make_member(
 
 bool value_sett::use_malloc_type;
 bool value_sett::use_dead_statements;
+bool value_sett::keep_identical_structs;
