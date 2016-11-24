@@ -130,10 +130,10 @@ def __main():
     taint_json_fname = os.path.abspath(os.path.join(cmdline.spec_dir,"taint.json"))
     dirs_counter = 0
     for root_fn in roots_fn_list:
-        root_jar = scripts.analyser.find_jar_containing_root_function(root_fn,jars_cfg)
+        root_jar = scripts.analyser.find_jar_containing_root_function(root_fn,jars_cfg["wars"])
         if len(root_jar) == 0:
-            print("ERROR: The root function '" + root_fn + "' does not appear in any of the JAR files. Skipping this "
-                                                           "configuration.")
+            print("ERROR: The search for JAR file containing root function '" + root_fn + "' has FAILED."
+                  "Skipping this configuration.")
         else:
             results_dir = os.path.abspath(os.path.join(cmdline.results_dir,
                                                        root_fn + "." + str(dirs_counter) + ".RESULTS.dir"))
