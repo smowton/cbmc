@@ -12,6 +12,7 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <util/symbol_table.h>
 #include <util/simplify_expr.h>
+#include <util/simplify_expr_class.h>
 #include <util/expr_util.h>
 #include <util/base_type.h>
 #include <util/std_expr.h>
@@ -316,6 +317,30 @@ bool value_sett::make_union(const value_sett::valuest &new_values)
   return result;
 }
 
+void value_sett::make_union_adjusting_evs_types(
+  object_mapt& dest,
+  const object_mapt& src,
+  const typet& new_evs_type) const
+{
+  for(const auto& num : src.read())
+  {
+    const auto& e=object_numbering[num.first];
+    const exprt* underlying=&e;
+    while(underlying->id()==ID_member)
+      underlying=&underlying->op0();
+    if(underlying->id()=="external-value-set")
+    {
+      external_value_set_exprt evse_copy=to_external_value_set(*underlying);
+      evse_copy.type()=new_evs_type;
+      insert(dest,evse_copy,num.second);
+    }
+    else
+    {
+      insert(dest,num.first,num.second);
+    }
+  }
+}
+
 /*******************************************************************\
 
 Function: value_sett::make_union
@@ -420,6 +445,26 @@ Function: value_sett::get_value_set
 
 \*******************************************************************/
 
+std::pair<value_sett::valuest::iterator,bool>
+value_sett::init_external_value_set(const external_value_set_exprt& evse)
+{
+
+  const auto& apback=evse.access_path_back();
+  std::string basename=evse.get_access_path_basename(apback.declared_on_type());
+  std::string access_path_suffix=id2string(apback.label());
+  std::string entryname=basename+access_path_suffix;
+        
+  entryt entry(basename,access_path_suffix,apback.declared_on_type());
+
+  auto insert_result=values.insert(std::make_pair(irep_idt(entryname),entry));
+
+  if(insert_result.second)
+    insert(insert_result.first->second.object_map,evse);
+
+  return insert_result;
+
+}
+
 void value_sett::get_value_set(
   const exprt &expr,
   value_setst::valuest &dest,
@@ -459,14 +504,24 @@ void value_sett::get_value_set(
   bool is_simplified) const
 {
   exprt tmp(expr);
-  if(!is_simplified) simplify(tmp, ns);
+  if(!is_simplified)
+  {
+    simplify_exprt s(ns);
+    s.keep_identical_structs=keep_identical_structs;
+    s.simplify(tmp);
+  }
 
   get_value_set_rec(tmp, dest, "", tmp.type(), ns);
 }
 
 static const typet& type_from_suffix(
-  const typet& original_type, const std::string& suffix, const namespacet& ns)
+  const typet& original_type,
+  const std::string& suffix,
+  const namespacet& ns,
+  typet& parent_type,
+  std::string& suffix_without_subtypes)
 {
+  suffix_without_subtypes=suffix;
   const typet* ret=&original_type;
   size_t next_member=1;
   while(next_member<suffix.size())
@@ -487,6 +542,7 @@ static const typet& type_from_suffix(
       assert(has_infix(suffix,subclass_name,next_member));
       ret=&subclass_comp.type();
       next_member+=(subclass_name.size()+1);
+      suffix_without_subtypes=suffix.substr(next_member-1);
     }
     else
     {
@@ -500,6 +556,7 @@ static const typet& type_from_suffix(
 	member.resize(member.size()-2);
 	++derefs;
       }
+      parent_type=*ret;
       ret=&to_struct_union_type(*ret).get_component(member).type();
       for(; derefs!=0; --derefs)
       {
@@ -706,22 +763,8 @@ void value_sett::get_value_set_rec(
       // pointer-to-pointer -- we just ignore these
       object_mapt tmp;
       get_value_set_rec(expr.op0(), tmp, suffix, original_type, ns);
-      // ...except to fix up the types of external objects as they pass through:
-      for(const auto& num : tmp.read())
-      {
-        const auto& e=object_numbering[num.first];
-	const exprt* underlying=&e;
-	while(underlying->id()==ID_member)
-	  underlying=&underlying->op0();
-        if(underlying->id()=="external-value-set")
-        {
-          external_value_set_exprt evse_copy=to_external_value_set(*underlying);
-          evse_copy.type()=expr.type().subtype();
-          insert(dest,evse_copy,num.second);
-        }
-        else
-          insert(dest,num.first,num.second);
-      }
+      // ...except to fix up the types of external objects as they pass through:      
+      make_union_adjusting_evs_types(dest,tmp,expr.type().subtype());
     }
     else if(op_type.id()==ID_unsignedbv ||
             op_type.id()==ID_signedbv)
@@ -994,32 +1037,27 @@ void value_sett::get_value_set_rec(
     // It points to another external value set representing an access path;
     // if it hasn't been initialised yet, do so now.
 
-    const typet& field_type=type_from_suffix(expr.type(),suffix,ns);
+    typet declared_on_type;
+    std::string suffix_without_subtype;
+    const typet& field_type=type_from_suffix(expr.type(),suffix,ns,
+					     declared_on_type,suffix_without_subtype);
     if(field_type.id()==ID_pointer)
     {
 
       std::string access_path_suffix=
-        suffix == "" ?
+        suffix_without_subtype == "" ?
         "[]" :
-        suffix;
+        suffix_without_subtype;
       const auto& extinit=to_external_value_set(expr);
-      access_path_entry_exprt newentry(access_path_suffix,function,i2string(location_number));
+      access_path_entry_exprt newentry(access_path_suffix,function,
+				       i2string(location_number),declared_on_type);
       external_value_set_exprt new_ext_set=extinit;
       new_ext_set.extend_access_path(newentry);
       new_ext_set.type()=field_type.subtype();
-
-      std::string basename=new_ext_set.get_access_path_basename();
-      std::string entryname=basename+access_path_suffix;
-        
-      entryt entry(basename,access_path_suffix);
-
+      
       // TODO: figure out how to do this sort of on-demand-insert
       // without such ugly const hacking:
-      auto insert_result=const_cast<valuest&>(values).
-        insert(std::make_pair(irep_idt(entryname),entry));
-
-      if(insert_result.second)
-        insert(insert_result.first->second.object_map,new_ext_set);
+      auto insert_result=(const_cast<value_sett*>(this))->init_external_value_set(new_ext_set);
 
       make_union(dest,insert_result.first->second.object_map);
       
@@ -1468,8 +1506,55 @@ void value_sett::assign(
     // basic type
     object_mapt values_rhs;
     get_value_set(rhs, values_rhs, ns, is_simplified);
+
+    // Special case: if an ext-val-set with modified=false is written,
+    // set modified=true before inserting, to represent the fact that
+    // <some external>.x = <some external>.x might have a side-effect if
+    // the two externals differ, and generally differentiates an
+    // initialiser from an external set that has been read from somewhere
+    // and then written.
+
+    std::vector<std::pair<unsigned, exprt> > replacements;
+    for(const auto& obj : values_rhs.read())
+    {
+      const exprt& objexpr=object_numbering[obj.first];
+      if(objexpr.id()=="external-value-set")
+      {
+        external_value_set_exprt mod(
+          to_external_value_set(objexpr).as_modified());
+        replacements.push_back({obj.first,mod});
+      }
+    }
+
+    for(const auto& kv : replacements)
+    {
+      values_rhs.write().erase(kv.first);
+      insert(values_rhs,kv.second);
+    }
+
+#if 0
+    // Check that external-value-set types are being properly adjusted:
+    for(const auto& kv : values_rhs.read())
+    {
+      const auto& rhs_expr=value_sett::object_numbering[kv.first];
+      if(lhs.type().id()==ID_pointer &&
+         rhs_expr.id()=="external-value-set" &&
+         ns.follow(rhs_expr.type())!=ns.follow(lhs.type().subtype()) &&
+         rhs_expr.type()!=void_typet() &&
+         lhs.type().subtype()!=void_typet())
+      {
+        for(const auto& kv : values_rhs.read())
+        {
+          const auto& rhs_expr=value_sett::object_numbering[kv.first];
+          std::cout << "RHS: " << from_expr(ns,"",rhs_expr) << "\n";
+        }
+        assert(false);
+      }
+    }
+#endif
     
     assign_rec(lhs, values_rhs, "", ns, add_to_sets);
+    
   }
 }
 
@@ -1600,8 +1685,11 @@ void value_sett::assign_rec(
   if(lhs.id()==ID_symbol)
   {
     const irep_idt &identifier=to_symbol_expr(lhs).get_identifier();
-    
-    entryt &e=get_entry(entryt(identifier, suffix), lhs.type(), ns);
+
+    typet declared_on_type;
+    std::string suffix_without_subtype_ignored;
+    type_from_suffix(lhs.type(),suffix,ns,declared_on_type,suffix_without_subtype_ignored);
+    entryt &e=get_entry(entryt(identifier, suffix, declared_on_type), lhs.type(), ns);
     
     if(add_to_sets)
       make_union(e.object_map, values_rhs);
@@ -1616,8 +1704,11 @@ void value_sett::assign_rec(
     const std::string name=
       "value_set::dynamic_object"+
       dynamic_object.instance().get_string(ID_value);
-      
-    entryt &e=get_entry(entryt(name, suffix), lhs.type(), ns);
+
+    typet declared_on_type;
+    std::string suffix_without_subtype_ignored;
+    type_from_suffix(lhs.type(),suffix,ns,declared_on_type,suffix_without_subtype_ignored);
+    entryt &e=get_entry(entryt(name, suffix, declared_on_type), lhs.type(), ns);
 
     make_union(e.object_map, values_rhs);
   }
@@ -1625,19 +1716,23 @@ void value_sett::assign_rec(
   {
     // Write through an opaque external value set.
     const auto& evsi=to_external_value_set(lhs);
-    const typet& field_type=type_from_suffix(lhs.type(),suffix,ns);
+    typet declared_on_type;
+    std::string suffix_without_subtype;
+    const typet& field_type=type_from_suffix(lhs.type(),suffix,ns,
+					     declared_on_type,suffix_without_subtype);
     std::string access_path_suffix=
-      suffix == "" ?
+      suffix_without_subtype == "" ?
       "[]" :
-      suffix;
-    access_path_entry_exprt newentry(access_path_suffix,function,i2string(location_number));
+      suffix_without_subtype;
+    access_path_entry_exprt newentry(access_path_suffix,function,
+				     i2string(location_number),declared_on_type);
     external_value_set_exprt new_ext_set=evsi;
     new_ext_set.extend_access_path(newentry);
     
-    const std::string basename=new_ext_set.get_access_path_basename();
+    const std::string basename=new_ext_set.get_access_path_basename(declared_on_type);
     std::string entryname=basename+access_path_suffix;
     
-    entryt entry(basename,access_path_suffix);
+    entryt entry(basename,access_path_suffix,declared_on_type);
 
     auto insert_result=const_cast<valuest&>(values).
       insert(std::make_pair(irep_idt(entryname),entry));
@@ -1648,24 +1743,6 @@ void value_sett::assign_rec(
     {
       new_ext_set.type()=field_type.subtype();
       insert(lhs_entry.object_map,new_ext_set);
-    }
-
-    // Special case: if an ext-val-set with modified=false is written,
-    // set modified=true before inserting, to represent the fact that
-    // <some external>.x = <some external>.x might have a side-effect if
-    // the two externals differ.
-
-    for(const auto& obj : values_rhs.read())
-    {
-      const exprt& objexpr=object_numbering[obj.first];
-      if(objexpr.id()=="external-value-set")
-      {
-        external_value_set_exprt mod(
-          to_external_value_set(objexpr).as_modified());
-        insert(lhs_entry.object_map,mod,obj.second);
-      }
-      else
-        insert(lhs_entry.object_map,obj.first,obj.second);
     }
   }
   else if(lhs.id()==ID_dereference)
@@ -2092,3 +2169,4 @@ exprt value_sett::make_member(
 
 bool value_sett::use_malloc_type;
 bool value_sett::use_dead_statements;
+bool value_sett::keep_identical_structs;
