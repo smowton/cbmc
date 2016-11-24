@@ -53,7 +53,17 @@ def find_jar_containing_root_function(root_fn, jars_cfg):
     return ""
 
 
-def run_goto_analyser(root_fn,root_jar,jars_cfg,taint_json_file,results_dir):
+def run_goto_analyser(
+        root_fn,
+        root_jar,
+        jars_cfg,
+        taint_json_file,
+        timeout,
+        dump_html_summaries,
+        dump_html_statistics,
+        dump_html_traces,
+        results_dir
+        ):
     print("Starting 'goto-analyser' for root function: " + root_fn)
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
@@ -66,6 +76,22 @@ def run_goto_analyser(root_fn,root_jar,jars_cfg,taint_json_file,results_dir):
             classpath += ":" + os.path.relpath(jar, results_dir)
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
+
+    if dump_html_summaries:
+        dump_html_summaries_option = "--taint-dump-html-full-summaries"
+    else:
+        dump_html_summaries_option = ""
+
+    if dump_html_statistics:
+        dump_html_statistics_option = "--taint-dump-html-statistics"
+    else:
+        dump_html_statistics_option = ""
+
+    if dump_html_traces:
+        dump_html_traces = "--taint-dump-html-traces"
+    else:
+        dump_html_traces = ""
+
     old_cwd = os.getcwd()
     os.chdir(results_dir)
     command = (
@@ -74,14 +100,14 @@ def run_goto_analyser(root_fn,root_jar,jars_cfg,taint_json_file,results_dir):
         "--function '" + root_fn + "' "
         "--taint '" + os.path.relpath(taint_json_file,results_dir) + "' "
         "--summary-only "
-        "--taint-dump-html-full-summaries "
-        "--taint-dump-html-statistics "
-        "--taint-dump-html-traces "
-        "--taint-summaries-timeout-seconds 300 "
+        + dump_html_summaries_option + " "
+        + dump_html_statistics_option + " "
+        + dump_html_traces + " "
+        "--taint-summaries-timeout-seconds " + str(timeout) + " "
         "--verbosity 9 "
         "--classpath '" + classpath + "'"
         )
-    #print(command)
+    print(command)
     os.system(command)
     os.chdir(old_cwd)
     #os.remove(root_jar_copy)
