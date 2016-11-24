@@ -770,7 +770,8 @@ int goto_analyzer_parse_optionst::doit()
 	++processed;
 	if(fname=="_start")
 	  continue;
-        debug() << "LVSA: analysing " << fname << eom;
+        progress() << "LVSA: analysing " << fname
+                   << "[" << processed << "/" << total_funcs << "]" << eom;
         const auto& gf=goto_model.goto_functions.function_map.at(fname);
         if(!gf.body_available())
           continue;
@@ -783,8 +784,6 @@ int goto_analyzer_parse_optionst::doit()
           status() << "*** function " << fname << eom;
 	  show_value_sets(get_ui(), gf.body, value_set_analysis);
         }
-	else
-	  progress() << processed << "/" << total_funcs << " functions analysed" << eom;
         if(dbpath.size()!=0)
           value_set_analysis.save_summary(gf.body);
       }
