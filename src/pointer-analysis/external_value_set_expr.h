@@ -37,6 +37,11 @@ class access_path_entry_exprt : public exprt
   {
     return static_cast<const typet&>(find("declared-on-type"));
   }
+  inline void drop_loc()
+  {
+    set("access-path-function","");
+    set("access-path-loc","");
+  }
 };
 
 static inline access_path_entry_exprt& to_access_path_entry(exprt& e) {
@@ -154,10 +159,13 @@ class external_value_set_exprt : public exprt
     {
       // Any attempt to extend a path yields <all-externals>->fieldname
       label()=constant_exprt("external_objects",string_typet());
+      access_path_entry_exprt toadd=newentry;
+      // In this case entries created at different locations are not distinguished:
+      toadd.drop_loc();
       if(access_path_size()==0)
-        access_path_push_back(newentry);
+        access_path_push_back(toadd);
       else
-        replace_access_path_tail(newentry);
+        replace_access_path_tail(toadd);
     }
     else
     {
