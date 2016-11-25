@@ -11,7 +11,7 @@ Installation on Ubuntu:
 
 1. Install TortoiseHg (http://tortoisehg.bitbucket.org/)
 2. Use TortoiseHg to clone the OpenOlat source code from http://hg.openolat.org/openolat105/
-3. Open terminat in the directory ehere you cloned OpenOlat into and type there: mvn clean package
+3. Open terminal in the directory where you cloned OpenOlat into and type there: mvn clean package
 
 The resulting WAR file "openolat-lms-10.5-SNAPSHOT.war" is then located in the sub-directory: ./target
 
