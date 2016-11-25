@@ -1,5 +1,6 @@
 import os
 import shutil
+import time
 
 
 def __get_my_dir(): return os.path.dirname(os.path.realpath(__file__))
@@ -22,10 +23,13 @@ def exists_java_script():
 
 
 def build_java_script():
+    prof = { "duration": time.time() }
     old_cwd = os.getcwd()
     os.chdir(__get_my_dir())
     os.system("ant")
     os.chdir(old_cwd)
+    prof["duration"] = time.time() - prof["duration"]
+    return prof
 
 
 def exists_goto_analyser():
@@ -33,24 +37,31 @@ def exists_goto_analyser():
 
 
 def build_goto_analyser():
+    prof = { "duration": time.time() }
     old_current_dir = os.getcwd()
     os.chdir(__get_make_dir())
     os.system("make all")
     os.chdir(old_current_dir)
+    prof["duration"] = time.time() - prof["duration"]
+    return prof
 
 
 def find_jar_containing_root_function(root_fn, jars_cfg):
+    prof = { "duration": time.time() }
     print("Searching for JAR file containing root function: " + root_fn)
     last_dot_index = root_fn.rfind(".")
     if last_dot_index < 1:
         print("ERROR: Cannot extract class name from function name in the root function specifier: " + root_fn)
-        return ""
+        prof["duration"] = time.time() - prof["duration"]
+        return "",prof
     relative_class_file_name = root_fn[:last_dot_index].replace('.', '/') + ".class"
     for jar_pathname in jars_cfg.keys():
         classes_root_dir = jars_cfg[jar_pathname]
         if os.path.exists(os.path.join(classes_root_dir,relative_class_file_name)):
-            return jar_pathname
-    return ""
+            prof["duration"] = time.time() - prof["duration"]
+            return jar_pathname,prof
+    prof["duration"] = time.time() - prof["duration"]
+    return "",prof
 
 
 def run_goto_analyser(
@@ -64,6 +75,7 @@ def run_goto_analyser(
         dump_html_traces,
         results_dir
         ):
+    prof = { "duration": time.time() }
     print("Starting 'goto-analyser' for root function: " + root_fn)
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
@@ -107,7 +119,11 @@ def run_goto_analyser(
         "--verbosity 9 "
         "--classpath '" + classpath + "'"
         )
-    print(command)
+    #print(command)
+    prof["calling_goto_analyser"] = { "duration": time.time() }
     os.system(command)
+    prof["calling_goto_analyser"]["duration"] = time.time() - prof["calling_goto_analyser"]["duration"]
     os.chdir(old_cwd)
     #os.remove(root_jar_copy)
+    prof["duration"] = time.time() - prof["duration"]
+    return prof

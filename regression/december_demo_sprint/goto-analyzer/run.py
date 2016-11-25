@@ -4,6 +4,7 @@ import argparse
 import os
 import shutil
 import json
+import time
 
 
 def __get_my_dir(): return os.path.dirname(os.path.realpath(__file__))
@@ -17,10 +18,11 @@ def parse_cmd_line():
                     "evaluation framework, like Sakai, Openolet, etc.")
     parser.add_argument("-V","--version", action="store_true",
                         help="Prints a version string.")
-    parser.add_argument("-E", "--evaluation-dir", type=str,
-                         help="An evaluation directory of defined structure and containing a Java web application and "
-                              "its binaries in standard sub-directories. This option will automatically set all those "
-                              "options from { -C, -S, -B, -T, -R } which were not specified.")
+    parser.add_argument("-E", "--evaluation-dirs", type=str, nargs='*',
+                         help="A list of evaluation directories, each of defined structure and containing a Java web "
+                              "application and its binaries in standard sub-directories. This option will automatically "
+                              "set all those options from { -C, -S, -B, -T, -R } which were not specified, for each "
+                              "directory in the list.")
     parser.add_argument("-C", "--spec-dir", type=str,
                          help="A directory containing all specification files for the analyser (like 'taint.json') "
                               "which should be used for the analysed Java web application.")
@@ -57,25 +59,7 @@ def parse_cmd_line():
     return parser.parse_args()
 
 
-def __main():
-    cmdline = parse_cmd_line()
-
-    if cmdline.version:
-        print("This is goto-analyzer version 0.1.0.")
-        return
-
-    if cmdline.evaluation_dir is not None:
-        if cmdline.spec_dir is None:
-            cmdline.spec_dir = os.path.abspath(os.path.join(cmdline.evaluation_dir,"APP"))
-        if cmdline.sources_dir is None:
-            cmdline.sources_dir = os.path.abspath(os.path.join(cmdline.spec_dir,os.path.basename(cmdline.evaluation_dir)))
-        if cmdline.binaries_dir is None:
-            cmdline.binaries_dir = os.path.abspath(os.path.join(cmdline.evaluation_dir,"BENCHMARK"))
-        if cmdline.temp_dir is None:
-            cmdline.temp_dir = os.path.abspath(os.path.join(cmdline.evaluation_dir,"BENCHMARK_EXT"))
-        if cmdline.results_dir is None:
-            cmdline.results_dir = os.path.abspath(os.path.join(cmdline.evaluation_dir, "RESULTS.aux"))
-
+def  evaluate_one_directory(cmdline):
     if cmdline.spec_dir is None:
         print("ERROR: Directory containing specification files was not specified.")
         return
@@ -110,7 +94,7 @@ def __main():
     bench_name = os.path.basename(cmdline.sources_dir)
     print("Starting analysis of Java web application '" + bench_name + "'.")
 
-    overall_perf = {}
+    prof = { "duration": time.time() }
 
     if cmdline.rebuild:
         if os.path.exists(cmdline.temp_dir):
@@ -122,22 +106,25 @@ def __main():
 
     if not scripts.analyser.exists_java_script():
         print("Building parser of Java class files.")
-        scripts.analyser.build_java_script()
+        prof["build_java_script"] = scripts.analyser.build_java_script()
 
     if not scripts.analyser.exists_goto_analyser():
         print("Building goto analyser")
-        scripts.analyser.build_goto_analyser()
+        prof["build_goto_analyser"] = scripts.analyser.build_goto_analyser()
 
     if not scripts.mkbench.exists_jars_configuration(cmdline.temp_dir):
         print("Building configuration of JAR files to analyse:")
-        scripts.mkbench.build_jars_configuration(cmdline.binaries_dir,cmdline.temp_dir)
+        prof["build_jars_cfg"] = scripts.mkbench.build_jars_configuration(cmdline.binaries_dir,cmdline.temp_dir)
 
+    prof["loading_jars_cfg"] = { "duration": time.time() }
     jars_cfg_fname = os.path.abspath(os.path.join(cmdline.temp_dir,"jars.json"))
     print("Loading config file " + jars_cfg_fname)
     jars_cfg_file = open(jars_cfg_fname, "r")
     jars_cfg = json.load(jars_cfg_file)
     jars_cfg_file.close()
+    prof["loading_jars_cfg"]["duration"] = time.time() - prof["loading_jars_cfg"]["duration"]
 
+    prof["loading_root_functions"] = { "duration": time.time() }
     roots_cfg_fname = os.path.abspath(os.path.join(cmdline.spec_dir,"roots.json"))
     if not os.path.exists(roots_cfg_fname):
         print("ERROR: The root-functions config file does not exist: " + roots_cfg_fname)
@@ -147,27 +134,29 @@ def __main():
     roots_cfg_file = open(roots_cfg_fname, "r")
     roots_fn_list = json.load(roots_cfg_file)
     roots_cfg_file.close()
+    prof["loading_root_functions"]["duration"] = time.time() - prof["loading_root_functions"]["duration"]
 
     taint_json_fname = os.path.abspath(os.path.join(cmdline.spec_dir,"taint.json"))
     dirs_counter = 0
     for root_fn in roots_fn_list:
-        root_jar = scripts.analyser.find_jar_containing_root_function(root_fn,jars_cfg["wars"])
+        root_jar,prof["find_jar"] = scripts.analyser.find_jar_containing_root_function(root_fn,jars_cfg["wars"])
         if len(root_jar) == 0:
             print("ERROR: The search for JAR file containing root function '" + root_fn + "' has FAILED."
                   "Skipping this configuration.")
         else:
             results_dir = os.path.abspath(os.path.join(cmdline.results_dir,
                                                        root_fn + "." + str(dirs_counter) + ".RESULTS.dir"))
-            scripts.analyser.run_goto_analyser(
-                root_fn,
-                root_jar,
-                jars_cfg,
-                taint_json_fname,
-                cmdline.timeout,
-                cmdline.dump_html_summaries,
-                cmdline.dump_html_statistics,
-                cmdline.dump_html_traces,
-                results_dir)
+            prof["run_analyser"] = scripts.analyser.run_goto_analyser(
+                                            root_fn,
+                                            root_jar,
+                                            jars_cfg,
+                                            taint_json_fname,
+                                            cmdline.timeout,
+                                            cmdline.dump_html_summaries,
+                                            cmdline.dump_html_statistics,
+                                            cmdline.dump_html_traces,
+                                            results_dir
+                                            )
 
     print("Saving results into directory: " + cmdline.results_dir)
     if not os.path.exists(cmdline.results_dir):
@@ -176,10 +165,39 @@ def __main():
     overall_perf_fname = os.path.abspath(os.path.join(cmdline.results_dir,"overall_performance.json"))
     print("  Saving overall performance statistics to: " + overall_perf_fname)
     overall_perf_file = open(overall_perf_fname,"w")
-    overall_perf_file.write(json.dumps(overall_perf,sort_keys=True,indent=4))
+    prof["duration"] = time.time() - prof["duration"]
+    overall_perf_file.write(json.dumps(prof,sort_keys=True,indent=4))
     overall_perf_file.close()
+    print("Done. [Time=" + str(prof["duration"]) + "s]")
 
-    print("Done.")
+
+def __main():
+    cmdline = parse_cmd_line()
+
+    if cmdline.version:
+        print("This is goto-analyzer version 0.1.0.")
+        return
+
+    if len(cmdline.evaluation_dirs) > 0:
+        set_sepc = cmdline.spec_dir is None
+        set_sources = cmdline.sources_dir is None
+        set_binaries = cmdline.binaries_dir is None
+        set_temp = cmdline.temp_dir is None
+        set_results = cmdline.results_dir is None
+        for evaluation_dir in cmdline.evaluation_dirs:
+            if set_sepc:
+                cmdline.spec_dir = os.path.abspath(os.path.join(evaluation_dir,"APP"))
+            if set_sources:
+                cmdline.sources_dir = os.path.abspath(os.path.join(cmdline.spec_dir,os.path.basename(evaluation_dir)))
+            if set_binaries:
+                cmdline.binaries_dir = os.path.abspath(os.path.join(evaluation_dir,"BENCHMARK"))
+            if set_temp:
+                cmdline.temp_dir = os.path.abspath(os.path.join(evaluation_dir,"BENCHMARK_EXT"))
+            if set_results:
+                cmdline.results_dir = os.path.abspath(os.path.join(evaluation_dir, "RESULTS.aux"))
+            evaluate_one_directory(cmdline)
+    else:
+        evaluate_one_directory(cmdline)
 
 
 if __name__ == "__main__":
