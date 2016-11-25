@@ -3,7 +3,11 @@ Encuestame
 
 Encuestame is an Open Source Java web application to publish, collect, share and measure the opinion of the people thought the social media or private environments.
 Private or public surveys, protected by password, widgets embeddable, ready for mobile and multi language.
-
+4,316 commits
+9 branches
+38 releases
+5 contributors
+License: Apache-2.0
 
 Website: http://www.encuestame.org
 Repository: https://github.com/encuestame/encuestame
