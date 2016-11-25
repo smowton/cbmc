@@ -35,6 +35,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/suffix.h>
 #include <util/find_symbols.h>
 #include <util/pointer_offset_size.h>
+#include <pointer-analysis/external_value_set_expr.h>
 
 #include "expr2c.h"
 #include "c_types.h"
@@ -4425,7 +4426,10 @@ std::string expr2ct::convert(
     std::ostringstream result;
     result << "{ " << src.get("access-path-label") << ", " <<
       src.get("access-path-function") << ", " <<
-      src.get("access-path-loc") << " }";
+      src.get("access-path-loc");
+    const auto& decl_type=to_access_path_entry(src).declared_on_type();
+    if(decl_type.id()==ID_struct)
+      result << " (decl-on-type " << to_struct_type(decl_type).get_tag() << ") }";
     return result.str();
   }
 

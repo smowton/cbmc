@@ -13,6 +13,7 @@ class lvsaa_single_external_set_summaryt : public json_serialisable_summaryt {
   struct fieldname {
     std::string basename;
     std::string fieldname;
+    typet declared_on_type;
   };
   std::vector<std::pair<fieldname, exprt> > field_assignments;
 

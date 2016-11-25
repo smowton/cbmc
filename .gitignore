@@ -25,7 +25,9 @@ src/util/irep_ids.inc
 
 # regression evaluation binaries
 regression/december_demo_sprint/goto-analyzer/.idea/*
+regression/december_demo_sprint/goto-analyzer/*.pyc
 regression/december_demo_sprint/goto-analyzer/scripts/*.class
+regression/december_demo_sprint/goto-analyzer/scripts/*.pyc
 regression/december_demo_sprint/goto-analyzer/data/openjdk-8-rt.jar-unpacked/*
 regression/december_demo_sprint/goto-analyzer/data/openjdk-8-rt.jar-unpacked-PRUNED/*
 regression/december_demo_sprint/goto-analyzer/temp/*

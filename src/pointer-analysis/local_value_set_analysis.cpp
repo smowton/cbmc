@@ -6,6 +6,7 @@
 #include <util/suffix.h>
 #include <util/string2int.h>
 #include <util/arith_tools.h>
+#include <util/std_expr.h>
 #include <goto-programs/remove_returns.h>
 
 #include <algorithm>
@@ -39,6 +40,7 @@ void local_value_set_analysist::initialize(const goto_programt& fun)
   // TODO: replace this with something less ugly.
   value_sett::use_malloc_type=true;
   value_sett::use_dead_statements=true;
+  value_sett::keep_identical_structs=true;
   value_set_analysist::initialize(fun);
 
   if(fun.instructions.size()==0)
@@ -75,6 +77,7 @@ void local_value_set_analysist::initialize(const goto_programt& fun)
 
 static void get_all_field_value_sets(
   const std::string& fieldname,
+  const typet& declared_on_type,
   value_sett& state,
   std::vector<value_sett::entryt*>& entrylist)
 {
@@ -83,7 +86,18 @@ static void get_all_field_value_sets(
   for(auto& entry : state.values)
   {
     if(entry.second.suffix==fieldname)
-      entrylist.push_back(&entry.second);
+    {
+      // Never conflate two different ext-val-sets this way:
+      if(has_prefix(id2string(entry.first),"external_objects"))
+        continue;
+      bool include_this=false;
+      if(declared_on_type.id()==ID_nil)
+	include_this=true;
+      else if(entry.second.declared_on_type==declared_on_type)
+	include_this=true;
+      if(include_this)
+	entrylist.push_back(&entry.second);
+    }
   }
 }
 
@@ -106,6 +120,9 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
 
   auto& valuesets=static_cast<value_set_domaint&>(state).value_set;
   std::map<exprt, value_sett::object_mapt> pre_call_rhs_value_sets;
+  const std::string external_objects_basename_prefix="external_objects";
+
+  std::set<std::pair<std::string,std::string> > lhs_written;
 
   for(const auto& assignment : call_summary.field_assignments)
   {
@@ -117,15 +134,29 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
     if(assignment.second.id()=="external-value-set")
     {
       auto& evse=to_external_value_set(assignment.second);
-      if(to_constant_expr(evse.label()).get_value()=="external_objects")
+      // Differentiate external-set entries that only contain
+      // their initialiser from ones that have been written:
+      if(evse.is_modified())
+        lhs_written.insert({assignment.first.basename,assignment.first.fieldname});
+      if(has_prefix(id2string(to_constant_expr(evse.label()).get_value()),"external_objects"))
       {
         std::vector<value_sett::entryt*> rhs_entries;
-        get_all_field_value_sets(
-          id2string(to_external_value_set(assignment.second).access_path_back().label()),
-          valuesets,
-          rhs_entries);
+	const auto& evse=to_external_value_set(assignment.second);
+	const auto& apback=evse.access_path_back();
+        if(evse.is_modified())
+        {
+          get_all_field_value_sets(
+            id2string(apback.label()),
+            apback.declared_on_type(),
+            valuesets,
+            rhs_entries);
+        }
+
         for(const auto& rhs_entry : rhs_entries)
-          valuesets.make_union(rhs_map,rhs_entry->object_map);
+          valuesets.make_union_adjusting_evs_types(rhs_map,rhs_entry->object_map,evse.type());
+        // Also add the external set itself, representing the possibility that the read
+        // comes from outside *this* function as well:
+        valuesets.insert(rhs_map,evse);
       }
       else {
         // This should be an external value set assigned to initialise some global or parameter.
@@ -167,27 +198,36 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
     {
       // Ordinary value set member; just add to the RHS map.
       valuesets.insert(rhs_map,assignment.second);
+      lhs_written.insert({assignment.first.basename,assignment.first.fieldname});      
     }
   }
 
   // OK, read all the RHS sets, now assign to the LHS symbols:
-  const std::string external_objects_basename="external_objects";
   
   for(const auto& assignment : call_summary.field_assignments)
   {
     const auto& rhs_values=pre_call_rhs_value_sets.at(assignment.second);
     
-    if(assignment.first.basename==external_objects_basename)
+    if(has_prefix(assignment.first.basename,external_objects_basename_prefix))
     {
       std::vector<value_sett::entryt*> lhs_entries;
-      get_all_field_value_sets(assignment.first.fieldname,valuesets,lhs_entries);
+      if(lhs_written.count({assignment.first.basename,assignment.first.fieldname}))
+        get_all_field_value_sets(assignment.first.fieldname,assignment.first.declared_on_type,
+                                 valuesets,lhs_entries);
+      // Also write to the external value set itself:
+      value_sett::entryt evse_entry(assignment.first.basename,assignment.first.fieldname,
+                                    assignment.first.declared_on_type);
+      std::string objkey=assignment.first.basename+assignment.first.fieldname;
+      auto insertit=valuesets.values.insert(std::make_pair(objkey, evse_entry));
+      lhs_entries.push_back(&insertit.first->second);
       for(auto lhs_entry : lhs_entries)
         valuesets.make_union(lhs_entry->object_map,rhs_values);
     }
     else if(has_prefix(assignment.first.basename,"value_set::dynamic_object"))
     {
       std::string objkey=assignment.first.basename+assignment.first.fieldname;
-      value_sett::entryt dynobj_entry_name(assignment.first.basename,assignment.first.fieldname);
+      value_sett::entryt dynobj_entry_name(assignment.first.basename,assignment.first.fieldname,
+                                           assignment.first.declared_on_type);
       auto insertit=valuesets.values.insert(std::make_pair(objkey, dynobj_entry_name));
       valuesets.make_union(insertit.first->second.object_map,rhs_values);
     }
@@ -196,7 +236,8 @@ void local_value_set_analysist::transform_function_stub_single_external_set(
       // The only other kind of symbols mentioned in summary LHS are global variables.
       assert(assignment.first.fieldname=="");
       const auto& global_sym=ns.lookup(assignment.first.basename);
-      value_sett::entryt global_entry_name(assignment.first.basename,"");
+      value_sett::entryt global_entry_name(assignment.first.basename,"",
+                                           assignment.first.declared_on_type);
       auto& global_entry=valuesets.get_entry(global_entry_name,global_sym.type,ns);
       valuesets.make_union(global_entry.object_map,rhs_values);
     }
@@ -339,16 +380,20 @@ void lvsaa_single_external_set_summaryt::from_final_state(
     const auto& pointsto=entry.second.object_map.read();
     for(const auto& pointsto_number : pointsto)
     {
-      const auto& pointsto_expr=final_state.object_numbering[pointsto_number.first];
+      auto pointsto_expr=final_state.object_numbering[pointsto_number.first];
       // Remove any subclass qualifiers-- for our purposes, "points to A cast to a B"
       // is equivalent to just "points to A".
-      const exprt* toexport=&pointsto_expr;
+      exprt* toexport=&pointsto_expr;
       while(toexport->id()==ID_member)
 	toexport=&toexport->op0();
 
       bool export_this_expr=false;
-      if(toexport->id()=="external-value-set" && to_external_value_set(*toexport).is_modified())
-	export_this_expr=true;
+      if(toexport->id()=="external-value-set")
+      {
+        export_this_expr=true;
+        // Update type in case casts were removed earlier:
+        toexport->type()=pointsto_expr.type();
+      }
       else if(toexport->id()==ID_dynamic_object)
       {
 	mp_integer object_number;
@@ -363,7 +408,9 @@ void lvsaa_single_external_set_summaryt::from_final_state(
       if(!export_this_expr)
 	continue;
 	
-      struct fieldname thisname = {id2string(entry.second.identifier), entry.second.suffix};
+      struct fieldname thisname = {id2string(entry.second.identifier),
+				   entry.second.suffix,
+				   entry.second.declared_on_type};
       field_assignments.push_back(std::make_pair(thisname,*toexport));
     }
   }

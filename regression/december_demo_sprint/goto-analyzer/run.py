@@ -11,7 +11,10 @@ def __get_my_dir(): return os.path.dirname(os.path.realpath(__file__))
 
 def parse_cmd_line():
     parser = argparse.ArgumentParser(
-        description="This is the root script for running goto-analyser on a Java web application.")
+        description="This is the root script for running goto-analyser on a Java web application. "
+                    "The typical usage in terminal is 'python ./run.py -E \"../<benchmark-name>\"', "
+                    "where '<benchmark-name>' is one of the benchmark directories in the root directory of the "
+                    "evaluation framework, like Sakai, Openolet, etc.")
     parser.add_argument("-V","--version", action="store_true",
                         help="Prints a version string.")
     parser.add_argument("-E", "--evaluation-dir", type=str,
@@ -32,7 +35,25 @@ def parse_cmd_line():
     parser.add_argument("-R", "--results-dir", type=str,
                          help="A directory into which all results from the analysis will be stored.")
     parser.add_argument("--rebuild", action="store_true",
-                        help="When specified, the directories -T and -R are deleted at the beginning of the analysis.")
+                        help="When specified, the directories -T and -R are deleted at the beginning of the analysis. "
+                             "This has an effect to running the analysis from scratch without reuse of any data "
+                             "computed in the previous run of the analyser of the specified benchmark.")
+    parser.add_argument("--timeout", type=int, default=300,
+                         help="A timeout in seconds for the goto-analyser. It means that it is NOT a timeout for "
+                              "whole the analysis. Namely, it does not include preprocessing steps of WAR/JAR file "
+                              "for goto-analyses nor saving results from the analysis. Also, since goto-analyser "
+                              "might be executed several times per one benchmark (once per each root function), "
+                              "the timeout applies to each of this executions independently (i.e. it is NOT a "
+                              "summary timeout for all executions).")
+    parser.add_argument("--dump-html-summaries", action="store_true",
+                        help="If specified, then the analyser will save function summaries in HTML format together "
+                             "with in JSON format (which is always saved).")
+    parser.add_argument("--dump-html-statistics", action="store_true",
+                        help="If specified, then the analyser will save statistics in HTML format together "
+                             "with in JSON format (which is always saved).")
+    parser.add_argument("--dump-html-traces", action="store_true",
+                        help="If specified, then the analyser will save error traces in HTML format together "
+                             "with in JSON format (which is always saved).")
     return parser.parse_args()
 
 
@@ -130,14 +151,23 @@ def __main():
     taint_json_fname = os.path.abspath(os.path.join(cmdline.spec_dir,"taint.json"))
     dirs_counter = 0
     for root_fn in roots_fn_list:
-        root_jar = scripts.analyser.find_jar_containing_root_function(root_fn,jars_cfg)
+        root_jar = scripts.analyser.find_jar_containing_root_function(root_fn,jars_cfg["wars"])
         if len(root_jar) == 0:
-            print("ERROR: The root function '" + root_fn + "' does not appear in any of the JAR files. Skipping this "
-                                                           "configuration.")
+            print("ERROR: The search for JAR file containing root function '" + root_fn + "' has FAILED."
+                  "Skipping this configuration.")
         else:
             results_dir = os.path.abspath(os.path.join(cmdline.results_dir,
                                                        root_fn + "." + str(dirs_counter) + ".RESULTS.dir"))
-            scripts.analyser.run_goto_analyser(root_fn,root_jar,jars_cfg,taint_json_fname,results_dir)
+            scripts.analyser.run_goto_analyser(
+                root_fn,
+                root_jar,
+                jars_cfg,
+                taint_json_fname,
+                cmdline.timeout,
+                cmdline.dump_html_summaries,
+                cmdline.dump_html_statistics,
+                cmdline.dump_html_traces,
+                results_dir)
 
     print("Saving results into directory: " + cmdline.results_dir)
     if not os.path.exists(cmdline.results_dir):

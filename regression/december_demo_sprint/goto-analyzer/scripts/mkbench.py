@@ -112,7 +112,7 @@ def exists_jars_configuration(temp_dir):
 
 def build_jars_configuration(binaries_dir,temp_dir):
     temp_dirs_counter = 0
-    root_jars = []
+    root_jars = {}
     jars = {}
     wars = {}
     collect_war_files(binaries_dir,wars)
@@ -141,11 +141,11 @@ def build_jars_configuration(binaries_dir,temp_dir):
             root_jar_fname = war_tmp_root + ".PACK.dir/" + os.path.splitext(fname)[0] + ".jar"
             print("    Packing classes: " + root_jar_fname)
             pack_classes_to_jar(class_dir,root_jar_fname)
-            root_jars.append(root_jar_fname)
+            root_jars[root_jar_fname] = class_dir
     collect_jar_files(binaries_dir,jars)
 
     print("  Saving config file 'jars.json'.")
-    config = { "wars": sorted(root_jars), "jars": [] }
+    config = { "wars": root_jars, "jars": [] }
     for fname in jars.keys():
         for fdir in jars[fname]:
             config["jars"].append(os.path.abspath(os.path.join(fdir,fname)))

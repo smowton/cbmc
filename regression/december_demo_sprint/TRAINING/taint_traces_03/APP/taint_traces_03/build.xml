@@ -8,7 +8,7 @@
   <target name="jar">
     <antcall target="compile" />
     <mkdir dir="${install.dir}"/>
-    <jar destfile="${install.dir}/taint_traces_03.jar" basedir="${classes.dir}" />
+    <jar destfile="${install.dir}/taint_traces_03.war" basedir="${classes.dir}" />
   </target>  
   
   <target name="compile">

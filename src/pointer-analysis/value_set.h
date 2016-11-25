@@ -17,6 +17,7 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "object_numbering.h"
 #include "value_sets.h"
+#include "external_value_set_expr.h"
 
 class namespacet;
 
@@ -38,6 +39,7 @@ public:
   // TODO: figure out a less awful way to get configuration state into value-set.
   static bool use_malloc_type;
   static bool use_dead_statements;
+  static bool keep_identical_structs;
 
   typedef irep_idt idt;
   
@@ -103,7 +105,9 @@ public:
     object_mapt object_map;
     idt identifier;
     std::string suffix;
-    
+    // Only used for external value set, giving
+    // the struct type this field belongs to, if suffix is a struct field.
+    typet declared_on_type;
     entryt()
     {
     }
@@ -113,6 +117,14 @@ public:
       suffix(_suffix)
     {
     }
+
+    entryt(const idt &_identifier, const std::string &_suffix, const typet& _type):
+      identifier(_identifier),
+      suffix(_suffix),
+      declared_on_type(_type)
+    {
+    }
+    
   };
   
   typedef std::set<exprt> expr_sett;
@@ -154,6 +166,8 @@ public:
   
   // true = added s.th. new
   bool make_union(object_mapt &dest, const object_mapt &src) const;
+
+  void make_union_adjusting_evs_types(object_mapt &dest, const object_mapt &src, const typet&) const;  
 
   // true = added s.th. new
   bool make_union(const valuest &new_values);
@@ -203,7 +217,10 @@ public:
     object_mapt &dest,
     const namespacet &ns,
     bool is_simplified) const;
- 
+
+  std::pair<valuest::iterator,bool> init_external_value_set(
+    const external_value_set_exprt& evse);
+  
 protected:
   void get_value_set_rec(
     const exprt &expr,
@@ -244,6 +261,7 @@ protected:
     const exprt &src, 
     const irep_idt &component_name,
     const namespacet &ns);
+
 };
 
 #endif
