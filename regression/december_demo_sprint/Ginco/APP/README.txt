@@ -21,7 +21,7 @@ git checkout e6ae1b436e308d3b712482b596f4f636aacd2e97
 mvn clean package
 
 3. Copy the resulting files to ../BENCHMARK (relative path to this README.txt file):
-mkdir ../BENCHMARK
-mv */target/* ../BENCHMARK/
+mkdir ../../BENCHMARK
+mv */target/* ../../BENCHMARK/
 
 
