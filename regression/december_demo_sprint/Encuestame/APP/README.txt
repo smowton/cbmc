@@ -15,9 +15,9 @@ Repository: https://github.com/encuestame/encuestame
 
 1. Open a terminal in the directory of this readme file and clone encuestame:
 git clone https://github.com/encuestame/encuestame
-git checkout 42cb745cbf15c9b40e497242898c2f75ded278f71
 2. Enter the directory and build with maven:
 cd encuestame/
+git checkout 42cb745cbf15c9b40e497242898c2f75ded278f71
 mvn clean package
 
 The main web application seems to be in enme-war and the resulting WAR file is in enme-war/web-app/tomcat-webapp/target/.
