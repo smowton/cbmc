@@ -1,6 +1,9 @@
-
+DSpace
+~~~~~~
 
 DSpace is an open source application used by more than 1000+ organizations and institutions worldwide to provide durable access to digital resources.
+The github repository has 8,934 commits, 85 releases, 107 contributors.
+
 
 Webpage: http://www.dspace.org/
 Repository: https://github.com/DSpace/DSpace
@@ -14,7 +17,7 @@ git clone https://github.com/DSpace/DSpace
 cd DSpace
 mvn clean package
 
-Several files are built in different directories. The main web application seems to be dspace-sword and the corresponding WAR/JAR file are in dspace-sword/target/
+Several files are built in different directories. The main web application seems to be dspace-sword and the corresponding WAR/JAR files are in dspace-sword/target/
 3. Copy the resulting WAR/JAR file(s) to ../BENCHMARK directory (relative path to this README.txt file):
 mkdir ../../BENCHMARK
 mv dspace-sword/target/* ../../BENCHMARK/

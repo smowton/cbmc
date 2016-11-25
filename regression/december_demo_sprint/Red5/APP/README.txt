@@ -1,6 +1,7 @@
+Red5
 
-
-
+Red5 is an Open Source Flash Server written in Java.
+The github repository has 400 commits, 31 releases, 10 contributors.
 
 1. Open a terminal in the directory of this readme file and clone Red5:
 git clone https://github.com/Red5/red5-server
