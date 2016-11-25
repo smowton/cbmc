@@ -56,6 +56,10 @@ def parse_cmd_line():
     parser.add_argument("--dump-html-traces", action="store_true",
                         help="If specified, then the analyser will save error traces in HTML format together "
                              "with in JSON format (which is always saved).")
+    parser.add_argument("--verbosity", type=int, default=9,
+                        help="If specified, then debugging messages will be printed to the standard output stream.")
+    parser.add_argument("--debug", action="store_true",
+                        help="If specified, then debugging messages will be printed to the standard output stream.")
     return parser.parse_args()
 
 
@@ -94,7 +98,7 @@ def  evaluate_one_directory(cmdline):
     bench_name = os.path.basename(cmdline.sources_dir)
     print("Starting analysis of Java web application '" + bench_name + "'.")
 
-    prof = { "duration": time.time() }
+    prof = { "duration": time.time(), "analysis_per_root_fn": [] }
 
     if cmdline.rebuild:
         if os.path.exists(cmdline.temp_dir):
@@ -139,14 +143,16 @@ def  evaluate_one_directory(cmdline):
     taint_json_fname = os.path.abspath(os.path.join(cmdline.spec_dir,"taint.json"))
     dirs_counter = 0
     for root_fn in roots_fn_list:
-        root_jar,prof["find_jar"] = scripts.analyser.find_jar_containing_root_function(root_fn,jars_cfg["wars"])
+        root_fn_prof = { "duration": time.time(), "function": root_fn }
+        root_jar,root_fn_prof["find_jar"] =\
+            scripts.mkbench.find_jar_containing_root_function(root_fn,jars_cfg,cmdline.temp_dir)
         if len(root_jar) == 0:
             print("ERROR: The search for JAR file containing root function '" + root_fn + "' has FAILED."
                   "Skipping this configuration.")
         else:
             results_dir = os.path.abspath(os.path.join(cmdline.results_dir,
                                                        root_fn + "." + str(dirs_counter) + ".RESULTS.dir"))
-            prof["run_analyser"] = scripts.analyser.run_goto_analyser(
+            root_fn_prof["run_analyser"] = scripts.analyser.run_goto_analyser(
                                             root_fn,
                                             root_jar,
                                             jars_cfg,
@@ -155,8 +161,12 @@ def  evaluate_one_directory(cmdline):
                                             cmdline.dump_html_summaries,
                                             cmdline.dump_html_statistics,
                                             cmdline.dump_html_traces,
-                                            results_dir
+                                            cmdline.verbosity,
+                                            results_dir,
+                                            cmdline.debug
                                             )
+        root_fn_prof["duration"] = time.time() - root_fn_prof["duration"]
+        prof["analysis_per_root_fn"].append(root_fn_prof)
 
     print("Saving results into directory: " + cmdline.results_dir)
     if not os.path.exists(cmdline.results_dir):

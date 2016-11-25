@@ -46,24 +46,6 @@ def build_goto_analyser():
     return prof
 
 
-def find_jar_containing_root_function(root_fn, jars_cfg):
-    prof = { "duration": time.time() }
-    print("Searching for JAR file containing root function: " + root_fn)
-    last_dot_index = root_fn.rfind(".")
-    if last_dot_index < 1:
-        print("ERROR: Cannot extract class name from function name in the root function specifier: " + root_fn)
-        prof["duration"] = time.time() - prof["duration"]
-        return "",prof
-    relative_class_file_name = root_fn[:last_dot_index].replace('.', '/') + ".class"
-    for jar_pathname in jars_cfg.keys():
-        classes_root_dir = jars_cfg[jar_pathname]
-        if os.path.exists(os.path.join(classes_root_dir,relative_class_file_name)):
-            prof["duration"] = time.time() - prof["duration"]
-            return jar_pathname,prof
-    prof["duration"] = time.time() - prof["duration"]
-    return "",prof
-
-
 def run_goto_analyser(
         root_fn,
         root_jar,
@@ -73,7 +55,9 @@ def run_goto_analyser(
         dump_html_summaries,
         dump_html_statistics,
         dump_html_traces,
-        results_dir
+        verbosity,
+        results_dir,
+        debug_logs_enabled
         ):
     prof = { "duration": time.time() }
     print("Starting 'goto-analyser' for root function: " + root_fn)
@@ -116,10 +100,11 @@ def run_goto_analyser(
         + dump_html_statistics_option + " "
         + dump_html_traces + " "
         "--taint-summaries-timeout-seconds " + str(timeout) + " "
-        "--verbosity 9 "
+        "--verbosity " + str(verbosity) + " "
         "--classpath '" + classpath + "'"
         )
-    #print(command)
+    if debug_logs_enabled:
+        print(command)
     prof["calling_goto_analyser"] = { "duration": time.time() }
     os.system(command)
     prof["calling_goto_analyser"]["duration"] = time.time() - prof["calling_goto_analyser"]["duration"]

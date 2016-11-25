@@ -1,1 +1,5 @@
-[]
+[
+  "org.dspace.app.webui.servlet.BitstreamServlet.doDSGet",
+  "org.dspace.app.webui.servlet.DisplayStatisticsServlet.doDSGet"
+]
+
