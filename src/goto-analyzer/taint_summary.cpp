@@ -1708,8 +1708,11 @@ taint_summary_ptrt  taint_summarise_function(
 
         // First instruction is a loop head in this case,
         // since callers are also predecessors.
-        if(dst_instr_it!=function.body.instructions.begin() &&
-           inst_predecessors.at(dst_instr_it).size()==1)
+        bool dst_has_unique_predecessor=
+          dst_instr_it!=function.body.instructions.begin() &&
+          inst_predecessors.at(dst_instr_it).size()==1;
+        
+        if(dst_has_unique_predecessor)
         {
           dst_value=std::move(transformed);
           if(dst_value.map_depth()>=10)
@@ -1730,7 +1733,7 @@ taint_summary_ptrt  taint_summarise_function(
                 dst_value,ns,taint_object_numbering,{}/*TODO*/,*log);
 	}
 
-        if (!taint_map_subset(dst_value,old_dst_value))
+        if (dst_has_unique_predecessor || !taint_map_subset(dst_value,old_dst_value))
         {
           work_set.insert(dst_instr_it);
 
