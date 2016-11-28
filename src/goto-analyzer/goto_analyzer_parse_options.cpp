@@ -592,6 +592,7 @@ int goto_analyzer_parse_optionst::doit()
             taint_object_numbering,
             object_numbers_by_field,
 	    formals_to_actuals,
+	    cmdline.isset("taint-stop-after-one-trace"),
             cmdline.isset("taint-dump-log") ? &log : nullptr
             );
       if (error_traces.empty())

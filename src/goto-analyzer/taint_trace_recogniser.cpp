@@ -547,6 +547,7 @@ void taint_recognise_error_traces(
     taint_object_numbering_per_functiont&  taint_object_numbering,
     object_numbers_by_field_per_functiont&  object_numbers_by_field,
     const formals_to_actuals_mapt& formals_to_actuals,
+    bool stop_after_one_trace,
     std::stringstream* const  log
     )
 {
@@ -576,6 +577,7 @@ void taint_recognise_error_traces(
                     taint_object_numbering,
                     object_numbers_by_field,
 		    formals_to_actuals,
+		    stop_after_one_trace,
                     log
                     );
       }
@@ -597,6 +599,7 @@ void taint_recognise_error_traces(
     taint_object_numbering_per_functiont&  taint_object_numbering,
     object_numbers_by_field_per_functiont&  object_numbers_by_field,
     const formals_to_actuals_mapt& formals_to_actuals,
+    bool stop_after_one_trace,
     std::stringstream* const  log
     )
 {
@@ -812,6 +815,10 @@ void taint_recognise_error_traces(
           }
           *log << "</table>";
         }
+
+	if(stop_after_one_trace)
+	  bt_trace.done=true;
+	
       }
       else
       {
