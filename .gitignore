@@ -56,14 +56,27 @@ regression/december_demo_sprint/TRAINING/taint_traces_05/BENCHMARK/*
 regression/december_demo_sprint/TRAINING/taint_traces_05/BENCHMARK_EXT/*
 regression/december_demo_sprint/TRAINING/taint_traces_05/RESULTS.aux/*
 regression/december_demo_sprint/TRAINING/taint_traces_05/RESULTS/*
+regression/december_demo_sprint/DSpace/APP/DSpace/*
+regression/december_demo_sprint/DSpace/BENCHMARK/*
+regression/december_demo_sprint/DSpace/BENCHMARK_EXT/*
+regression/december_demo_sprint/DSpace/RESULTS.aux/*
+regression/december_demo_sprint/jforum3/APP/jforum3/*
+regression/december_demo_sprint/jforum3/BENCHMARK/*
+regression/december_demo_sprint/jforum3/BENCHMARK_EXT/*
+regression/december_demo_sprint/jforum3/RESULTS.aux/*
 regression/december_demo_sprint/Openolat/APP/Openolat/*
 regression/december_demo_sprint/Openolat/BENCHMARK/*
 regression/december_demo_sprint/Openolat/BENCHMARK_EXT/*
 regression/december_demo_sprint/Openolat/RESULTS.aux/*
+regression/december_demo_sprint/Red5/APP/Red5/*
+regression/december_demo_sprint/Red5/BENCHMARK/*
+regression/december_demo_sprint/Red5/BENCHMARK_EXT/*
+regression/december_demo_sprint/Red5/RESULTS.aux/*
 regression/december_demo_sprint/Sakai/APP/Sakai/*
 regression/december_demo_sprint/Sakai/BENCHMARK/*
 regression/december_demo_sprint/Sakai/BENCHMARK_EXT/*
 regression/december_demo_sprint/Sakai/RESULTS.aux/*
+
 
 # regression/test files
 *.out

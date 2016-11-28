@@ -1,23 +1,27 @@
 DSpace
 ~~~~~~
 
-DSpace is an open source application used by more than 1000+ organizations and institutions worldwide to provide durable access to digital resources.
-The github repository has 8,934 commits, 85 releases, 107 contributors.
+DSpace is an open source application used by more than 1000+ organizations and
+institutions worldwide to provide durable access to digital resources.
 
 
 Webpage: http://www.dspace.org/
 Repository: https://github.com/DSpace/DSpace
+Analysed branch: master
+Analysed commit: 462ed4437c2f60812af1c207d8309212dbf893f6
+Commits: 8 934
+Releases: 85
+Contributors: 107
 
 Installation on Ubuntu:
 
 1. Open a terminal in the directory of this readme file and clone DSpace:
-git clone https://github.com/DSpace/DSpace
-(Installation tested with commit 462ed4437c2f60812af1c207d8309212dbf893f6)
-2. Enter the directory and build with maven:
-cd DSpace
-mvn clean package
+      git clone https://github.com/DSpace/DSpace
+2. Enter the directory type the following commands:
+      git checkout 462ed4437c2f60812af1c207d8309212dbf893f6 .
+      cd DSpace
+      mvn clean package
+3. Copy built binaries into the installation directory by typing this command
+   into the terminal:
+      python ./copy_binaries.py
 
-Several files are built in different directories. The main web application seems to be dspace-sword and the corresponding WAR/JAR files are in dspace-sword/target/
-3. Copy the resulting WAR/JAR file(s) to ../BENCHMARK directory (relative path to this README.txt file):
-mkdir ../../BENCHMARK
-mv dspace-sword/target/* ../../BENCHMARK/

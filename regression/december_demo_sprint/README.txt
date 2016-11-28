@@ -40,10 +40,12 @@ Each benchmark directory (including training ones) must have this structure
     
 The sub-directory "<java-web-app-install-dir>" is a diretory, into which the
 repository of a particular Java web application have be clonned into. Name of
-this directory can be arbitrary (but application's name is a good practice).
-The directory is initially empty (or missing completely). It is your task to
-download/clone its repository, check-out a particulat commit and build it.
-All instructions for these tasks are available in the "README.txt".
+this directory have to match the name of benchmark's directory. For example,
+if the benchmarks directory is "Sakai", then "<java-web-app-install-dir>" have
+to be "Sakai" as well (so, the directory is "Sakai/APP/Sakai"). The directory
+is initially empty (or missing completely). It is your task to download/clone
+its repository, check-out a particulat commit and build it. All instructions
+for these tasks are available in the "README.txt".
 
 The file "README.txt" provides an installation and building guide of the
 considered java web application. Besides that it also contains a brief
