@@ -136,7 +136,13 @@ def  evaluate_one_directory(cmdline):
         return
     print("Loading root-functions config file " + roots_cfg_fname)
     roots_cfg_file = open(roots_cfg_fname, "r")
-    roots_fn_list = json.load(roots_cfg_file)
+    try:
+        roots_fn_list = json.load(roots_cfg_file)
+    except:
+        print("ERROR: Incorrect format of JSON file: " + roots_cfg_fname)
+        print("ERROR: Terminating the analysis of the Java web application with FAILURE.")
+        return
+
     roots_cfg_file.close()
     prof["loading_root_functions"]["duration"] = time.time() - prof["loading_root_functions"]["duration"]
 

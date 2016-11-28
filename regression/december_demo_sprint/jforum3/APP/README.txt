@@ -1,15 +1,16 @@
 JForum3
 ~~~~~~~
 
-TODO: add description
+It is a discussion board system implemented in Java.
 
 Homepage WEB: TODO!
 Repository URL: http://github.com/rafaelsteil/jforum3
 Analysed branch: master
 Analysed commit: bb847ea32f0abc7e3d0eb67fe8bbf88c7becfce4
-Commints: TODO!
-Releases: TODO!
-Contributors: TODO!
+Commints: 154
+Releases: 0
+Contributors: 7
+Branches: 1
 
 Installation on Ubuntu:
 
