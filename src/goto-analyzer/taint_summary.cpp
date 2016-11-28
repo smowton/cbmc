@@ -436,7 +436,7 @@ static void  build_symbols_substitution(
     {
       auto const  it = a.find(lvalue);
       if (it != a.cend())
-        argument_svalue = join(argument_svalue,it->second);
+        argument_svalue.add_all(it->second);
     }
 
     symbols_substitution.insert({
@@ -497,10 +497,9 @@ static void  build_substituted_summary(
           {
             auto const  it = symbols_substitution.find(symbol);
             if (it != symbols_substitution.cend())
-              substituted_svalue = join(substituted_svalue,it->second);
+              substituted_svalue.add_all(it->second);
             else
-              substituted_svalue =
-          join(substituted_svalue,{{symbol},false,false});
+              substituted_svalue.add(symbol);
           }
           substituted_summary.insert({
               lhs,
@@ -614,7 +613,7 @@ static void  maybe_assign(
       map.insert({lvalue,svalue});
   }
   else
-    map[lvalue]=join(it->second,svalue);
+    map[lvalue].add_all(svalue);
 }
 
 taint_svaluet  taint_make_symbol()
@@ -654,7 +653,7 @@ taint_svaluet::taint_svaluet(
 
 taint_svaluet::taint_svaluet(
     expressiont const&  expression,
-    expressiont const&  suppression,
+    supressiont const&  suppression,
     bool  is_bottom,
     bool  is_top
     )
@@ -667,7 +666,7 @@ taint_svaluet::taint_svaluet(
   assert(m_is_bottom || m_is_top || !m_expression.empty());
   assert(!(m_is_bottom || m_is_top) || m_expression.empty());
   assert(
-      [](expressiont const&  A, expressiont const&  B){
+      [](expressiont const&  A, supressiont const&  B){
         expressiont X;
         std::set_intersection(
             A.cbegin(),A.cend(),
@@ -753,35 +752,35 @@ taint_svaluet  join(taint_svaluet const&  a, taint_svaluet const&  b)
     return a;
   if (b.is_top())
     return b;
-  taint_svaluet::expressiont  result_set = a.expression();
-  result_set.insert(b.expression().cbegin(),b.expression().cend());
-  taint_svaluet::expressiont  result_suppression;
-  std::set_intersection(
-      a.suppression().cbegin(),a.suppression().cend(),
-      b.suppression().cbegin(),b.suppression().cend(),
-      std::inserter(result_suppression,result_suppression.end())
-      );
-  return {result_set,result_suppression,false,false};
+  taint_svaluet result=a;
+  result.add_all(b);
+  return result;
 }
 
 taint_svaluet  suppression(
     taint_svaluet const&  a,
-    taint_svaluet::expressiont const&  sub)
+    taint_svaluet::supressiont const&  sub)
 {
   if (a.is_bottom() || a.is_top() || sub.empty())
     return a;
 
   taint_svaluet::expressiont  result_set;
+  std::vector<taint_svaluet::taint_symbolt> result_vector;
   std::set_difference(
       a.expression().cbegin(),a.expression().cend(),
       sub.cbegin(),sub.cend(),
-      std::inserter(result_set,result_set.end())
+      std::inserter(result_vector,result_vector.end())
       );
+#ifdef USE_BOOST
+  result_set.insert(boost::container::ordered_unique_range_t(),result_vector.begin(),result_vector.end());
+#else
+  result.insert(result_vector.begin(),result_vector.end());
+#endif
 
   if (result_set.empty())
     return taint_make_bottom();
 
-  taint_svaluet::expressiont  result_suppression;
+  taint_svaluet::supressiont  result_suppression;
   std::set_union(
       a.suppression().cbegin(),a.suppression().cend(),
       sub.cbegin(),sub.cend(),
@@ -1017,7 +1016,7 @@ static void handle_assignment(
     {
       auto const  it = a.find(lvalue);
       if (it != a.cend())
-        rvalue = join(rvalue,it->second);
+        rvalue.add_all(it->second);
 
       if (log != nullptr)
       {
@@ -1770,3 +1769,22 @@ taint_summary_ptrt  taint_summarise_function(
 
 }
 
+void taint_svaluet::add_all(const taint_svaluet& other)
+{
+  if(m_is_top)
+    return;
+  if(other.m_expression.size())
+    m_is_bottom=false;
+#ifdef USE_BOOST
+  m_expression.insert(boost::container::ordered_unique_range_t(),other.m_expression.begin(),other.m_expression.end());
+#else
+  m_expression.insert(other.m_expression.begin(),other.m_expression.end());
+#endif
+  taint_svaluet::supressiont  result_suppression;
+  std::set_intersection(
+    suppression().cbegin(),suppression().cend(),
+    other.suppression().cbegin(),other.suppression().cend(),
+    std::inserter(result_suppression,result_suppression.end())
+  );
+  m_suppression=std::move(result_suppression);
+}

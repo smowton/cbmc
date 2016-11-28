@@ -123,7 +123,8 @@ void  taint_dump_numbered_lvalues_to_svalues_as_html(
       std::stringstream sstr;
       const auto& lvalue=numbering[elem.first];
       taint_dump_lvalue_in_html(lvalue,ns,sstr);
-      order.insert({sstr.str(),elem.first});
+      if(sstr.str().find("taintfield")!=std::string::npos)
+	order.insert({sstr.str(),elem.first});
     }
     ostr << "    <table>\n";
     for (auto const&  elem : order)

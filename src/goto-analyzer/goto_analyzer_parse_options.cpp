@@ -594,7 +594,6 @@ int goto_analyzer_parse_optionst::doit()
 	    formals_to_actuals,
             cmdline.isset("taint-dump-log") ? &log : nullptr
             );
-
       if (error_traces.empty())
         status() << "The program is free of taint-related issues."
                  << eom;

@@ -99,9 +99,9 @@ public:
 
   typedef std::pair<
               std::size_t, //!< Index into this trace where is a call statement.
-              std::unordered_set<taint_svaluet::taint_symbolt> //!< A set of symbols representing
-                                                               //!< the tainted symbol in the
-                                                               //!< called function.
+              taint_svaluet::expressiont //!< A set of symbols representing
+                                         //!< the tainted symbol in the
+                                         //!< called function.
               >
           call_stack_valuet;
 
@@ -115,7 +115,7 @@ public:
 
   explicit trace_under_constructiont(
       taint_trace_elementt const&  element,
-      std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols
+      taint_svaluet::expressiont const&  symbols
       );
 
   taint_tracet const&  get_trace() const noexcept  { return trace; }
@@ -141,8 +141,8 @@ public:
   /// Call-stack-related access/check methods
   bool  stack_has_return() const { return call_stack.size() > 1UL; }
   call_stack_valuet const& stack_top() const { return call_stack.back(); }
-  void  stack_push(std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols);
-  void  stack_set_top(std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols);
+  void  stack_push(taint_svaluet::expressiont const&  symbols);
+  void  stack_set_top(taint_svaluet::expressiont const&  symbols);
   void  stack_pop();
 
   backtrack_statet get_backtrack_state() { return { trace.size(), call_stack }; }
@@ -189,9 +189,23 @@ struct backtracking_trace_constructiont {
 
 };
 
+static taint_svaluet::expressiont taint_expression_intersect(const taint_svaluet::expressiont& a, const taint_svaluet::expressiont& b)
+{
+  std::vector<taint_svaluet::taint_symbolt> result_vec;
+  // This may or may not be a good optimisation when expressiont == std::set,
+  // but definitely is when it's boost::container::flat_set!
+  std::set_intersection(a.cbegin(),a.cend(),b.cbegin(),b.cend(),
+    std::inserter(result_vec,result_vec.end()));
+#ifdef USE_BOOST
+  return taint_svaluet::expressiont(boost::container::ordered_unique_range_t(),result_vec.cbegin(),result_vec.cend());
+#else
+  return taint_svaluet::expressiont(result_vec.cbegin(),result_vec.cend());
+#endif
+}
+
 trace_under_constructiont::trace_under_constructiont(
     taint_trace_elementt const&  element,
-    std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols
+    taint_svaluet::expressiont const&  symbols
     )
   : trace{element}
   , visited{}
@@ -264,7 +278,7 @@ void trace_under_constructiont::push_back(
 }
 
 void  trace_under_constructiont::stack_push(
-    std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols
+    taint_svaluet::expressiont const&  symbols
     )
 {
   assert(!empty());
@@ -273,7 +287,7 @@ void  trace_under_constructiont::stack_push(
 }
 
 void  trace_under_constructiont::stack_set_top(
-    std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols
+    taint_svaluet::expressiont const&  symbols
     )
 {
   assert(!empty());
@@ -348,17 +362,13 @@ static void  taint_collect_successors_inside_function(
         0UL == processed_locations.count(succ_target->location_number))
     {
       taint_map_from_lvalues_to_svaluest  from_lvalues_to_svalues;
-      taint_svaluet::expressiont  symbols;
       {
 	const auto& summary=*summaries.find<taint_summaryt>(elem.get_name_of_function());
         const auto& domain=summary.domain();
 	const auto& numbering=summary.domain_numbering();
 	for (auto const&  lvalue_svalue : domain.at(succ_target))
         {
-          taint_svaluet::expressiont  symbols;
-          for (auto const&  symbol : lvalue_svalue.second.expression())
-            if (trace.stack_top().second.count(symbol) != 0UL)
-              symbols.insert(symbol);
+          auto symbols=taint_expression_intersect(lvalue_svalue.second.expression(),trace.stack_top().second);
           if (!symbols.empty())
             from_lvalues_to_svalues.insert({
                 numbering[lvalue_svalue.first],
@@ -828,7 +838,7 @@ void taint_recognise_error_traces(
             as_string(to_symbol_expr(fn_call.function()).get_identifier());
 	  
         taint_map_from_lvalues_to_svaluest  from_lvalues_to_svalues;
-        std::unordered_set<taint_svaluet::taint_symbolt>  symbols;
+        taint_svaluet::expressiont  symbols;
         {
 	  const auto& summary=*summaries.find<taint_summaryt>(elem.get_name_of_function());
 	  const auto& domain=summary.domain();
@@ -851,7 +861,7 @@ void taint_recognise_error_traces(
 	    for (auto const&  callee_lvalue_svalue : callee_symbol_map)
             {
               {
-                std::set<taint_svaluet::taint_symbolt>
+                std::vector<taint_svaluet::taint_symbolt>
                     collected_symbols;
                 {
                   taint_numbered_lvalues_sett  argument_lvalues;
@@ -888,20 +898,15 @@ void taint_recognise_error_traces(
                     if (lvalue_it != lvalue_svalue.cend())
                     {
                       for (auto const  symbol : lvalue_it->second.expression())
-                        collected_symbols.insert(symbol);
+                        collected_symbols.push_back(symbol);
                     }
                   }
                 }
 
-                taint_svaluet::expressiont  symbols_intersection;
-                std::set_intersection(
-                      collected_symbols.cbegin(),
-                      collected_symbols.cend(),
-                      trace.stack_top().second.cbegin(),
-                      trace.stack_top().second.cend(),
-                      std::inserter(symbols_intersection,
-                                    symbols_intersection.begin())
-                      );
+                auto symbols_intersection=
+		  taint_expression_intersect(
+		    taint_svaluet::expressiont(collected_symbols.begin(),collected_symbols.end()),
+		    trace.stack_top().second);
                 if (!symbols_intersection.empty())
                 {
                   symbols_intersection.insert(
@@ -924,15 +929,7 @@ void taint_recognise_error_traces(
 		  lvalue_svalue.find(lvalue_number);
                 if (it != lvalue_svalue.cend())
                 {
-                  taint_svaluet::expressiont  symbols_intersection;
-                  std::set_intersection(
-                        it->second.expression().cbegin(),
-                        it->second.expression().cend(),
-                        trace.stack_top().second.cbegin(),
-                        trace.stack_top().second.cend(),
-                        std::inserter(symbols_intersection,
-                                      symbols_intersection.begin())
-                        );
+		  auto symbols_intersection=taint_expression_intersect(it->second.expression(),trace.stack_top().second);
                   if (!symbols_intersection.empty())
                   {
                     from_lvalues_to_svalues.insert({
@@ -1141,7 +1138,7 @@ void taint_recognise_error_traces(
       }
       else
       {
-        std::unordered_set<taint_svaluet::taint_symbolt>  stack_symbols(
+        taint_svaluet::expressiont  stack_symbols(
               elem.get_symbols().cbegin(),
               elem.get_symbols().cend()
               );
