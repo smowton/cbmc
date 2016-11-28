@@ -1,4 +1,9 @@
 
+jforum is a discussion board system implemented in Java
+154 commits
+1 branch
+0 releases
+7 contributors
 
 Installation on Ubuntu:
 

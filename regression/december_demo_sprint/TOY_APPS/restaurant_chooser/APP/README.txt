@@ -2,6 +2,10 @@ Restaurant Chooser
 ~~~~~~~~~~~~~~~~~~
 
 Small application implementing a voting system for deciding where to have lunch.
+2 commits
+1 branch
+0 releases
+0 contributors
 
 Repository: https://github.com/michaelzherdev/restaurant_chooser
 

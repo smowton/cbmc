@@ -3,6 +3,13 @@ mediaManager
 
 Web application which provides an interface to a collection of media.
 Source code on github, only one contributor, draft.
+29 commits
+1 branch
+0 releases
+1 contributor
+
+    Java 99.1% SQL 0.9% 
+
 
 Webpage:  
 Repo URL: https://github.com/jamescoll/mediaManager
