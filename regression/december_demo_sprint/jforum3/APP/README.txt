@@ -1,9 +1,8 @@
 JForum3
 ~~~~~~~
-
 It is a discussion board system implemented in Java.
 
-Homepage WEB: TODO!
+Homepage WEB: WEB: http://jforum.net/
 Repository URL: http://github.com/rafaelsteil/jforum3
 Analysed branch: master
 Analysed commit: bb847ea32f0abc7e3d0eb67fe8bbf88c7becfce4

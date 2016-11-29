@@ -71,6 +71,11 @@ regression/december_demo_sprint/TOY_APPS/restaurant_chooser/BENCHMARK/*
 regression/december_demo_sprint/TOY_APPS/restaurant_chooser/BENCHMARK_EXT/*
 regression/december_demo_sprint/TOY_APPS/restaurant_chooser/RESULTS.aux/*
 regression/december_demo_sprint/TOY_APPS/restaurant_chooser/RESULTS/*
+regression/december_demo_sprint/TOY_APPS/SuggestionBox/APP/SuggestionBox/*
+regression/december_demo_sprint/TOY_APPS/SuggestionBox/BENCHMARK/*
+regression/december_demo_sprint/TOY_APPS/SuggestionBox/BENCHMARK_EXT/*
+regression/december_demo_sprint/TOY_APPS/SuggestionBox/RESULTS.aux/*
+regression/december_demo_sprint/TOY_APPS/SuggestionBox/RESULTS/*
 regression/december_demo_sprint/Alfresco/APP/Alfresco/*
 regression/december_demo_sprint/Alfresco/BENCHMARK/*
 regression/december_demo_sprint/Alfresco/BENCHMARK_EXT/*
@@ -91,6 +96,14 @@ regression/december_demo_sprint/jforum3/APP/jforum3/*
 regression/december_demo_sprint/jforum3/BENCHMARK/*
 regression/december_demo_sprint/jforum3/BENCHMARK_EXT/*
 regression/december_demo_sprint/jforum3/RESULTS.aux/*
+regression/december_demo_sprint/Libresonic/APP/Libresonic/*
+regression/december_demo_sprint/Libresonic/BENCHMARK/*
+regression/december_demo_sprint/Libresonic/BENCHMARK_EXT/*
+regression/december_demo_sprint/Libresonic/RESULTS.aux/*
+regression/december_demo_sprint/Onyx/APP/Onyx/*
+regression/december_demo_sprint/Onyx/BENCHMARK/*
+regression/december_demo_sprint/Onyx/BENCHMARK_EXT/*
+regression/december_demo_sprint/Onyx/RESULTS.aux/*
 regression/december_demo_sprint/Openolat/APP/Openolat/*
 regression/december_demo_sprint/Openolat/BENCHMARK/*
 regression/december_demo_sprint/Openolat/BENCHMARK_EXT/*

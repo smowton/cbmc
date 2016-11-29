@@ -17,7 +17,7 @@ Repository: https://github.com/culturecommunication/ginco
 1. Open a terminal in the directory of this readme file and clone:
       git clone https://github.com/culturecommunication/ginco
 2. Rename the created directory "ginco" to "Ginco"
-2. Enter the directory "Ginco" and build with maven:
+3. Enter the directory "Ginco" and build with maven:
       git checkout e6ae1b436e308d3b712482b596f4f636aacd2e97 .
       mvn clean package
 4. Copy the resulting files to ../BENCHMARK (relative path to this README.txt
