@@ -100,6 +100,8 @@ void taint_recognise_error_traces(
     taint_object_numbering_per_functiont&  taint_object_numbering,
     object_numbers_by_field_per_functiont&  object_numbers_by_field,
     const formals_to_actuals_mapt&,
+    bool stop_after_one_trace,
+    message_handlert&,
     std::stringstream* const  log
     );
 
@@ -116,7 +118,9 @@ void taint_recognise_error_traces(
     goto_programt::const_targett const sink_instruction,
     taint_object_numbering_per_functiont&  taint_object_numbering,
     object_numbers_by_field_per_functiont&  object_numbers_by_field,
-    const formals_to_actuals_mapt&,    
+    const formals_to_actuals_mapt&,
+    bool stop_after_one_trace,
+    message_handlert&,
     std::stringstream* const  log
     );
 

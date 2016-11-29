@@ -34,6 +34,10 @@ This module defines interfaces and functionality for taint summaries.
 #include <string>
 #include <iosfwd>
 
+#ifdef USE_BOOST
+#include <boost/container/flat_set.hpp>
+#endif
+
 /*******************************************************************\
 
    Class:
@@ -46,7 +50,13 @@ class  taint_svaluet
 public:
 
   typedef unsigned long  taint_symbolt;
-  typedef std::set<taint_symbolt>  expressiont;
+#ifdef USE_BOOST
+  typedef boost::container::flat_set<taint_symbolt> expressiont;
+  typedef std::set<taint_symbolt> supressiont;
+#else
+  typedef std::set<taint_symbolt> expressiont;
+  typedef std::set<taint_symbolt> supressiont;
+#endif
 
   taint_svaluet(
       expressiont const&  expression,
@@ -56,7 +66,7 @@ public:
 
   taint_svaluet(
       expressiont const&  expression,
-      expressiont const&  suppression,
+      supressiont const&  suppression,
       bool  is_bottom,
       bool  is_top
       );
@@ -72,14 +82,24 @@ public:
   bool  is_top() const noexcept { return m_is_top; }
   bool  is_bottom() const noexcept { return m_is_bottom; }
   expressiont const&  expression() const noexcept { return m_expression; }
-  expressiont const&  suppression() const noexcept { return m_suppression; }
+  supressiont const&  suppression() const noexcept { return m_suppression; }
 
   bool  is_symbol() const noexcept
   { return !is_top() && !is_bottom() && expression().size() == 1UL; }
 
+  void add(const taint_symbolt& newsym)
+  {
+    if(m_is_top)
+      return;
+    m_is_bottom=false;
+    m_expression.insert(newsym);
+  }
+
+  void add_all(const taint_svaluet& other);
+
 private:
   expressiont  m_expression;
-  expressiont  m_suppression;
+  supressiont  m_suppression;
   bool  m_is_bottom;
   bool  m_is_top;
 };
@@ -176,7 +196,7 @@ Function:
 \*******************************************************************/
 taint_svaluet  suppression(
     taint_svaluet const&  a,
-    taint_svaluet::expressiont const&  sub
+    taint_svaluet::supressiont const&  sub
     );
 
 

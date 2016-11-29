@@ -52,7 +52,8 @@ class optionst;
   "(taint-dump-lvsa-summaries)" \
   "(taint-dump-program)" \
   "(taint-summaries-timeout-seconds):" \
-  "(taint-dump-log)"\
+  "(taint-dump-log)" \
+  "(taint-stop-after-one-trace)" \
   "(class-info):"
 
 class goto_analyzer_parse_optionst:

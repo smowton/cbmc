@@ -26,8 +26,6 @@ data stored in the databese of taint summaries.
 #include <iterator>
 #include <cassert>
 
-#include <iostream>
-
 static const namespacet* global_ns;
 
 static void  dump_trace(taint_tracet const&  trace,
@@ -99,9 +97,9 @@ public:
 
   typedef std::pair<
               std::size_t, //!< Index into this trace where is a call statement.
-              std::unordered_set<taint_svaluet::taint_symbolt> //!< A set of symbols representing
-                                                               //!< the tainted symbol in the
-                                                               //!< called function.
+              taint_svaluet::expressiont //!< A set of symbols representing
+                                         //!< the tainted symbol in the
+                                         //!< called function.
               >
           call_stack_valuet;
 
@@ -115,7 +113,7 @@ public:
 
   explicit trace_under_constructiont(
       taint_trace_elementt const&  element,
-      std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols
+      taint_svaluet::expressiont const&  symbols
       );
 
   taint_tracet const&  get_trace() const noexcept  { return trace; }
@@ -141,8 +139,8 @@ public:
   /// Call-stack-related access/check methods
   bool  stack_has_return() const { return call_stack.size() > 1UL; }
   call_stack_valuet const& stack_top() const { return call_stack.back(); }
-  void  stack_push(std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols);
-  void  stack_set_top(std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols);
+  void  stack_push(taint_svaluet::expressiont const&  symbols);
+  void  stack_set_top(taint_svaluet::expressiont const&  symbols);
   void  stack_pop();
 
   backtrack_statet get_backtrack_state() { return { trace.size(), call_stack }; }
@@ -189,9 +187,23 @@ struct backtracking_trace_constructiont {
 
 };
 
+static taint_svaluet::expressiont taint_expression_intersect(const taint_svaluet::expressiont& a, const taint_svaluet::expressiont& b)
+{
+  std::vector<taint_svaluet::taint_symbolt> result_vec;
+  // This may or may not be a good optimisation when expressiont == std::set,
+  // but definitely is when it's boost::container::flat_set!
+  std::set_intersection(a.cbegin(),a.cend(),b.cbegin(),b.cend(),
+    std::inserter(result_vec,result_vec.end()));
+#ifdef USE_BOOST
+  return taint_svaluet::expressiont(boost::container::ordered_unique_range_t(),result_vec.cbegin(),result_vec.cend());
+#else
+  return taint_svaluet::expressiont(result_vec.cbegin(),result_vec.cend());
+#endif
+}
+
 trace_under_constructiont::trace_under_constructiont(
     taint_trace_elementt const&  element,
-    std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols
+    taint_svaluet::expressiont const&  symbols
     )
   : trace{element}
   , visited{}
@@ -264,7 +276,7 @@ void trace_under_constructiont::push_back(
 }
 
 void  trace_under_constructiont::stack_push(
-    std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols
+    taint_svaluet::expressiont const&  symbols
     )
 {
   assert(!empty());
@@ -273,7 +285,7 @@ void  trace_under_constructiont::stack_push(
 }
 
 void  trace_under_constructiont::stack_set_top(
-    std::unordered_set<taint_svaluet::taint_symbolt> const&  symbols
+    taint_svaluet::expressiont const&  symbols
     )
 {
   assert(!empty());
@@ -348,17 +360,13 @@ static void  taint_collect_successors_inside_function(
         0UL == processed_locations.count(succ_target->location_number))
     {
       taint_map_from_lvalues_to_svaluest  from_lvalues_to_svalues;
-      taint_svaluet::expressiont  symbols;
       {
 	const auto& summary=*summaries.find<taint_summaryt>(elem.get_name_of_function());
         const auto& domain=summary.domain();
 	const auto& numbering=summary.domain_numbering();
 	for (auto const&  lvalue_svalue : domain.at(succ_target))
         {
-          taint_svaluet::expressiont  symbols;
-          for (auto const&  symbol : lvalue_svalue.second.expression())
-            if (trace.stack_top().second.count(symbol) != 0UL)
-              symbols.insert(symbol);
+          auto symbols=taint_expression_intersect(lvalue_svalue.second.expression(),trace.stack_top().second);
           if (!symbols.empty())
             from_lvalues_to_svalues.insert({
                 numbering[lvalue_svalue.first],
@@ -537,6 +545,8 @@ void taint_recognise_error_traces(
     taint_object_numbering_per_functiont&  taint_object_numbering,
     object_numbers_by_field_per_functiont&  object_numbers_by_field,
     const formals_to_actuals_mapt& formals_to_actuals,
+    bool stop_after_one_trace,
+    message_handlert& msghandler,
     std::stringstream* const  log
     )
 {
@@ -566,6 +576,8 @@ void taint_recognise_error_traces(
                     taint_object_numbering,
                     object_numbers_by_field,
 		    formals_to_actuals,
+		    stop_after_one_trace,
+		    msghandler,
                     log
                     );
       }
@@ -587,9 +599,12 @@ void taint_recognise_error_traces(
     taint_object_numbering_per_functiont&  taint_object_numbering,
     object_numbers_by_field_per_functiont&  object_numbers_by_field,
     const formals_to_actuals_mapt& formals_to_actuals,
+    bool stop_after_one_trace,
+    message_handlert& msghandler,
     std::stringstream* const  log
     )
 {
+  messaget msg(msghandler);
   if (log != nullptr)
     *log << "<h3>Building an error trace from source to sink</h3>\n"
             "<p>We will recognise all tained paths from this pair of source "
@@ -709,13 +724,9 @@ void taint_recognise_error_traces(
     taint_trace_elementt const&  elem = trace.back();
     const auto& local_numbering=taint_object_numbering.at(elem.get_name_of_function());
 
-    std::cout << trace.get_trace().size() << " " << elem.get_name_of_function() << " " << from_expr(ns,"",elem.get_instruction_iterator()->code) << "\n";
+    if(msghandler.get_verbosity()>=message_clientt::M_DEBUG)
+      msg.debug() << trace.get_trace().size() << " " << elem.get_name_of_function() << " " << from_expr(ns,"",elem.get_instruction_iterator()->code) << messaget::eom;
 
-    if(trace.get_trace().size()==255)
-    {
-      std::cout << "HERE\n";
-    }
-    
     if (elem.get_name_of_function() == sink_function_name &&
         elem.get_instruction_iterator() == sink_instruction)
     {
@@ -762,8 +773,7 @@ void taint_recognise_error_traces(
       if (is_taint_expression_tainted)
       {
         output_traces.push_back(trace.get_trace());
-	std::cout << "BACKTRACK: successful trace (looking for alternatives)\n";
-	bt_trace.backtrack();
+	msg.debug() << "BACKTRACK: successful trace (looking for alternatives)" << messaget::eom;
 
         if (log != nullptr)
         {
@@ -817,6 +827,11 @@ void taint_recognise_error_traces(
           }
           *log << "</table>";
         }
+
+	if(stop_after_one_trace)
+	  bt_trace.done=true;
+	bt_trace.backtrack();
+	
       }
       else
       {
@@ -825,7 +840,7 @@ void taint_recognise_error_traces(
                      "Skipping the following explored path",
                      ns,
                      log);
-	std::cout << "BACKTRACK: sink without appropriate taint\n";
+	msg.debug() << "BACKTRACK: sink without appropriate taint" << messaget::eom;
 	bt_trace.backtrack();
 
         if (log != nullptr)
@@ -849,7 +864,7 @@ void taint_recognise_error_traces(
 //        }
 	  
         taint_map_from_lvalues_to_svaluest  from_lvalues_to_svalues;
-        std::unordered_set<taint_svaluet::taint_symbolt>  symbols;
+        taint_svaluet::expressiont  symbols;
         {
 	  const auto& summary=*summaries.find<taint_summaryt>(elem.get_name_of_function());
 	  const auto& domain=summary.domain();
@@ -872,7 +887,7 @@ void taint_recognise_error_traces(
 	    for (auto const&  callee_lvalue_svalue : callee_symbol_map)
             {
               {
-                std::set<taint_svaluet::taint_symbolt>
+                std::vector<taint_svaluet::taint_symbolt>
                     collected_symbols;
                 {
                   taint_numbered_lvalues_sett  argument_lvalues;
@@ -888,7 +903,10 @@ void taint_recognise_error_traces(
 		    
 		    for(const auto number : actuals_list[param_indices[paramsym]])
 		    {
-		      std::cout << "Actual parameter for " << from_expr(ns,"",callee_lvalue_svalue.first) << ": " << from_expr(ns,"",local_numbering[number]) << "\n";
+		      if(msghandler.get_verbosity()>=message_clientt::M_DEBUG)
+			msg.debug() << "Actual parameter for " <<
+			  from_expr(ns,"",callee_lvalue_svalue.first) << ": " <<
+			  from_expr(ns,"",local_numbering[number]) << messaget::eom;
 		      argument_lvalues.insert(number);
 		    }
 		  }
@@ -909,20 +927,15 @@ void taint_recognise_error_traces(
                     if (lvalue_it != lvalue_svalue.cend())
                     {
                       for (auto const  symbol : lvalue_it->second.expression())
-                        collected_symbols.insert(symbol);
+                        collected_symbols.push_back(symbol);
                     }
                   }
                 }
 
-                taint_svaluet::expressiont  symbols_intersection;
-                std::set_intersection(
-                      collected_symbols.cbegin(),
-                      collected_symbols.cend(),
-                      trace.stack_top().second.cbegin(),
-                      trace.stack_top().second.cend(),
-                      std::inserter(symbols_intersection,
-                                    symbols_intersection.begin())
-                      );
+                auto symbols_intersection=
+		  taint_expression_intersect(
+		    taint_svaluet::expressiont(collected_symbols.begin(),collected_symbols.end()),
+		    trace.stack_top().second);
                 if (!symbols_intersection.empty())
                 {
                   symbols_intersection.insert(
@@ -945,15 +958,7 @@ void taint_recognise_error_traces(
 		  lvalue_svalue.find(lvalue_number);
                 if (it != lvalue_svalue.cend())
                 {
-                  taint_svaluet::expressiont  symbols_intersection;
-                  std::set_intersection(
-                        it->second.expression().cbegin(),
-                        it->second.expression().cend(),
-                        trace.stack_top().second.cbegin(),
-                        trace.stack_top().second.cend(),
-                        std::inserter(symbols_intersection,
-                                      symbols_intersection.begin())
-                        );
+		  auto symbols_intersection=taint_expression_intersect(it->second.expression(),trace.stack_top().second);
                   if (!symbols_intersection.empty())
                   {
                     from_lvalues_to_svalues.insert({
@@ -1000,7 +1005,7 @@ void taint_recognise_error_traces(
                          "Skipping the following explored path",
                          ns,
                          log);
-	    std::cout << "BACKTRACK: uninteresting call, no successors\n";
+	    msg.debug() << "BACKTRACK: uninteresting call, no successors" << messaget::eom;
 	    bt_trace.backtrack();
           }
           else
@@ -1035,10 +1040,10 @@ void taint_recognise_error_traces(
 		mycost=std::min(findit3->second,mycost);		
 	    }
 	    callee_is_closer=(mycost > findit->second);
-	    std::cout << "*** Callee " << callee_ident << " cost " << findit->second << " vs. skip cost " << mycost << "\n";
+	    msg.debug() << "*** Callee " << callee_ident << " cost " << findit->second << " vs. skip cost " << mycost << messaget::eom;
 	  }
 	  else
-	    std::cout << "*** Callee " << callee_ident << " not on path to sink\n";
+	    msg.debug() << "*** Callee " << callee_ident << " not on path to sink" << messaget::eom;
 
 	  const auto& fstart=goto_model.goto_functions.function_map.at(callee_ident)
 	    .body.instructions.cbegin();
@@ -1082,7 +1087,7 @@ void taint_recognise_error_traces(
 			   "Skipping the following explored path",
 			   ns,
 			   log);
-	      std::cout << "BACKTRACK: interesting call, no successors\n";
+	      msg.debug() << "BACKTRACK: interesting call, no successors" << messaget::eom;
 	      bt_trace.backtrack();
 	    }
 	    else
@@ -1115,7 +1120,7 @@ void taint_recognise_error_traces(
                        "Skipping the following explored path",
                        ns,
                        log);
-	  std::cout << "BACKTRACK: call without summary, no successors\n";
+	  msg.debug() << "BACKTRACK: call without summary, no successors" << messaget::eom;
           bt_trace.backtrack();
         }
         else
@@ -1151,7 +1156,7 @@ void taint_recognise_error_traces(
                        "Skipping the following explored path",
                        ns,
                        log);
-	  std::cout << "BACKTRACK: function end (have stack) with no successors\n";
+	  msg.debug() << "BACKTRACK: function end (have stack) with no successors" << messaget::eom;
           bt_trace.backtrack();
         }
         else
@@ -1162,7 +1167,7 @@ void taint_recognise_error_traces(
       }
       else
       {
-        std::unordered_set<taint_svaluet::taint_symbolt>  stack_symbols(
+        taint_svaluet::expressiont  stack_symbols(
               elem.get_symbols().cbegin(),
               elem.get_symbols().cend()
               );
@@ -1228,9 +1233,12 @@ void taint_recognise_error_traces(
 	compare_costs comp(function_upward_distances_to_sink);
 	std::sort(sorted_callers.begin(),sorted_callers.end(),comp);
 
-	std::cout << "*** Return costs:\n";
+	msg.debug() << "*** Return costs:" << messaget::eom;
 	for(const auto& caller : sorted_callers)
-	  std::cout << caller.first << " cost " << (function_upward_distances_to_sink.count(caller.first) ? function_upward_distances_to_sink[caller.first] : 10000) << "\n";
+	  msg.debug() << caller.first << " cost " <<
+	    (function_upward_distances_to_sink.count(caller.first) ?
+	     function_upward_distances_to_sink[caller.first] :
+	     10000) << messaget::eom;
 	
         for (auto callerit=sorted_callers.rbegin(), callerend=sorted_callers.rend();
 	     callerit!=callerend; ++callerit)
@@ -1280,7 +1288,7 @@ void taint_recognise_error_traces(
                      ns,
                      log);
 	if(!bt_trace.can_backtrack())
-	  std::cout << "BACKTRACK: function end, no callers\n";
+	  msg.debug() << "BACKTRACK: function end, no callers" << messaget::eom;
 
 	bt_trace.backtrack();
       }
@@ -1306,7 +1314,7 @@ void taint_recognise_error_traces(
                      "Skipping the following explored path",
                      ns,
                      log);
-	std::cout << "BACKTRACK: Normal inst no successors\n";
+	msg.debug() << "BACKTRACK: Normal inst no successors" << messaget::eom;
 	bt_trace.backtrack();
       }
       else
@@ -1346,14 +1354,16 @@ void taint_recognise_error_traces(
 	  
 	  compare_local_costs comp(insit.first->second);
 	  std::sort(successors.begin(),successors.end(),comp);
-	  std::cout << "Conditional branch costs:\n";
-	  for(const auto& succ : successors)
+	  if(msghandler.get_verbosity()>=message_clientt::M_DEBUG)
 	  {
-	    auto succit=succ.get_instruction_iterator();
-	    std::cout << from_expr(ns,"",succit->code) << ": " <<
-	      (insit.first->second.count(succit) ? insit.first->second.at(succit) : 10000) << "\n";
+	    msg.debug() << "Conditional branch costs:" << messaget::eom;
+	    for(const auto& succ : successors)
+	    {
+	      auto succit=succ.get_instruction_iterator();
+	      msg.debug() << from_expr(ns,"",succit->code) << ": " <<
+		(insit.first->second.count(succit) ? insit.first->second.at(succit) : 10000) << messaget::eom;
+	    }
 	  }
-
 	}
 	
         for (std::size_t  i = 1UL; i < successors.size(); ++i)
