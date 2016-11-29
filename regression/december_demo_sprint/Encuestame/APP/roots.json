@@ -1,3 +1,9 @@
 [
+    "org.encuestame.rest.api.v1.SettingsJsonController.upgradeProfile",
+    "org.encuestame.rest.api.v1.SettingsJsonController.upgradePostProfile",
+    "org.encuestame.rest.api.v1.social.SocialAccountsJsonController.getSocialAccountByType",
+    "org.encuestame.mvc.interceptor.EnMeSecurityInterceptor.preHandle",
+    "org.encuestame.mvc.interceptor.EnMeSecurityInterceptor.postHandle",
+    "org.encuestame.mvc.interceptor.EnMeMobileInterceptor.preHandle"
 ]
 

@@ -1,15 +1,15 @@
 JForum3
 ~~~~~~~
-jforum is a discussion board system implemented in Java
+It is a discussion board system implemented in Java.
 
 Homepage WEB: http://jforum.net/
 Repository URL: http://github.com/rafaelsteil/jforum3
 Analysed branch: master
 Analysed commit: bb847ea32f0abc7e3d0eb67fe8bbf88c7becfce4
-154 commits
-1 branch
-0 releases
-7 contributors
+Commints: 154
+Releases: 0
+Contributors: 7
+Branches: 1
 
 Installation on Ubuntu:
 

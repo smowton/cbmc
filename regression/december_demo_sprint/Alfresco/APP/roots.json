@@ -1,3 +1,12 @@
 [
+    "org.alfresco.web.app.Application.handleServletError",
+    "org.alfresco.web.app.Application.handleSystemError",
+    "org.alfresco.web.sharepoint.auth.BasicAuthenticationHandler.authenticateRequest",
+    "org.alfresco.web.sharepoint.auth.BasicAuthenticationHandler.isUserAuthenticated",
+    "org.alfresco.web.app.servlet.UploadFileServlet.service",
+    "org.alfresco.web.app.servlet.CommandServlet.service",
+    "org.alfresco.web.app.servlet.UploadContentServlet.doPut",
+    "org.alfresco.web.app.servlet.DownloadRawContentServlet.service",
+    "org.alfresco.web.app.servlet.DownloadRawContentServlet.processRequest"
 ]
 

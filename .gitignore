@@ -56,10 +56,37 @@ regression/december_demo_sprint/TRAINING/taint_traces_05/BENCHMARK/*
 regression/december_demo_sprint/TRAINING/taint_traces_05/BENCHMARK_EXT/*
 regression/december_demo_sprint/TRAINING/taint_traces_05/RESULTS.aux/*
 regression/december_demo_sprint/TRAINING/taint_traces_05/RESULTS/*
+regression/december_demo_sprint/TOY_APPS/Fotoalbum/APP/Fotoalbum/*
+regression/december_demo_sprint/TOY_APPS/Fotoalbum/BENCHMARK/*
+regression/december_demo_sprint/TOY_APPS/Fotoalbum/BENCHMARK_EXT/*
+regression/december_demo_sprint/TOY_APPS/Fotoalbum/RESULTS.aux/*
+regression/december_demo_sprint/TOY_APPS/Fotoalbum/RESULTS/*
+regression/december_demo_sprint/TOY_APPS/mediaManager/APP/mediaManager/*
+regression/december_demo_sprint/TOY_APPS/mediaManager/BENCHMARK/*
+regression/december_demo_sprint/TOY_APPS/mediaManager/BENCHMARK_EXT/*
+regression/december_demo_sprint/TOY_APPS/mediaManager/RESULTS.aux/*
+regression/december_demo_sprint/TOY_APPS/mediaManager/RESULTS/*
+regression/december_demo_sprint/TOY_APPS/restaurant_chooser/APP/restaurant_chooser/*
+regression/december_demo_sprint/TOY_APPS/restaurant_chooser/BENCHMARK/*
+regression/december_demo_sprint/TOY_APPS/restaurant_chooser/BENCHMARK_EXT/*
+regression/december_demo_sprint/TOY_APPS/restaurant_chooser/RESULTS.aux/*
+regression/december_demo_sprint/TOY_APPS/restaurant_chooser/RESULTS/*
+regression/december_demo_sprint/Alfresco/APP/Alfresco/*
+regression/december_demo_sprint/Alfresco/BENCHMARK/*
+regression/december_demo_sprint/Alfresco/BENCHMARK_EXT/*
+regression/december_demo_sprint/Alfresco/RESULTS.aux/*
 regression/december_demo_sprint/DSpace/APP/DSpace/*
 regression/december_demo_sprint/DSpace/BENCHMARK/*
 regression/december_demo_sprint/DSpace/BENCHMARK_EXT/*
 regression/december_demo_sprint/DSpace/RESULTS.aux/*
+regression/december_demo_sprint/Encuestame/APP/Encuestame/*
+regression/december_demo_sprint/Encuestame/BENCHMARK/*
+regression/december_demo_sprint/Encuestame/BENCHMARK_EXT/*
+regression/december_demo_sprint/Encuestame/RESULTS.aux/*
+regression/december_demo_sprint/Ginco/APP/Ginco/*
+regression/december_demo_sprint/Ginco/BENCHMARK/*
+regression/december_demo_sprint/Ginco/BENCHMARK_EXT/*
+regression/december_demo_sprint/Ginco/RESULTS.aux/*
 regression/december_demo_sprint/jforum3/APP/jforum3/*
 regression/december_demo_sprint/jforum3/BENCHMARK/*
 regression/december_demo_sprint/jforum3/BENCHMARK_EXT/*
@@ -76,6 +103,10 @@ regression/december_demo_sprint/Sakai/APP/Sakai/*
 regression/december_demo_sprint/Sakai/BENCHMARK/*
 regression/december_demo_sprint/Sakai/BENCHMARK_EXT/*
 regression/december_demo_sprint/Sakai/RESULTS.aux/*
+regression/december_demo_sprint/SocialSDK/APP/SocialSDK/*
+regression/december_demo_sprint/SocialSDK/BENCHMARK/*
+regression/december_demo_sprint/SocialSDK/BENCHMARK_EXT/*
+regression/december_demo_sprint/SocialSDK/RESULTS.aux/*
 
 
 # regression/test files
