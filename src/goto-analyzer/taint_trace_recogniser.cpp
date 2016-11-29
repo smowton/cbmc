@@ -26,8 +26,6 @@ data stored in the databese of taint summaries.
 #include <iterator>
 #include <cassert>
 
-#include <iostream>
-
 static const namespacet* global_ns;
 
 static void  dump_trace(taint_tracet const&  trace,
@@ -548,6 +546,7 @@ void taint_recognise_error_traces(
     object_numbers_by_field_per_functiont&  object_numbers_by_field,
     const formals_to_actuals_mapt& formals_to_actuals,
     bool stop_after_one_trace,
+    message_handlert& msghandler,
     std::stringstream* const  log
     )
 {
@@ -578,6 +577,7 @@ void taint_recognise_error_traces(
                     object_numbers_by_field,
 		    formals_to_actuals,
 		    stop_after_one_trace,
+		    msghandler,
                     log
                     );
       }
@@ -600,9 +600,11 @@ void taint_recognise_error_traces(
     object_numbers_by_field_per_functiont&  object_numbers_by_field,
     const formals_to_actuals_mapt& formals_to_actuals,
     bool stop_after_one_trace,
+    message_handlert& msghandler,
     std::stringstream* const  log
     )
 {
+  messaget msg(msghandler);
   if (log != nullptr)
     *log << "<h3>Building an error trace from source to sink</h3>\n"
             "<p>We will recognise all tained paths from this pair of source "
@@ -722,13 +724,9 @@ void taint_recognise_error_traces(
     taint_trace_elementt const&  elem = trace.back();
     const auto& local_numbering=taint_object_numbering.at(elem.get_name_of_function());
 
-    std::cout << trace.get_trace().size() << " " << elem.get_name_of_function() << " " << from_expr(ns,"",elem.get_instruction_iterator()->code) << "\n";
+    if(msghandler.get_verbosity()>=message_clientt::M_DEBUG)
+      msg.debug() << trace.get_trace().size() << " " << elem.get_name_of_function() << " " << from_expr(ns,"",elem.get_instruction_iterator()->code) << messaget::eom;
 
-    if(trace.get_trace().size()==255)
-    {
-      std::cout << "HERE\n";
-    }
-    
     if (elem.get_name_of_function() == sink_function_name &&
         elem.get_instruction_iterator() == sink_instruction)
     {
@@ -760,8 +758,7 @@ void taint_recognise_error_traces(
       if (is_taint_expression_tainted)
       {
         output_traces.push_back(trace.get_trace());
-	std::cout << "BACKTRACK: successful trace (looking for alternatives)\n";
-	bt_trace.backtrack();
+	msg.debug() << "BACKTRACK: successful trace (looking for alternatives)" << messaget::eom;
 
         if (log != nullptr)
         {
@@ -818,6 +815,7 @@ void taint_recognise_error_traces(
 
 	if(stop_after_one_trace)
 	  bt_trace.done=true;
+	bt_trace.backtrack();
 	
       }
       else
@@ -827,7 +825,7 @@ void taint_recognise_error_traces(
                      "Skipping the following explored path",
                      ns,
                      log);
-	std::cout << "BACKTRACK: sink without appropriate taint\n";
+	msg.debug() << "BACKTRACK: sink without appropriate taint" << messaget::eom;
 	bt_trace.backtrack();
 
         if (log != nullptr)
@@ -884,7 +882,10 @@ void taint_recognise_error_traces(
 		    
 		    for(const auto number : actuals_list[param_indices[paramsym]])
 		    {
-		      std::cout << "Actual parameter for " << from_expr(ns,"",callee_lvalue_svalue.first) << ": " << from_expr(ns,"",local_numbering[number]) << "\n";
+		      if(msghandler.get_verbosity()>=message_clientt::M_DEBUG)
+			msg.debug() << "Actual parameter for " <<
+			  from_expr(ns,"",callee_lvalue_svalue.first) << ": " <<
+			  from_expr(ns,"",local_numbering[number]) << messaget::eom;
 		      argument_lvalues.insert(number);
 		    }
 		  }
@@ -983,7 +984,7 @@ void taint_recognise_error_traces(
                          "Skipping the following explored path",
                          ns,
                          log);
-	    std::cout << "BACKTRACK: uninteresting call, no successors\n";
+	    msg.debug() << "BACKTRACK: uninteresting call, no successors" << messaget::eom;
 	    bt_trace.backtrack();
           }
           else
@@ -1018,10 +1019,10 @@ void taint_recognise_error_traces(
 		mycost=std::min(findit3->second,mycost);		
 	    }
 	    callee_is_closer=(mycost > findit->second);
-	    std::cout << "*** Callee " << callee_ident << " cost " << findit->second << " vs. skip cost " << mycost << "\n";
+	    msg.debug() << "*** Callee " << callee_ident << " cost " << findit->second << " vs. skip cost " << mycost << messaget::eom;
 	  }
 	  else
-	    std::cout << "*** Callee " << callee_ident << " not on path to sink\n";
+	    msg.debug() << "*** Callee " << callee_ident << " not on path to sink" << messaget::eom;
 
 	  const auto& fstart=goto_model.goto_functions.function_map.at(callee_ident)
 	    .body.instructions.cbegin();
@@ -1065,7 +1066,7 @@ void taint_recognise_error_traces(
 			   "Skipping the following explored path",
 			   ns,
 			   log);
-	      std::cout << "BACKTRACK: interesting call, no successors\n";
+	      msg.debug() << "BACKTRACK: interesting call, no successors" << messaget::eom;
 	      bt_trace.backtrack();
 	    }
 	    else
@@ -1098,7 +1099,7 @@ void taint_recognise_error_traces(
                        "Skipping the following explored path",
                        ns,
                        log);
-	  std::cout << "BACKTRACK: call without summary, no successors\n";
+	  msg.debug() << "BACKTRACK: call without summary, no successors" << messaget::eom;
           bt_trace.backtrack();
         }
         else
@@ -1134,7 +1135,7 @@ void taint_recognise_error_traces(
                        "Skipping the following explored path",
                        ns,
                        log);
-	  std::cout << "BACKTRACK: function end (have stack) with no successors\n";
+	  msg.debug() << "BACKTRACK: function end (have stack) with no successors" << messaget::eom;
           bt_trace.backtrack();
         }
         else
@@ -1211,9 +1212,12 @@ void taint_recognise_error_traces(
 	compare_costs comp(function_upward_distances_to_sink);
 	std::sort(sorted_callers.begin(),sorted_callers.end(),comp);
 
-	std::cout << "*** Return costs:\n";
+	msg.debug() << "*** Return costs:" << messaget::eom;
 	for(const auto& caller : sorted_callers)
-	  std::cout << caller.first << " cost " << (function_upward_distances_to_sink.count(caller.first) ? function_upward_distances_to_sink[caller.first] : 10000) << "\n";
+	  msg.debug() << caller.first << " cost " <<
+	    (function_upward_distances_to_sink.count(caller.first) ?
+	     function_upward_distances_to_sink[caller.first] :
+	     10000) << messaget::eom;
 	
         for (auto callerit=sorted_callers.rbegin(), callerend=sorted_callers.rend();
 	     callerit!=callerend; ++callerit)
@@ -1263,7 +1267,7 @@ void taint_recognise_error_traces(
                      ns,
                      log);
 	if(!bt_trace.can_backtrack())
-	  std::cout << "BACKTRACK: function end, no callers\n";
+	  msg.debug() << "BACKTRACK: function end, no callers" << messaget::eom;
 
 	bt_trace.backtrack();
       }
@@ -1289,7 +1293,7 @@ void taint_recognise_error_traces(
                      "Skipping the following explored path",
                      ns,
                      log);
-	std::cout << "BACKTRACK: Normal inst no successors\n";
+	msg.debug() << "BACKTRACK: Normal inst no successors" << messaget::eom;
 	bt_trace.backtrack();
       }
       else
@@ -1329,14 +1333,16 @@ void taint_recognise_error_traces(
 	  
 	  compare_local_costs comp(insit.first->second);
 	  std::sort(successors.begin(),successors.end(),comp);
-	  std::cout << "Conditional branch costs:\n";
-	  for(const auto& succ : successors)
+	  if(msghandler.get_verbosity()>=message_clientt::M_DEBUG)
 	  {
-	    auto succit=succ.get_instruction_iterator();
-	    std::cout << from_expr(ns,"",succit->code) << ": " <<
-	      (insit.first->second.count(succit) ? insit.first->second.at(succit) : 10000) << "\n";
+	    msg.debug() << "Conditional branch costs:" << messaget::eom;
+	    for(const auto& succ : successors)
+	    {
+	      auto succit=succ.get_instruction_iterator();
+	      msg.debug() << from_expr(ns,"",succit->code) << ": " <<
+		(insit.first->second.count(succit) ? insit.first->second.at(succit) : 10000) << messaget::eom;
+	    }
 	  }
-
 	}
 	
         for (std::size_t  i = 1UL; i < successors.size(); ++i)
