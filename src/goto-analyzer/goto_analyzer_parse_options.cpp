@@ -428,7 +428,7 @@ int goto_analyzer_parse_optionst::doit()
   }
   */
 
-  if(goto_model(cmdline.args))
+  if(goto_model(cmdline))
     return 6;
     
   if(process_goto_program(options))
