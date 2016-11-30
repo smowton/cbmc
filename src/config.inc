@@ -8,8 +8,9 @@ BUILD_ENV = AUTO
 #CXXFLAGS = -std=c++11
 #CXXFLAGS = -ggdb3
 
-#CXXFLAGS = -std=c++11 -Wall -O0 -g
-CXXFLAGS = -std=c++11 -Wall -O2 -ggdb3 -DUSE_BOOST
+#CXXFLAGS = -std=c++11 -Wall -O0 -ggdb3 -DUSE_BOOST
+#CXXFLAGS = -std=c++11 -Wall -O2 -ggdb3
+CXXFLAGS = -std=c++11 -Wall -O2 -DUSE_BOOST
 
 # If GLPK is available; this is used by goto-instrument and musketeer.
 #LIB_GLPK = -lglpk 

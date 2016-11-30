@@ -1,0 +1,20 @@
+[
+    "org.libresonic.player.controller.MultiController.login",
+    "org.libresonic.player.controller.MultiController.recover",
+    "org.libresonic.player.controller.HLSController.handleRequest",
+    "org.libresonic.player.controller.CoverArtController.handleRequest",
+    "org.libresonic.player.controller.MainController.handleRequestInternal",
+    "org.libresonic.player.controller.HomeController.handleRequestInternal",
+    "org.libresonic.player.controller.DownloadController.handleRequest",
+    "org.libresonic.player.controller.RESTController.getLicense",
+    "org.libresonic.player.controller.RESTController.getMusicFolders",
+    "org.libresonic.player.controller.RESTController.getIndexes",
+    "org.libresonic.player.controller.RESTController.getGenres",
+    "org.libresonic.player.controller.RESTController.getTopSongs",
+    "org.libresonic.player.controller.RESTController.",
+    "org.libresonic.player.controller.RESTController.",
+    "org.libresonic.player.controller.RESTController.",
+    "org.libresonic.player.controller.RESTController.",
+    "org.libresonic.player.controller.RESTController."
+]
+

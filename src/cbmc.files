@@ -706,6 +706,8 @@ goto-analyzer/taint_trace_dump_json.cpp
 goto-analyzer/taint_trace_dump.h
 goto-analyzer/unreachable_instructions.cpp
 goto-analyzer/unreachable_instructions.h
+goto-analyzer/class_info.cpp
+goto-analyzer/class_info.h
 goto-cc/xml_binaries/read_goto_object.cpp
 goto-cc/xml_binaries/read_goto_object.h
 goto-cc/xml_binaries/xml_goto_function.cpp

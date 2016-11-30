@@ -1,0 +1,26 @@
+[
+  {
+    "id": "source_id",
+    "kind": "source",
+    "where": "return_value",
+    "taint": "X1",
+    "function": "Test.taint_source_01"
+  },
+  {
+    "id": "sanitizer_id",
+    "kind": "sanitizer",
+    "where": "return_value",
+    "taint": "X1",
+    "function": "Test.taint_sanitize_01",
+    "message": "sanitize"
+  },
+  {
+    "id": "sink_id",
+    "kind": "sink",
+    "where": "parameter1",
+    "taint": "X1",
+    "function": "Test.taint_sink_01",
+    "message": "sink"
+  }
+]
+

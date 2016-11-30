@@ -1,0 +1,6 @@
+[
+    "fr.mcc.ginco.security.AuthenticationFilter.attemptAuthentication",
+    "fr.mcc.ginco.rest.services.ImportRestService.uploadFile",
+    "fr.mcc.ginco.rest.services.ImportRestService.uploadGincoXmlThesaurusFile"
+]
+

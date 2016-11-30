@@ -1,0 +1,21 @@
+[
+    "com.ibm.commons.runtime.servlet.BaseHttpServlet.infoServletContext",
+    "com.ibm.commons.runtime.servlet.BaseToolkitServlet.service",
+    "com.ibm.sbt.jslibrary.servlet.AbstractLibrary.doGet",
+    "com.ibm.sbt.jslibrary.servlet.LibraryServlet.doGet",
+    "com.ibm.sbt.security.authentication.oauth.consumer.servlet.OAClientAuthentication.doGet",
+    "com.ibm.sbt.security.authentication.oauth.consumer.servlet.OACallback.doGet",
+    "com.ibm.sbt.security.authentication.oauth.consumer.servlet.OA2Callback.doGet",
+    "com.ibm.sbt.service.basic.ProxyService.service",
+    "com.ibm.sbt.service.basic.ProxyEndpointService.initProxy",
+    "com.ibm.sbt.service.core.servlet.SimpleProxyServlet.doGet",
+    "com.ibm.sbt.service.core.servlet.SimpleProxyServlet.connect",
+    "com.ibm.sbt.service.core.handlers.EmailHandler.doPost",
+    "com.ibm.sbt.service.core.handlers.EmailHandler.doGet",
+    "com.ibm.sbt.service.core.handlers.EmailHandler.doPut",
+    "com.ibm.sbt.service.core.handlers.FileHandler.service",
+    "com.ibm.sbt.service.core.handlers.PingHandler.service",
+    "com.ibm.sbt.service.core.handlers.AuthCredsHandler.service",
+    "com.ibm.sbt.sample.web.util.SnippetServlet.doGet"
+]
+

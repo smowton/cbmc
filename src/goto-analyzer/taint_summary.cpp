@@ -1176,8 +1176,8 @@ taint_numbered_lvalue_svalue_mapt  transform(
       if (taint_name!=invalid_taint)
       {
         taint_svaluet const  rvalue({taint_name},false,false);
-        auto const  lvalue =
-          normalise(find_taint_expression(I.code.op0()),ns);
+        auto const  lvalue = I.code.op0();
+          //normalise(find_taint_expression(I.code.op0()),ns);
         if (lvsa == nullptr)
           assign(result,taint_object_numbering.number(lvalue),rvalue);
         else
@@ -1200,8 +1200,8 @@ taint_numbered_lvalue_svalue_mapt  transform(
       auto const  taint_name = find_taint_value(I.code.op1(),taint_spec_names);
       if (taint_name!=invalid_taint)
       {
-        taint_lvaluet const  lvalue =
-        normalise(find_taint_expression(I.code.op0()),ns);
+        taint_lvaluet const  lvalue =I.code.op0();
+        //normalise(find_taint_expression(I.code.op0()),ns);
         if (lvsa == nullptr)
         {
           auto lvalue_number=taint_object_numbering.number(lvalue);

@@ -1,0 +1,26 @@
+<project name="Main" basedir="." default="jar">
+
+  <property name="root.dir"      value="./"/>
+  <property name="src.dir"       value="${root.dir}"/>
+  <property name="classes.dir"   value="${root.dir}/classes"/>
+  <property name="install.dir"   value="${root.dir}/../../BENCHMARK"/>
+
+  <target name="jar">
+    <antcall target="compile" />
+    <mkdir dir="${install.dir}"/>
+    <jar destfile="${install.dir}/taint_traces_01.war" basedir="${classes.dir}" />
+  </target>  
+  
+  <target name="compile">
+    <antcall target="clean" />
+    <mkdir dir="${classes.dir}"/>
+    <javac srcdir="${src.dir}" destdir="${classes.dir}" includeantruntime="false" debug="on" />
+  </target>
+
+  <target name="clean">
+    <delete dir="${classes.dir}"/>
+  </target>
+
+
+</project>
+

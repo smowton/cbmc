@@ -11,8 +11,18 @@
   </target>
 
   <target name="clean">
-    <delete file="./Main.class"/>
-    <delete file="./Other.class"/>
+    <delete file="./AssignmentAction.class"/>
+    <delete file="./AssignmentService.class"/>
+    <delete file="./AssignmentSubmission.class"/>
+    <delete file="./AssignmentSubmissionEdit.class"/>
+    <delete file="./DummyAssignmentSubmissionEdit.class"/>
+    <delete file="./FileItem.class"/>
+    <delete file="./FormattedText.class"/>
+    <delete file="./ParameterParser.class"/>
+    <delete file="./RunData.class"/>
+    <delete file="./TaintedInputStream.class"/>
+    <delete file="./TaintSink.class"/>
+    <delete file="./TaintSource.class"/>
   </target>
 
 

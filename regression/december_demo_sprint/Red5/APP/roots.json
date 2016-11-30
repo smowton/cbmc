@@ -1,0 +1,10 @@
+[
+    "org.red5.server.net.rtmpt.RTMPTServlet.handleOpen",
+    "org.red5.server.net.rtmpt.RTMPTServlet.handleSend",
+    "org.red5.server.net.rtmpt.RTMPTServlet.service",
+    "org.red5.server.net.servlet.AMFTunnelServlet.service",
+    "org.red5.server.net.servlet.RedirectHTTPServlet.service",
+    "org.red5.server.net.servlet.AMFGatewayServlet.service",
+    "org.red5.server.net.servlet.AMFGatewayServlet.serviceAMF"
+]
+

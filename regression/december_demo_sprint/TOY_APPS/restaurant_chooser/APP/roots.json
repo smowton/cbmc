@@ -1,0 +1,5 @@
+[
+    "com.mzherdev.restchooser.web.GlobalControllerExceptionHandler.defaultErrorHandler",
+    "com.mzherdev.restchooser.web.ExceptionInfoHandler.conflict"
+]
+

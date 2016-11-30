@@ -1,0 +1,34 @@
+Mongoose
+~~~~~~~~
+
+Mongoose is more than an embedded webserver. It is a multi-protocol embedded
+networking library with functions including TCP, HTTP client and server,
+WebSocket client and server, MQTT client and broker and much more.
+It has been designed for connecting devices and bringing them online.
+On the market since 2004, used by vast number of open source and commercial
+products - it even runs on the International Space station! Mongoose makes
+embedded network programming fast, robust, and easy.
+
+Home web: https://www.cesanta.com/
+Repo URL: https://github.com/cesanta/mongoose
+Commits: 2 472
+Releases: 24
+Contributors: 77
+Files (master, last commit): mongoose.c + mongoose.h (~584.7 KiB)
+
+What was analysed:
+mongoose.c
+mongoose.h
+  - Functions: 316
+  - Commit: a67323fc1216d955b68c4d87a91fee355adbf6bb
+  - We want to present trace no.: 42  (there were generated 477 traces)
+  - MODIFICATIONS PERFORMED IN MONGOOSE'S CODE:
+      Lines added: 6 (Instrumentation by CProver's functions)
+      Lines removed: 0
+      Lines modified: 1 (One realloc -> __CPROVER_malloc)
+      Description:
+      This is memory leak issue in function "mg_connect_ws_opt" (line 7783).
+      We used intrumented lines to emit, sanitise, and catch tainted data.
+      Memory allocations are sources and returns from the root function (the
+      one above) are sinks.
+

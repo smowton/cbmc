@@ -62,6 +62,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-analyzer/taint_summary_json.h>
 #include <goto-analyzer/taint_trace_recogniser.h>
 #include <goto-analyzer/taint_trace_dump.h>
+#include <goto-analyzer/class_info.h>
 
 #include "goto_analyzer_parse_options.h"
 #include "taint_analysis.h"
@@ -432,6 +433,14 @@ int goto_analyzer_parse_optionst::doit()
     
   if(process_goto_program(options))
     return 6;
+
+  if (cmdline.isset("class-info"))
+  {
+    dump_class_info_in_json(
+      cmdline.get_value("class-info")
+      );
+    return 0;
+  }
 
   taint_statisticst::instance().end_goto_program_building();
 
