@@ -33,5 +33,12 @@ void java_bytecode_convert_method_lazy(
   const java_bytecode_parse_treet::methodt &,
   symbol_tablet &symbol_table);
 
+symbol_exprt check_stub_function(
+  symbol_tablet&,
+  const irep_idt& symname,
+  const irep_idt& basename,
+  const irep_idt& prettyname,
+  const typet& fntype);
+
 #endif
 

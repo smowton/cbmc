@@ -183,11 +183,6 @@ protected:
   void check_static_field_stub(const symbol_exprt& se,
 			       const irep_idt& basename);
 
-  symbol_exprt check_stub_function(const irep_idt& symname,
-                                   const irep_idt& basename,
-                                   const irep_idt& prettyname,
-                                   const typet& fntype);
-    
 };
 
 #endif

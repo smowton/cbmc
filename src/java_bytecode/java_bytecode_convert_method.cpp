@@ -494,10 +494,12 @@ void java_bytecode_convert_methodt::check_static_field_stub(const symbol_exprt& 
   }
 }
 
-symbol_exprt java_bytecode_convert_methodt::check_stub_function(const irep_idt& symname,
-                                                                const irep_idt& basename,
-                                                                const irep_idt& prettyname,
-                                                                const typet& fntype)
+symbol_exprt check_stub_function(
+  symbol_tablet& symbol_table,
+  const irep_idt& symname,
+  const irep_idt& basename,
+  const irep_idt& prettyname,
+  const typet& fntype)
 {
   auto findit=symbol_table.symbols.find(symname);
   if(findit==symbol_table.symbols.end())
@@ -1065,7 +1067,6 @@ codet java_bytecode_convert_methodt::convert_instructions(
       auto fn_prettyname=id2string(arg0.get(ID_C_class)).substr(6) + "." +
 	  id2string(fn_basename) + "()";
       auto fn_type=arg0.type();
-      check_stub_function(id,fn_basename,fn_prettyname,fn_type);
 
       if(is_virtual)
       {
@@ -1080,6 +1081,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
         // static binding
         call.function()=symbol_exprt(arg0.get(ID_identifier), arg0.type());
 	needed_methods.push_back(arg0.get(ID_identifier));
+        check_stub_function(symbol_table,id,fn_basename,fn_prettyname,fn_type);
       }
 
       call.function().add_source_location()=dloc;
@@ -1804,10 +1806,12 @@ codet java_bytecode_convert_methodt::convert_instructions(
       type.return_type()=void_typet();
       type.parameters().resize(1);
       type.parameters()[0].type()=reference_typet(void_typet());
-      auto symexpr=check_stub_function("java::monitorenter",
-                                       "monitorenter",
-                                       "monitorenter",
-                                       type);
+      auto symexpr=check_stub_function(
+        symbol_table,
+        "java::monitorenter",
+        "monitorenter",
+        "monitorenter",
+        type);
       code_function_callt call;
       call.function()=symexpr;
       call.lhs().make_nil();
@@ -1822,10 +1826,12 @@ codet java_bytecode_convert_methodt::convert_instructions(
       type.return_type()=void_typet();
       type.parameters().resize(1);
       type.parameters()[0].type()=reference_typet(void_typet());
-      auto symexpr=check_stub_function("java::monitorexit",
-                                       "monitorexit",
-                                       "monitorexit",
-                                       type);
+      auto symexpr=check_stub_function(
+        symbol_table,
+        "java::monitorexit",
+        "monitorexit",
+        "monitorexit",
+        type);
       code_function_callt call;
       call.function()=symexpr;
       call.lhs().make_nil();
