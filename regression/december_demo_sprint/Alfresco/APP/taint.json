@@ -1,3 +1,79 @@
 [
+  {
+    "id": "source_0_X1",
+    "kind": "source",
+    "where": "return_value",
+    "taint": "X1",
+    "function": "javax.servlet.http.HttpServletRequest.getQueryString"
+  },
+  {
+    "id": "source_1_X1",
+    "kind": "source",
+    "where": "return_value",
+    "taint": "X1",
+    "function": "javax.servlet.http.HttpServletRequest.getRequestURI"
+  },
+  {
+    "id": "source_2_X1",
+    "kind": "source",
+    "where": "return_value",
+    "taint": "X1",
+    "function": "javax.servlet.http.HttpServletRequest.getRequestURL"
+  },
+  {
+    "id": "source_3_X1",
+    "kind": "source",
+    "where": "return_value",
+    "taint": "X1",
+    "function": "javax.servlet.ServletRequest.getParameter"
+  },
+  {
+    "id": "source_4_X1",
+    "kind": "source",
+    "where": "return_value",
+    "taint": "X1",
+    "function": "javax.servlet.ServletRequest.getParameterValues"
+  },
+  {	
+    "id": "source_5_X1",
+    "kind": "source",
+    "where": "return_value",
+    "taint": "X1",
+    "function": "javax.servlet.ServletRequest.getInputStream"
+  },
+
+  {
+    "id": "sink_0_X1",
+    "kind": "sanitizer",
+    "where": "return_value",
+    "taint": "X1",
+    "function": "",
+    "message": "sanitize(X1)"
+  },
+
+  {
+    "id": "sink_0_X1",
+    "kind": "sink",
+    "where": "parameter1",
+    "taint": "X1",
+    "function": "java.io.PrintWriter.write",
+    "message": "sink(X1)"
+  },
+  {
+    "id": "sink_1_X1",
+    "kind": "sink",
+    "where": "return_value",
+    "taint": "parameter1",
+    "function": "java.io.PrintWriter.print",
+    "message": "sink(X1)"
+  },
+  {
+    "id": "sink_2_X1",
+    "kind": "sink",
+    "where": "parameter1",
+    "taint": "X1",
+    "function": "java.io.PrintWriter.println",
+    "message": "sink(X1)"
+  }
 ]
 

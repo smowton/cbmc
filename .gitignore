@@ -24,6 +24,7 @@ src/util/irep_ids.h
 src/util/irep_ids.inc
 
 # regression evaluation binaries
+regression/december_demo_sprint/temp/*
 regression/december_demo_sprint/goto-analyzer/.idea/*
 regression/december_demo_sprint/goto-analyzer/*.pyc
 regression/december_demo_sprint/goto-analyzer/scripts/*.class
