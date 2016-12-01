@@ -733,6 +733,13 @@ Function: java_bytecode_convert_methodt::convert_instructions
 
 \*******************************************************************/
 
+static unsigned get_bytecode_type_width(const typet& ty)
+{
+  if(ty.id()==ID_pointer)
+    return 32;
+  return ty.get_unsigned_int(ID_width);
+}
+
 codet java_bytecode_convert_methodt::convert_instructions(
   const methodt &method,
   const code_typet &method_type)
@@ -1524,7 +1531,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
     {
       assert(!stack.empty() && results.empty());
 
-      if(stack.back().type().get_unsigned_int(ID_width)==32)
+      if(get_bytecode_type_width(stack.back().type())==32)
         op=pop(2);
       else
         op=pop(1);
@@ -1536,7 +1543,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
     {
       assert(!stack.empty() && results.empty());
 
-      if(stack.back().type().get_unsigned_int(ID_width)==32)
+      if(get_bytecode_type_width(stack.back().type())==32)
         op=pop(3);
       else
         op=pop(2);
@@ -1548,7 +1555,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
     {
       assert(!stack.empty() && results.empty());
 
-      if(stack.back().type().get_unsigned_int(ID_width)==32)
+      if(get_bytecode_type_width(stack.back().type())==32)
         op=pop(2);
       else
         op=pop(1);
@@ -1556,7 +1563,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
       assert(!stack.empty());
       exprt::operandst op2;
 
-      if(stack.back().type().get_unsigned_int(ID_width)==32)
+      if(get_bytecode_type_width(stack.back().type())==32)
         op2=pop(2);
       else
         op2=pop(1);
@@ -1789,7 +1796,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
       // two-word item (i.e. a double or a long).
       // http://cs.au.dk/~mis/dOvs/jvmspec/ref-pop2.html
       if(statement=="pop2" &&
-         op[0].type().get_unsigned_int(ID_width)==32)
+         get_bytecode_type_width(op[0].type())==32)
         pop(1);
     }
     else if(statement=="instanceof")
