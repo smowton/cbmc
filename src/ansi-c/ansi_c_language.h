@@ -15,6 +15,9 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "ansi_c_parse_tree.h"
 
+class symbolt;
+class symbol_tablet;
+
 /*! \brief TO_BE_DOCUMENTED
     \ingroup gr_ansi_c
 */
@@ -73,6 +76,10 @@ public:
   virtual void modules_provided(std::set<std::string> &modules);
 
 protected:
+  virtual irep_idt generate_opaque_stub_body(
+    symbolt &symbol,
+    symbol_tablet &symbol_table) override;
+
   ansi_c_parse_treet parse_tree;
   std::string parse_path;
 };

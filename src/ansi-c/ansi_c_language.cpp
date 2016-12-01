@@ -65,6 +65,57 @@ void ansi_c_languaget::modules_provided(std::set<std::string> &modules)
 
 /*******************************************************************\
 
+Function: ansi_c_languaget::generate_opaque_stub_body
+
+  Inputs:
+          symbol - the function symbol which is opaque
+          symbol_table - the symbol table
+
+ Outputs: The identifier of the return variable. ID_nil if the function
+          doesn't return anything.
+
+ Purpose: To generate the stub function for the opaque function in
+          question. The identifier is used in the flag to the interpreter
+          that the function is opaque. In C, providing the function returns
+          something, the id will be to_return_function_name.
+          The GOTO code will simply create a NONDET instruction as the
+          return value.
+
+\*******************************************************************/
+
+irep_idt ansi_c_languaget::generate_opaque_stub_body(
+  symbolt &symbol,
+  symbol_tablet &symbol_table)
+{
+  code_blockt new_instructions;
+  code_typet &function_type=to_code_type(symbol.type);
+  const typet &return_type=function_type.return_type();
+
+  if(return_type.id()!=ID_nil)
+  {
+    auxiliary_symbolt return_symbol;
+    std::ostringstream return_symbol_name_builder;
+    return_symbol_name_builder << "to_return_" << symbol.name;
+    return_symbol.name=return_symbol_name_builder.str();
+    return_symbol.base_name=return_symbol.name;
+    return_symbol.mode=ID_C;
+    return_symbol.type=return_type;
+
+    symbolt *symbol_ptr=nullptr;
+    symbol_table.move(return_symbol, symbol_ptr);
+    assert(symbol_ptr);
+
+    exprt return_symbol_expr=side_effect_expr_nondett(return_type);
+    new_instructions.copy_to_operands(code_returnt(return_symbol_expr));
+    symbol.value=new_instructions;
+    return symbol_ptr->name;
+  }
+
+  return ID_nil;
+}
+
+/*******************************************************************\
+
 Function: ansi_c_languaget::preprocess
 
   Inputs:
@@ -194,6 +245,8 @@ Function: ansi_c_languaget::final
 
 bool ansi_c_languaget::final(symbol_tablet &symbol_table)
 {
+  generate_opaque_method_stubs(symbol_table);
+
   if(ansi_c_entry_point(symbol_table, "main", get_message_handler()))
     return true;
 
