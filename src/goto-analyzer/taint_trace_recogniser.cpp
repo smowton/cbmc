@@ -1210,7 +1210,12 @@ void taint_recognise_error_traces(
                           to_symbol_expr(fn_call.function()).get_identifier()
                           );
                   if (callee_ident == elem.get_name_of_function())
+                  {
+                    // Avoid recursion: check if we've seen this callsite before:
+                    if(trace.count(as_string(it->second),inst_it))
+                        continue;
                     possible_callers.insert({as_string(it->second),inst_it});
+                  }
                 }
               }
           }
