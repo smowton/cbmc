@@ -138,7 +138,7 @@ Function: ansi_c_languaget::build_stub_parameter_symbol
 parameter_symbolt ansi_c_languaget::build_stub_parameter_symbol(
   const symbolt &function_symbol,
   size_t parameter_index,
-  const typet &parameter_type)
+  const code_typet::parametert &parameter)
 {
   irep_idt base_name="stub_ignored_arg"+i2string(parameter_index);
   irep_idt identifier=id2string(function_symbol.name)+"::"+id2string(base_name);
@@ -147,7 +147,7 @@ parameter_symbolt ansi_c_languaget::build_stub_parameter_symbol(
   parameter_symbol.base_name=base_name;
   parameter_symbol.mode=ID_C;
   parameter_symbol.name=identifier;
-  parameter_symbol.type=parameter_type;
+  parameter_symbol.type=parameter.type();
 
   return parameter_symbol;
 }

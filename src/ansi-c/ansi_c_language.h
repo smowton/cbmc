@@ -83,7 +83,7 @@ protected:
   virtual parameter_symbolt build_stub_parameter_symbol(
     const symbolt &function_symbol,
     size_t parameter_index,
-    const typet &parameter_type) override;
+    const code_typet::parametert &parameter) override;
 
   ansi_c_parse_treet parse_tree;
   std::string parse_path;
