@@ -732,7 +732,7 @@ void taint_recognise_error_traces(
     {
       bool  is_taint_expression_tainted = false;
       {
-        exprt const  taint_expr =
+        exprt  taint_expr =
             taint_find_expression_of_rule(sink_instruction->guard);
 	const auto& summary=*summaries.find<taint_summaryt>(elem.get_name_of_function());
 	const auto& domain=summary.domain();
@@ -741,6 +741,12 @@ void taint_recognise_error_traces(
             domain.at(elem.get_instruction_iterator());
 	object_numberingt::number_type taint_num;
 	bool missing=numbering.get_number(taint_expr,taint_num);
+        // HACK! Remove this and find out why this is happening!
+        while(missing && taint_expr.id()==ID_typecast)
+        {
+          taint_expr=taint_expr.op0();
+          missing=numbering.get_number(taint_expr,taint_num);
+        }
 	const auto it=
 	  (missing) ?
 	  lvalue_svalue.end() :
