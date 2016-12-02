@@ -104,6 +104,7 @@ def run_goto_analyser(
         "--classpath '" + classpath + "'"
         )
     if debug_logs_enabled:
+	print "CWD:", results_dir
         print(command)
     prof["calling_goto_analyser"] = { "duration": time.time() }
     os.system(command)
