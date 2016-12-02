@@ -11,6 +11,8 @@ BUILD_ENV = AUTO
 CXXFLAGS = -std=c++11 -Wall -O2 -ggdb3 -DUSE_BOOST
 #CXXFLAGS = -std=c++11 -Wall -O2 -ggdb3
 
+LIBS=-lboost_filesystem -lboost_system
+
 # If GLPK is available; this is used by goto-instrument and musketeer.
 #LIB_GLPK = -lglpk 
 
