@@ -182,9 +182,10 @@ static void populate_predecessor_map(
   local_variable_table_with_holest::iterator varlimit,
   const std::vector<local_variable_with_holest*>& live_variable_at_address,
   const address_mapt& amap,
-  predecessor_mapt& predecessor_map)
+  predecessor_mapt& predecessor_map,
+  message_handlert& msg_handler)
 {
-
+  messaget msg(msg_handler);
   for(auto it=firstvar, itend=varlimit; it!=itend; ++it)
   {
     // Parameters are irrelevant to us and shouldn't be changed:
@@ -221,8 +222,10 @@ static void populate_predecessor_map(
           --inst_before_this;
           if(amapit->first!=it->var.start_pc || inst_before_this->first!=pred)
 	  {
-            //throw "Local variable table: unexpected flow from out of range";
-	    std::cerr << "Local variable table: ignoring flow from out of range for " << it->var.name << " " << pred << " -> " << amapit->first << "\n";
+            // These sorts of infeasible edges can occur because jsr handling is presently vague
+            // (any subroutine is assumed to be able to return to any callsite)
+	    msg.warning() << "Local variable table: ignoring flow from out of range for " <<
+              it->var.name << " " << pred << " -> " << amapit->first << messaget::eom;
 	    continue;
 	  }
           if(!is_store_to_slot(*(inst_before_this->second.source),it->var.index))
@@ -231,7 +234,13 @@ static void populate_predecessor_map(
         }
         else {
           if(pred_var->var.name!=it->var.name || pred_var->var.signature!=it->var.signature)
-            throw "Local variable table: flow from variable with clashing name or signature";
+          {
+            // These sorts of infeasible edges can occur because jsr handling is presently vague
+            // (any subroutine is assumed to be able to return to any callsite)            
+            msg.warning() << "Local variable table: ignoring flow from clashing variable for " <<
+              it->var.name << " " << pred << " -> " << amapit->first << messaget::eom;
+            continue;
+          }
           // OK, this is a flow from a similar but distinct entry in the local var table.
           predecessor_map[&*it].insert(pred_var);
         }
@@ -360,7 +369,7 @@ void java_bytecode_convert_methodt::find_initialisers_for_slot(
   // Now find variables that flow together by walking backwards to find initialisers
   // or branches from other live ranges:
   predecessor_mapt predecessor_map;
-  populate_predecessor_map(firstvar,varlimit,live_variable_at_address,amap,predecessor_map);
+  populate_predecessor_map(firstvar,varlimit,live_variable_at_address,amap,predecessor_map,get_message_handler());
   
   // OK, we've established the flows all seem sensible. Now merge vartable entries
   // according to the predecessor_map:
