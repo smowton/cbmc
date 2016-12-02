@@ -914,7 +914,11 @@ void taint_recognise_error_traces(
 		  {
 		    // Find number, and expand external object references if necessary:
 		    unsigned number;
-		    assert(!local_numbering.get_number(callee_lvalue_svalue.first,number));
+		    if(local_numbering.get_number(callee_lvalue_svalue.first,number))
+                    {
+                      msg.warning() << "TOFIX: callee input doesn't have a local number: " << from_expr(ns,"",callee_lvalue_svalue.first) << messaget::eom;
+                      number=const_cast<object_numberingt&>(local_numbering).number(callee_lvalue_svalue.first);
+                    }
 		    argument_lvalues.insert(number);
 		    expand_external_objects(
 			argument_lvalues,
