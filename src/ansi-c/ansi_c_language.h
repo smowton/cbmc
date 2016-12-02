@@ -80,6 +80,11 @@ protected:
     symbolt &symbol,
     symbol_tablet &symbol_table) override;
 
+  virtual parameter_symbolt build_stub_parameter_symbol(
+    const symbolt &function_symbol,
+    size_t parameter_index,
+    const typet &parameter_type) override;
+
   ansi_c_parse_treet parse_tree;
   std::string parse_path;
 };

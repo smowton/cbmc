@@ -13,6 +13,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/expr_util.h>
 #include <util/config.h>
 #include <util/get_base_name.h>
+#include <util/symbol.h>
 
 #include <linking/linking.h>
 #include <linking/remove_internal_symbols.h>
@@ -112,6 +113,43 @@ irep_idt ansi_c_languaget::generate_opaque_stub_body(
   }
 
   return ID_nil;
+}
+
+/*******************************************************************\
+
+Function: ansi_c_languaget::build_stub_parameter_symbol
+
+  Inputs:
+          function_symbol - the symbol of an opaque function
+          parameter_index - the index of the parameter within the
+                            the parameter list
+          parameter_type - the type of the parameter
+
+ Outputs: A named symbol to be added to the symbol table representing
+          one of the parameters in this opaque function.
+
+ Purpose: To build the parameter symbol and choose its name. For C
+          we do not have to worry about this pointers so can just
+          name the parameters according to index.
+          Builds a parameter with name stub_ignored_arg0,...
+
+\*******************************************************************/
+
+parameter_symbolt ansi_c_languaget::build_stub_parameter_symbol(
+  const symbolt &function_symbol,
+  size_t parameter_index,
+  const typet &parameter_type)
+{
+  irep_idt base_name="stub_ignored_arg"+i2string(parameter_index);
+  irep_idt identifier=id2string(function_symbol.name)+"::"+id2string(base_name);
+
+  parameter_symbolt parameter_symbol;
+  parameter_symbol.base_name=base_name;
+  parameter_symbol.mode=ID_C;
+  parameter_symbol.name=identifier;
+  parameter_symbol.type=parameter_type;
+
+  return parameter_symbol;
 }
 
 /*******************************************************************\
