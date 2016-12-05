@@ -94,18 +94,29 @@ irep_idt ansi_c_languaget::generate_opaque_stub_body(
 
   if(return_type.id()!=ID_nil)
   {
+    // Build an auxillary symbol to store the return value for
+    // this function
     auxiliary_symbolt return_symbol;
     return_symbol.name=get_stub_return_symbol_name(symbol.name);
     return_symbol.base_name=return_symbol.name;
     return_symbol.mode=ID_C;
     return_symbol.type=return_type;
 
+    // Put this symbol into the symbol table
     symbolt *symbol_ptr=nullptr;
     symbol_table.move(return_symbol, symbol_ptr);
     assert(symbol_ptr);
 
+    // Assign a NONDET expression to the temporary symbol
+    symbol_exprt temp_return_symbol(symbol_ptr->name, return_type);
     exprt return_symbol_expr=side_effect_expr_nondett(return_type);
-    new_instructions.copy_to_operands(code_returnt(return_symbol_expr));
+    code_declt temp_return_decl(temp_return_symbol);
+    temp_return_decl.copy_to_operands(return_symbol_expr);
+
+    // Add the temporary symbol declaration and the return expression
+    // to the body for the stubbed function
+    new_instructions.copy_to_operands(temp_return_decl);
+    new_instructions.copy_to_operands(code_returnt(temp_return_symbol));
     symbol.value=new_instructions;
     return symbol_ptr->name;
   }
