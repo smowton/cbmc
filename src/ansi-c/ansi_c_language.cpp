@@ -95,9 +95,7 @@ irep_idt ansi_c_languaget::generate_opaque_stub_body(
   if(return_type.id()!=ID_nil)
   {
     auxiliary_symbolt return_symbol;
-    std::ostringstream return_symbol_name_builder;
-    return_symbol_name_builder << "to_return_" << symbol.name;
-    return_symbol.name=return_symbol_name_builder.str();
+    return_symbol.name=get_stub_return_symbol_name(symbol.name);
     return_symbol.base_name=return_symbol.name;
     return_symbol.mode=ID_C;
     return_symbol.type=return_type;
