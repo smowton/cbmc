@@ -826,8 +826,17 @@ void goto_partial_inline(
         it=goto_functions.function_map.begin();
         it!=goto_functions.function_map.end();
         it++)
-      if(it->second.body_available())
+    {
+      // We can't take functions without bodies to find functions
+      // inside them to be inlined.
+      // We also don't allow for the _start function to have any of its
+      // function calls to be inlined
+      if(it->second.body_available() &&
+        it->first!=ID__start)
+      {
         goto_inline.goto_inline_rec(it, false);
+      }
+    }
   }
 
   catch(int)
