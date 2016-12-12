@@ -120,7 +120,7 @@ protected:
   }
 
   // JVM local variables
-  const exprt variable(const exprt &arg, char type_char, size_t address, instruction_sizet inst_size)
+  const exprt variable(const exprt &arg, char type_char, size_t address, instruction_sizet inst_size, bool do_cast=true)
   {
     irep_idt number=to_constant_expr(arg).get_value();
 
@@ -146,7 +146,7 @@ protected:
     else
     {
       exprt result=var.symbol_expr;
-      if(t!=result.type()) result=typecast_exprt(result, t);
+      if(do_cast && t!=result.type()) result=typecast_exprt(result, t);
       return result;
     }
   }
@@ -828,7 +828,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
       // store value into some local variable
       assert(op.size()==1 && results.empty());
 
-      exprt var=variable(arg0, statement[0], i_it->address, INST_INDEX);
+      exprt var=variable(arg0, statement[0], i_it->address, INST_INDEX, /*do_cast=*/false);
 
       const bool is_array('a' == statement[0]);
 
@@ -1022,7 +1022,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
     else if(statement=="iinc")
     {
       code_assignt code_assign;
-      code_assign.lhs()=variable(arg0, 'i', i_it->address, INST_INDEX_CONST);
+      code_assign.lhs()=variable(arg0, 'i', i_it->address, INST_INDEX_CONST, /*do_cast=*/false);
       code_assign.rhs()=plus_exprt(
                                    variable(arg0, 'i', i_it->address, INST_INDEX_CONST),
                           typecast_exprt(arg1, java_int_type()));
