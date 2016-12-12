@@ -1815,17 +1815,84 @@ codet java_bytecode_convert_methodt::convert_instructions(
     code.add(code_declt(var));
   }
 
-  for(const auto & it : address_map)
+  // Try to recover block structure as indicated in the local variable table:
+
+  // The block tree node mirrors the block structure of root_block,
+  // indexing the Java PCs were each subblock starts and ends.
+  block_tree_node root;
+  code_blockt root_block;
+
+  bool start_new_block=true;
+  for(auto ait=address_map.begin(), aend=address_map.end(); ait != aend; ++ait)
   {
+    const auto& it=*ait;
     const unsigned address=it.first;
     assert(it.first==it.second.source->address);
     const codet &c=it.second.code;
 
-    if(targets.find(address)!=targets.end())
-      code.add(code_labelt(label(i2string(address)), c));
-    else if(c.get_statement()!=ID_skip)
-      code.add(c);
+    if(!start_new_block)
+      start_new_block=targets.find(address)!=targets.end();
+    if(!start_new_block)
+      start_new_block=it.second.predecessors.size()>1;
+
+    if(start_new_block)
+    {
+      code_labelt newlabel(label(i2string(address)), code_blockt());
+      root_block.move_to_operands(newlabel);
+      root.branch.push_back(block_tree_node::get_leaf());
+      assert((root.branch_addresses.size()==0 ||
+              root.branch_addresses.back()<address) &&
+             "Block addresses should be unique and increasing");
+      root.branch_addresses.push_back(address);
+    }
+
+    if(c.get_statement()!=ID_skip)
+    {
+      auto& lastlabel=to_code_label(to_code(root_block.operands().back()));
+      auto& add_to_block=to_code_block(lastlabel.code());
+      add_to_block.add(c);
+    }
+    start_new_block=it.second.successors.size()>1;
   }
+
+  for(const auto& vlist : variables)
+  {
+    for(const auto& v : vlist)
+    {
+      if(v.is_parameter)
+        continue;
+      // Merge lexical scopes as far as possible to allow us to
+      // declare these variable scopes faithfully.
+      // Don't insert yet, as for the time being the blocks' only
+      // operands must be other blocks.
+      get_or_create_block_for_pcrange(
+        root,
+        root_block,
+        v.start_pc,
+        v.start_pc+v.length,
+        std::numeric_limits<unsigned>::max(),
+        address_map);
+    }
+  }
+  for(const auto& vlist : variables)
+  {
+    for(const auto& v : vlist)
+    {
+      if(v.is_parameter)
+        continue;
+      code_declt d(v.symbol_expr);
+      auto& block=get_block_for_pcrange(
+        root,
+        root_block,
+        v.start_pc,
+        v.start_pc+v.length,
+        std::numeric_limits<unsigned>::max());
+      block.operands().insert(block.operands().begin(),d);
+    }
+  }
+
+  for(auto& block : root_block.operands())
+    code.move_to_operands(block);
 
   return code;
 }
