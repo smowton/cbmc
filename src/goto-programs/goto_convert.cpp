@@ -47,6 +47,86 @@ static bool is_empty(const goto_programt &goto_program)
 
 /*******************************************************************\
 
+Function: finish_catch_push_targets
+
+  Inputs:
+
+ Outputs:
+
+ Purpose: Populate the CATCH instructions with the targets 
+          corresponding to their associated labels
+
+\*******************************************************************/
+void finish_catch_push_targets(goto_programt &dest)
+{
+  std::map<irep_idt, goto_programt::targett> label_targets;
+
+  // in the first pass collect the labels and the corresponding targets
+  Forall_goto_program_instructions(it, dest)
+  {
+    if(!it->labels.empty())
+    {
+      for(goto_programt::instructiont::labelst::const_iterator
+            l_it=it->labels.begin();
+          l_it!=it->labels.end();
+          l_it++)
+      {
+        // record the label and the corresponding target
+        label_targets.insert(
+          std::pair<irep_idt, goto_programt::targett>(*l_it, it));
+      }
+    }
+  }
+
+  // in the second pass set the targets
+  Forall_goto_program_instructions(it, dest)
+  {
+    if(it->is_catch())
+    {
+      irept exceptions=it->code.find(ID_exception_list);
+
+      if(exceptions.is_nil() &&
+         it->code.has_operands())
+        exceptions=it->code.op0().find(ID_exception_list);
+
+      const irept::subt &exception_list=exceptions.get_sub();
+
+      if(!exception_list.empty())
+      {
+        // in this case we have a CATCH_PUSH
+        irept handlers=it->code.find(ID_label);
+        if(handlers.is_nil() &&
+           it->code.has_operands())
+          handlers=it->code.op0().find(ID_label);
+        const irept::subt &handler_list=handlers.get_sub();
+
+        // some handlers may not have been converted (if there was no
+        // exception to be caught); in such a situation we abort
+        for(irept::subt::const_iterator
+            it_handler=handler_list.begin();
+            it_handler!=handler_list.end();
+            it_handler++)
+        {
+          if(label_targets.find(it_handler->id())==label_targets.end())
+            return;
+        }
+
+        for(irept::subt::const_iterator
+            it_handler=handler_list.begin();
+            it_handler!=handler_list.end();
+            it_handler++)
+        {
+          assert(label_targets.find(it_handler->id())!=label_targets.end());
+          // set the target
+          it->targets.push_back((label_targets.find(it_handler->id()))->second);
+        }
+      }
+    }
+  }
+}
+
+/*******************************************************************	\
+
 Function: goto_convertt::finish_gotos
 
   Inputs:
@@ -302,6 +382,10 @@ void goto_convertt::goto_convert_rec(
   finish_gotos(dest);
   finish_computed_gotos(dest);
   finish_guarded_gotos(dest);
+
+  const symbolt &init_symbol = symbol_table.lookup(CPROVER_PREFIX "initialize");
+  if(init_symbol.mode==ID_java)
+    finish_catch_push_targets(dest);
 }
 
 /*******************************************************************\

@@ -128,6 +128,71 @@ void goto_convertt::convert_msc_leave(
 
 /*******************************************************************\
 
+Function: goto_convertt::convert_java_try_catch
+
+  Inputs:
+
+ Outputs:
+
+ Purpose:
+
+\*******************************************************************/
+
+void goto_convertt::convert_java_try_catch(
+  const codet &code,
+  goto_programt &dest)
+{
+  assert(code.operands().size()>=1);
+
+  // add the CATCH instruction to 'dest'
+  goto_programt::targett catch_instruction=dest.add_instruction();
+  catch_instruction->make_catch();
+  catch_instruction->code.set_statement(ID_catch);
+  catch_instruction->source_location=code.source_location();
+
+  // the CATCH instruction is annotated with a list of exception IDs
+  const irept exceptions=code.op0().find(ID_exception_list);
+  if(exceptions!=get_nil_irep())
+  {
+    irept::subt exceptions_sub=exceptions.get_sub();
+    irept::subt &exception_list=
+      catch_instruction->code.add(ID_exception_list).get_sub();
+    exception_list.resize(exceptions_sub.size());
+    for(size_t i=0; i<exceptions_sub.size(); ++i)
+      exception_list[i].id(exceptions_sub[i].id());
+  }
+
+  // the CATCH instruction is also annotated with a list of handle labels
+  const irept handlers=code.op0().find(ID_label);
+  if(handlers!=get_nil_irep())
+  {
+    irept::subt handlers_sub=handlers.get_sub();
+    irept::subt &handlers_list=
+      catch_instruction->code.add(ID_label).get_sub();
+    handlers_list.resize(handlers_sub.size());
+    for(size_t i=0; i<handlers_sub.size(); ++i)
+      handlers_list[i].id(handlers_sub[i].id());
+  }
+
+  // the CATCH instruction may also be annotated with a flag
+  // saying that this is a handler
+  const irept handler=code.op0().find(ID_handler);
+  if(handler!=get_nil_irep())
+  {
+    catch_instruction->code.set(ID_handler, handler);
+  }
+
+  // add a SKIP target for the end of everything
+  goto_programt end;
+  goto_programt::targett end_target=end.add_instruction();
+  end_target->make_skip();
+
+  // add the end-target
+  dest.destructive_append(end);
+}
+
+/*******************************************************************\
+
 Function: goto_convertt::convert_try_catch
 
   Inputs:

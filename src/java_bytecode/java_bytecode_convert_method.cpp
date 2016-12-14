@@ -969,7 +969,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
         exprt exc_var=variable(
           arg0, statement[0],
           i_it->address,
-          false);
+          NO_CAST);
 
         // throw away the operands
         pop_residue(bytecode_info.pop);
@@ -981,7 +981,9 @@ codet java_bytecode_convert_methodt::convert_instructions(
         catch_handler_expr.set(ID_handler, exc_var);
         codet catch_handler=code_expressiont(catch_handler_expr);
 
-        code_labelt newlabel(label(i2string(cur_pc)), code_blockt());
+        std::ostringstream strInt;
+        strInt << cur_pc;
+        code_labelt newlabel(label(strInt.str()), code_blockt());
         code_blockt label_block=to_code_block(newlabel.code());
         code_blockt handler_block;
         handler_block.move_to_operands(c);
@@ -1994,8 +1996,9 @@ codet java_bytecode_convert_methodt::convert_instructions(
           // record the exception handler in the CATCH-PUSH
           // instruction by generating a label corresponding to
           // the handler's pc
-          handler_labels.push_back(
-            label(i2string(method.exception_table[pos].handler_pc)));
+          std::ostringstream strInt;
+          strInt << method.exception_table[pos].handler_pc;
+          handler_labels.push_back(label(strInt.str()));
         }
         else
           break;
@@ -2083,7 +2086,9 @@ codet java_bytecode_convert_methodt::convert_instructions(
 
         // create labels for the handlers that match those used
         // in CATCH-PUSH above
-        code_labelt newlabel(label(i2string(cur_pc)), code_blockt());
+        std::ostringstream strInt;
+        strInt << cur_pc;
+        code_labelt newlabel(label(strInt.str()), code_blockt());
         code_blockt label_block=to_code_block(newlabel.code());
         code_blockt handler_block;
         handler_block.move_to_operands(c);
@@ -2170,8 +2175,6 @@ codet java_bytecode_convert_methodt::convert_instructions(
     }
   }
 
-  // TODO: add exception handlers from exception table
-  // review successor computation of athrow!
   code_blockt code;
 
   // Add anonymous locals to the symtab:
