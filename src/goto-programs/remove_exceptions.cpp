@@ -345,7 +345,7 @@ void remove_exceptionst::add_throw_gotos(
       while(exc_symbol.id()!=ID_symbol)
         exc_symbol=exc_symbol.op0();
 
-      binary_predicate_exprt check(exc_symbol, "java_instanceof", expr);
+      binary_predicate_exprt check(exc_symbol, ID_java_instanceof, expr);
       t_exc->guard=check;
     }
   }
@@ -417,7 +417,7 @@ void remove_exceptionst::add_function_call_gotos(
         type_exprt expr(type);
         binary_predicate_exprt check_instanceof(
           callee_exc,
-          "java_instanceof",
+          ID_java_instanceof,
           expr);
         t_exc->guard=check_instanceof;
 
