@@ -13,6 +13,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/expr_util.h>
 #include <util/config.h>
 #include <util/get_base_name.h>
+#include <util/symbol.h>
 
 #include <linking/linking.h>
 #include <linking/remove_internal_symbols.h>
@@ -61,6 +62,103 @@ Function: ansi_c_languaget::modules_provided
 void ansi_c_languaget::modules_provided(std::set<std::string> &modules)
 {
   modules.insert(get_base_name(parse_path, true));
+}
+
+/*******************************************************************\
+
+Function: ansi_c_languaget::generate_opaque_stub_body
+
+  Inputs:
+          symbol - the function symbol which is opaque
+          symbol_table - the symbol table
+
+ Outputs: The identifier of the return variable. ID_nil if the function
+          doesn't return anything.
+
+ Purpose: To generate the stub function for the opaque function in
+          question. The identifier is used in the flag to the interpreter
+          that the function is opaque. In C, providing the function returns
+          something, the id will be to_return_function_name.
+          The GOTO code will simply create a NONDET instruction as the
+          return value.
+
+\*******************************************************************/
+
+irep_idt ansi_c_languaget::generate_opaque_stub_body(
+  symbolt &symbol,
+  symbol_tablet &symbol_table)
+{
+  code_blockt new_instructions;
+  code_typet &function_type=to_code_type(symbol.type);
+  const typet &return_type=function_type.return_type();
+
+  if(return_type.id()!=ID_nil)
+  {
+    // Build an auxillary symbol to store the return value for
+    // this function
+    auxiliary_symbolt return_symbol;
+    return_symbol.name=get_stub_return_symbol_name(symbol.name);
+    return_symbol.base_name=return_symbol.name;
+    return_symbol.mode=ID_C;
+    return_symbol.type=return_type;
+
+    // Put this symbol into the symbol table
+    symbolt *symbol_ptr=nullptr;
+    symbol_table.move(return_symbol, symbol_ptr);
+    assert(symbol_ptr);
+
+    // Assign a NONDET expression to the temporary symbol
+    symbol_exprt temp_return_symbol(symbol_ptr->name, return_type);
+    exprt return_symbol_expr=side_effect_expr_nondett(return_type);
+    code_declt temp_return_decl(temp_return_symbol);
+    temp_return_decl.copy_to_operands(return_symbol_expr);
+
+    // Add the temporary symbol declaration and the return expression
+    // to the body for the stubbed function
+    new_instructions.copy_to_operands(temp_return_decl);
+    new_instructions.copy_to_operands(code_returnt(temp_return_symbol));
+    symbol.value=new_instructions;
+    return symbol_ptr->name;
+  }
+
+  return ID_nil;
+}
+
+/*******************************************************************\
+
+Function: ansi_c_languaget::build_stub_parameter_symbol
+
+  Inputs:
+          function_symbol - the symbol of an opaque function
+          parameter_index - the index of the parameter within the
+                            the parameter list
+          parameter_type - the type of the parameter
+
+ Outputs: A named symbol to be added to the symbol table representing
+          one of the parameters in this opaque function.
+
+ Purpose: To build the parameter symbol and choose its name. For C
+          we do not have to worry about this pointers so can just
+          name the parameters according to index.
+          Builds a parameter with name stub_ignored_arg0,...
+
+\*******************************************************************/
+
+parameter_symbolt ansi_c_languaget::build_stub_parameter_symbol(
+  const symbolt &function_symbol,
+  size_t parameter_index,
+  const code_typet::parametert &parameter)
+{
+  irep_idt base_name="stub_ignored_arg"+i2string(parameter_index);
+  irep_idt identifier=id2string(function_symbol.name)+"::"+id2string(base_name);
+
+  parameter_symbolt parameter_symbol;
+  parameter_symbol.base_name=base_name;
+  parameter_symbol.mode=ID_C;
+  parameter_symbol.name=identifier;
+  parameter_symbol.type=parameter.type();
+
+  return parameter_symbol;
 }
 
 /*******************************************************************\
@@ -194,6 +292,8 @@ Function: ansi_c_languaget::final
 
 bool ansi_c_languaget::final(symbol_tablet &symbol_table)
 {
+  generate_opaque_method_stubs(symbol_table);
+
   if(ansi_c_entry_point(symbol_table, "main", get_message_handler()))
     return true;
 
