@@ -32,7 +32,10 @@ Author: Daniel Kroening, kroening@kroening.com
   "(no-assertions)(no-assumptions)(uninitialized-check)" \
   "(race-check)(scc)(one-event-per-cycle)" \
   "(minimum-interference)" \
-  "(mm):(my-events)(unwind):" \
+  "(mm):(my-events)" \
+  "(unwind):(unwindset):(unwindset-file):" \
+  "(unwinding-assertions)(partial-loops)(continue-as-loops)" \
+  "(log):" \
   "(max-var):(max-po-trans):(ignore-arrays)" \
   "(cfg-kill)(no-dependencies)(force-loop-duplication)" \
   "(call-graph)" \
@@ -48,7 +51,7 @@ Author: Daniel Kroening, kroening@kroening.com
   "(show-struct-alignment)(interval-analysis)(show-intervals)" \
   "(show-uninitialized)(show-locations)" \
   "(full-slice)(reachability-slice)" \
-  "(inline)" \
+  "(inline)(remove-function-pointers)" \
   "(show-claims)(show-properties)(property):" \
   "(show-symbol-table)(show-points-to)(show-rw-set)" \
   "(cav11)" \

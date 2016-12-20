@@ -14,6 +14,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <cassert>
 #include <iosfwd>
 #include <set>
+#include <limits>
 
 #include <util/namespace.h>
 #include <util/symbol_table.h>
@@ -126,7 +127,7 @@ public:
 
     //! is this node a branch target?
     inline bool is_target() const
-    { return target_number!=unsigned(-1); }
+    { return target_number!=std::numeric_limits<unsigned>::max(); }
 
     //! clear the node
     inline void clear(goto_program_instruction_typet _type)
@@ -188,7 +189,7 @@ public:
       type(NO_INSTRUCTION_TYPE),
       guard(true_exprt()),
       location_number(0),
-      target_number(unsigned(-1))
+      target_number(std::numeric_limits<unsigned>::max())
     {
     }
 
@@ -197,7 +198,7 @@ public:
       type(_type),
       guard(true_exprt()),
       location_number(0),
-      target_number(unsigned(-1))
+      target_number(std::numeric_limits<unsigned>::max())
     {
     }
 
@@ -293,6 +294,13 @@ public:
   {
     return instructions.insert(target, instructiont());
   }
+  
+  //! Insertion before the given target
+  //! \return newly inserted location
+  inline targett insert_before(const_targett target)
+  {
+    return instructions.insert(target, instructiont());
+  }
 
   //! Insertion after the given target
   //! \return newly inserted location
@@ -315,6 +323,17 @@ public:
   //! The program is destroyed.
   inline void destructive_insert(
     targett target,
+    goto_program_templatet<codeT, guardT> &p)
+  {
+    instructions.splice(target,
+                        p.instructions);
+    // BUG: The iterators to p-instructions are invalidated!
+  }
+
+  //! Inserts the given program at the given location.
+  //! The program is destroyed.
+  inline void destructive_insert(
+    const_targett target,
     goto_program_templatet<codeT, guardT> &p)
   {
     instructions.splice(target,
@@ -593,7 +612,7 @@ void goto_program_templatet<codeT, guardT>::compute_target_numbers()
       if(t!=instructions.end())
       {
         assert(t->target_number!=0);
-        assert(t->target_number!=unsigned(-1));
+        assert(t->target_number!=std::numeric_limits<unsigned>::max());
       }
     }
   }
