@@ -1,7 +1,9 @@
 class A extends Throwable {}
 class B extends A {}
 class C extends B {}
-class D extends C {}public class test {
+class D extends C {}
+
+public class test {
  public static void main (String arg[]) {
    try {
      D d = new D();
@@ -23,6 +25,6 @@ class D extends C {}public class test {
    catch(A exc) {
      assert false;
    }  
-  }
+ }
 }
 
