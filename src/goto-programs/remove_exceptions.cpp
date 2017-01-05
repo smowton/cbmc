@@ -7,7 +7,10 @@ Author: Cristina David
 Date:   December 2016
 
 \*******************************************************************/
+//#define DEBUG
+#ifdef DEBUG
 #include<iostream>
+#endif
 #include <stack>
 
 #include <util/std_expr.h>
@@ -30,76 +33,78 @@ protected:
   symbol_tablet &symbol_table;
 
   void add_exceptional_returns(
-    goto_functionst::function_mapt::iterator f_it);
+    goto_functionst::function_mapt::iterator);
 
   void replace_throws(
-    goto_functionst::function_mapt::iterator f_it);
+    goto_functionst::function_mapt::iterator);
 
   void instrument_function_calls(
-    goto_functionst::function_mapt::iterator f_it);
+    goto_functionst::function_mapt::iterator);
 
   void instrument_exception_handlers(
-    goto_functionst::function_mapt::iterator f_it);
+    goto_functionst::function_mapt::iterator);
   void add_gotos(
-    goto_functionst::function_mapt::iterator f_it);
+    goto_functionst::function_mapt::iterator);
 
   void add_throw_gotos(
-    goto_functionst::function_mapt::iterator f_it,
-    goto_programt::instructionst::iterator i_it,
+    goto_functionst::function_mapt::iterator,
+    goto_programt::instructionst::iterator instr_it,
     stack_catcht stack_catch);
 
   void add_function_call_gotos(
-    goto_functionst::function_mapt::iterator f_it,
-    goto_programt::instructionst::iterator i_it,
+    goto_functionst::function_mapt::iterator func_it,
+    goto_programt::instructionst::iterator instr_it,
     stack_catcht stack_catch);
 };
 
 void remove_exceptionst::add_exceptional_returns(
-  goto_functionst::function_mapt::iterator f_it)
+  goto_functionst::function_mapt::iterator func_it)
 {
-  const irep_idt function_id=f_it->first;
-  goto_programt &goto_program=f_it->second.body;
+  const irep_idt function_id=func_it->first;
+  goto_programt &goto_program=func_it->second.body;
 
   if(goto_program.empty())
     return;
 
-  bool change=true;
-
-  // we recursively add all the functions that may throw an exception
-  while(change)
+  // We generate an exceptional return value for any function that has
+  // a throw or a function call. This can be improved by only considering
+  // function calls that may escape exceptions. However, this will
+  // require multiple passes.
+  Forall_goto_program_instructions(instr_it, goto_program)
   {
-    change=false;
-    Forall_goto_program_instructions(i_it, goto_program)
+    if(instr_it->is_throw() || instr_it->is_function_call())
     {
-      irep_idt function_call_id;
-      if(i_it->is_function_call())
-        function_call_id=to_symbol_expr(to_code_function_call(i_it->code).
-          function()).get_identifier();
+      // look up the function symbol
+      symbol_tablet::symbolst::iterator s_it=
+        symbol_table.symbols.find(function_id);
 
-      if(i_it->is_throw() ||
-        (i_it->is_function_call() &&
-         symbol_table.has_symbol(id2string(function_call_id)+EXC_SUFFIX)))
-      {
-        change=true;
-        // look up the function symbol
-        symbol_tablet::symbolst::iterator s_it=
-          symbol_table.symbols.find(function_id);
+      assert(s_it!=symbol_table.symbols.end());
+      symbolt &function_symbol=s_it->second;
 
-        assert(s_it!=symbol_table.symbols.end());
-        symbolt &function_symbol=s_it->second;
+      auxiliary_symbolt new_symbol;
+      new_symbol.is_static_lifetime=true;
+      new_symbol.module=function_symbol.module;
+      new_symbol.base_name=id2string(function_symbol.base_name)+EXC_SUFFIX;
+      new_symbol.name=id2string(function_symbol.name)+EXC_SUFFIX;
+      new_symbol.mode=function_symbol.mode;
+      new_symbol.type=typet(ID_pointer, empty_typet());
+      symbol_table.add(new_symbol);
 
-        auxiliary_symbolt new_symbol;
-        new_symbol.is_static_lifetime=true;
-        new_symbol.module=function_symbol.module;
-        new_symbol.base_name=id2string(function_symbol.base_name)+EXC_SUFFIX;
-        new_symbol.name=id2string(function_symbol.name)+EXC_SUFFIX;
-        new_symbol.mode=function_symbol.mode;
-        // initialize with NULL
-        new_symbol.type=typet(ID_pointer, empty_typet());
-        new_symbol.value=null_pointer_exprt(pointer_typet());
-        symbol_table.add(new_symbol);
-        return;
-      }
+      // initialize the exceptional return with NULL
+      symbol_exprt lhs_expr_null;
+      lhs_expr_null.set_identifier(id2string(function_symbol.name)+EXC_SUFFIX);
+      lhs_expr_null.type()=typet(ID_pointer, empty_typet());
+
+      exprt rhs_expr_null;
+      rhs_expr_null=null_pointer_exprt(pointer_typet());
+      goto_programt::targett t_null=goto_program.insert_before(instr_it);
+      t_null->make_assignment();
+      t_null->source_location=instr_it->source_location;
+      t_null->code=code_assignt(
+        lhs_expr_null,
+        typecast_exprt(rhs_expr_null, lhs_expr_null.type()));
+      t_null->function=instr_it->function;
+      return;
     }
   }
 }
@@ -117,20 +122,20 @@ Purpose: turns 'throw x' in function f into an assignment to f#exc_value
 \*******************************************************************/
 
 void remove_exceptionst::replace_throws(
-  goto_functionst::function_mapt::iterator f_it)
+  goto_functionst::function_mapt::iterator func_it)
 {
-  const irep_idt function_id=f_it->first;
-  goto_programt &goto_program=f_it->second.body;
+  const irep_idt function_id=func_it->first;
+  goto_programt &goto_program=func_it->second.body;
 
   if(goto_program.empty())
     return;
 
-  Forall_goto_program_instructions(i_it, goto_program)
+  Forall_goto_program_instructions(instr_it, goto_program)
   {
-    if(i_it->is_throw() &&
+    if(instr_it->is_throw() &&
        symbol_table.has_symbol(id2string(function_id)+EXC_SUFFIX))
     {
-      assert(i_it->code.operands().size()==1);
+      assert(instr_it->code.operands().size()==1);
       symbolt &function_symbol=symbol_table.lookup(id2string(function_id)+
                                                   EXC_SUFFIX);
 
@@ -140,7 +145,7 @@ void remove_exceptionst::replace_throws(
       lhs_expr.type()=function_symbol.type;
 
       // find the symbol corresponding to the thrown exceptions
-      exprt exc_symbol=i_it->code;
+      exprt exc_symbol=instr_it->code;
       while(exc_symbol.id()!=ID_symbol)
         exc_symbol=exc_symbol.op0();
 
@@ -149,8 +154,8 @@ void remove_exceptionst::replace_throws(
                               exc_symbol);
 
       // now turn the `throw' into `assignment'
-      i_it->type=ASSIGN;
-      i_it->code=assignment;
+      instr_it->type=ASSIGN;
+      instr_it->code=assignment;
     }
   }
 }
@@ -169,19 +174,19 @@ Purpose: after each function call g() in function f
 \*******************************************************************/
 
 void remove_exceptionst::instrument_function_calls(
-  goto_functionst::function_mapt::iterator f_it)
+  goto_functionst::function_mapt::iterator func_it)
 {
-  const irep_idt &caller_id=f_it->first;
-  goto_programt &goto_program=f_it->second.body;
+  const irep_idt &caller_id=func_it->first;
+  goto_programt &goto_program=func_it->second.body;
 
   if(goto_program.empty())
     return;
 
-  Forall_goto_program_instructions(i_it, goto_program)
+  Forall_goto_program_instructions(instr_it, goto_program)
   {
-    if(i_it->is_function_call())
+    if(instr_it->is_function_call())
     {
-      code_function_callt &function_call=to_code_function_call(i_it->code);
+      code_function_callt &function_call=to_code_function_call(instr_it->code);
       const irep_idt &callee_id=
         to_symbol_expr(function_call.function()).get_identifier();
 
@@ -200,11 +205,11 @@ void remove_exceptionst::instrument_function_calls(
         lhs_expr.set_identifier(id2string(caller_id)+EXC_SUFFIX);
         lhs_expr.type()=caller.type;
 
-        goto_programt::targett t=goto_program.insert_after(i_it);
+        goto_programt::targett t=goto_program.insert_after(instr_it);
         t->make_assignment();
-        t->source_location=i_it->source_location;
+        t->source_location=instr_it->source_location;
         t->code=code_assignt(lhs_expr, rhs_expr);
-        t->function=i_it->function;
+        t->function=instr_it->function;
       }
     }
   }
@@ -224,21 +229,21 @@ Purpose: at the beginning of each handler in function f
 \*******************************************************************/
 
 void remove_exceptionst::instrument_exception_handlers(
-  goto_functionst::function_mapt::iterator f_it)
+  goto_functionst::function_mapt::iterator func_it)
 {
-  const irep_idt &function_id=f_it->first;
-  goto_programt &goto_program=f_it->second.body;
+  const irep_idt &function_id=func_it->first;
+  goto_programt &goto_program=func_it->second.body;
 
   if(goto_program.empty())
     return;
 
-  Forall_goto_program_instructions(i_it, goto_program)
+  Forall_goto_program_instructions(instr_it, goto_program)
   {
     // is this a handler
-    if(i_it->type==CATCH && i_it->code.find(ID_handler)!=get_nil_irep())
+    if(instr_it->type==CATCH && instr_it->code.find(ID_handler)!=get_nil_irep())
     {
       // retrieve the exception variable
-      const irept &exception=i_it->code.find(ID_handler);
+      const irept &exception=instr_it->code.find(ID_handler);
 
       if(symbol_table.has_symbol(id2string(function_id)+EXC_SUFFIX))
       {
@@ -252,13 +257,13 @@ void remove_exceptionst::instrument_exception_handlers(
         rhs_expr_null=null_pointer_exprt(pointer_typet());
 
         // add the assignment
-        goto_programt::targett t_null=goto_program.insert_after(i_it);
+        goto_programt::targett t_null=goto_program.insert_after(instr_it);
         t_null->make_assignment();
-        t_null->source_location=i_it->source_location;
+        t_null->source_location=instr_it->source_location;
         t_null->code=code_assignt(
           lhs_expr_null,
           typecast_exprt(rhs_expr_null, lhs_expr_null.type()));
-        t_null->function=i_it->function;
+        t_null->function=instr_it->function;
 
         // add the assignment exc=f#exception_value
         symbol_exprt rhs_expr_exc;
@@ -266,16 +271,16 @@ void remove_exceptionst::instrument_exception_handlers(
         rhs_expr_exc.type()=function_symbol.type;
 
         const exprt &lhs_expr_exc=static_cast<const exprt &>(exception);
-        goto_programt::targett t_exc=goto_program.insert_after(i_it);
+        goto_programt::targett t_exc=goto_program.insert_after(instr_it);
         t_exc->make_assignment();
-        t_exc->source_location=i_it->source_location;
+        t_exc->source_location=instr_it->source_location;
         t_exc->code=code_assignt(
           typecast_exprt(lhs_expr_exc, rhs_expr_exc.type()),
           rhs_expr_exc);
-        t_exc->function=i_it->function;
+        t_exc->function=instr_it->function;
       }
 
-      i_it->make_skip();
+      instr_it->make_skip();
     }
   }
 }
@@ -293,25 +298,25 @@ Purpose: instruments each throw with conditional GOTOS to the
 
 \*******************************************************************/
 void remove_exceptionst::add_throw_gotos(
-  goto_functionst::function_mapt::iterator f_it,
-  goto_programt::instructionst::iterator i_it,
+  goto_functionst::function_mapt::iterator func_it,
+  goto_programt::instructionst::iterator instr_it,
   stack_catcht stack_catch)
 {
-  assert(i_it->type==THROW);
+  assert(instr_it->type==THROW);
 
-  goto_programt &goto_program=f_it->second.body;
+  goto_programt &goto_program=func_it->second.body;
 
-  assert(i_it->code.operands().size()==1);
+  assert(instr_it->code.operands().size()==1);
 
   // make sure that these are always forward gotos
-  assert(!i_it->is_backwards_goto());
+  assert(!instr_it->is_backwards_goto());
 
   // jump to the end of the function
   // this will appear after the GOTO-based dynamic dispatch below
-  goto_programt::targett t_end=goto_program.insert_after(i_it);
+  goto_programt::targett t_end=goto_program.insert_after(instr_it);
   goto_programt::targett new_state;
   // find the end of the function
-  for(goto_programt::instructionst::iterator inner_it=i_it;
+  for(goto_programt::instructionst::iterator inner_it=instr_it;
       inner_it!=goto_program.instructions.end();
       inner_it++)
   {
@@ -319,8 +324,8 @@ void remove_exceptionst::add_throw_gotos(
       new_state=inner_it;
   }
   t_end->make_goto(new_state);
-  t_end->source_location=i_it->source_location;
-  t_end->function=i_it->function;
+  t_end->source_location=instr_it->source_location;
+  t_end->function=instr_it->function;
 
   // add GOTOs implementing the dynamic dispatch of the
   // exception handlers
@@ -332,16 +337,16 @@ void remove_exceptionst::add_throw_gotos(
       new_state_pc=stack_catch[i].catch_handlers[j].second;
 
       // find handler
-      goto_programt::targett t_exc=goto_program.insert_after(i_it);
+      goto_programt::targett t_exc=goto_program.insert_after(instr_it);
       t_exc->make_goto(new_state_pc);
-      t_exc->source_location=i_it->source_location;
-      t_exc->function=i_it->function;
+      t_exc->source_location=instr_it->source_location;
+      t_exc->function=instr_it->function;
 
       // use instanceof to check that this is the correct handler
       symbol_typet type(stack_catch[i].catch_handlers[j].first);
       type_exprt expr(type);
       // find the symbol corresponding to the caught exceptions
-      exprt exc_symbol=i_it->code;
+      exprt exc_symbol=instr_it->code;
       while(exc_symbol.id()!=ID_symbol)
         exc_symbol=exc_symbol.op0();
 
@@ -364,54 +369,42 @@ Purpose: instruments each function call that may escape exceptions
 
 \*******************************************************************/
 void remove_exceptionst::add_function_call_gotos(
-  goto_functionst::function_mapt::iterator f_it,
-  goto_programt::instructionst::iterator i_it,
+  goto_functionst::function_mapt::iterator func_it,
+  goto_programt::instructionst::iterator instr_it,
   stack_catcht stack_catch)
 {
-  assert(i_it->type==FUNCTION_CALL);
+  assert(instr_it->type==FUNCTION_CALL);
 
-  goto_programt &goto_program=f_it->second.body;
+  goto_programt &goto_program=func_it->second.body;
 
+  // save the address of the next instruction
+  goto_programt::instructionst::iterator next_it=instr_it;
+  next_it++;
 
-  code_function_callt &function_call=to_code_function_call(i_it->code);
+  code_function_callt &function_call=to_code_function_call(instr_it->code);
   assert(function_call.function().id()==ID_symbol);
   const irep_idt &callee_id=
     to_symbol_expr(function_call.function()).get_identifier();
 
   if(symbol_table.has_symbol(id2string(callee_id)+EXC_SUFFIX))
   {
-    // jump to the end of the function
-    goto_programt::targett t_end=goto_program.insert_after(i_it);
-    goto_programt::targett new_state;
-    // find the end of the function
-    for(goto_programt::instructionst::iterator inner_it=i_it;
-        inner_it!=goto_program.instructions.end();
-        inner_it++)
-    {
-      if(inner_it->is_end_function())
-        new_state=inner_it;
-    }
-    t_end->make_goto(new_state);
-    t_end->source_location=i_it->source_location;
-    t_end->function=i_it->function;
-
     // dynamic dispatch of the escaped exception
+    symbolt &callee_exc_symbol=symbol_table.lookup(id2string(callee_id)+
+                                                   EXC_SUFFIX);
+    symbol_exprt callee_exc;
+    callee_exc.set_identifier(id2string(callee_id)+EXC_SUFFIX);
+    callee_exc.type()=callee_exc_symbol.type;
+
     for(std::size_t i=stack_catch.size(); i-->0;)
     {
       for(std::size_t j=stack_catch[i].catch_handlers.size(); j-->0;)
       {
-        symbolt &callee_exc_symbol=symbol_table.lookup(id2string(callee_id)+
-                                                       EXC_SUFFIX);
-        symbol_exprt callee_exc;
-        callee_exc.set_identifier(id2string(callee_id)+EXC_SUFFIX);
-        callee_exc.type()=callee_exc_symbol.type;
-
         goto_programt::targett new_state_pc;
         new_state_pc=stack_catch[i].catch_handlers[j].second;
-        goto_programt::targett t_exc=goto_program.insert_after(i_it);
+        goto_programt::targett t_exc=goto_program.insert_after(instr_it);
         t_exc->make_goto(new_state_pc);
-        t_exc->source_location=i_it->source_location;
-        t_exc->function=i_it->function;
+        t_exc->source_location=instr_it->source_location;
+        t_exc->function=instr_it->function;
         // use instanceof to check that this is the correct handler
         symbol_typet type(stack_catch[i].catch_handlers[j].first);
         type_exprt expr(type);
@@ -420,18 +413,18 @@ void remove_exceptionst::add_function_call_gotos(
           ID_java_instanceof,
           expr);
         t_exc->guard=check_instanceof;
-
-        // add a null check (so that instanceof can ba applied)
-        equal_exprt eq_null(typecast_exprt(callee_exc, pointer_typet()),
-                            null_pointer_exprt(pointer_typet()));
-        // jump to the end of the function
-        goto_programt::targett t_null=goto_program.insert_after(i_it);
-        t_null->make_goto(new_state);
-        t_null->source_location=i_it->source_location;
-        t_null->function=i_it->function;
-        t_null->guard=eq_null;
       }
     }
+
+    // add a null check (so that instanceof can ba applied)
+    equal_exprt eq_null(typecast_exprt(callee_exc, pointer_typet()),
+                        null_pointer_exprt(pointer_typet()));
+    // jump to the next instruction 
+    goto_programt::targett t_null=goto_program.insert_after(instr_it);
+    t_null->make_goto(next_it);
+    t_null->source_location=instr_it->source_location;
+    t_null->function=instr_it->function;
+    t_null->guard=eq_null;
   }
 }
 
@@ -448,27 +441,22 @@ Purpose: instruments each throw and function calls that may escape exceptions
 
 \*******************************************************************/
 void remove_exceptionst::add_gotos(
-  goto_functionst::function_mapt::iterator f_it)
+  goto_functionst::function_mapt::iterator func_it)
 {
   // Stack of try-catch blocks
   stack_catcht stack_catch;
 
-  const irep_idt &function_id=f_it->first;
-  goto_programt &goto_program=f_it->second.body;
+  goto_programt &goto_program=func_it->second.body;
 
   if(goto_program.empty())
     return;
-  Forall_goto_program_instructions(i_it, goto_program)
+  Forall_goto_program_instructions(instr_it, goto_program)
   {
     // it's a CATCH but not a handler
-    if(i_it->type==CATCH && i_it->code.find(ID_handler)==get_nil_irep())
+    if(instr_it->type==CATCH && instr_it->code.find(ID_handler)==get_nil_irep())
     {
-      if(i_it->targets.empty()) // pop
+      if(instr_it->targets.empty()) // pop
       {
-#if 0
-        if(stack_catch.empty())
-          throw "catch-pop on empty call stack";
-#endif
         // pop from the stack if possible
         if(!stack_catch.empty())
         {
@@ -476,24 +464,24 @@ void remove_exceptionst::add_gotos(
         }
         else
         {
+#ifdef DEBUG
           std::cout << "Remove exceptions: empty stack" << std::endl;
+#endif
         }
       }
       else // push
       {
-        std::cout << "(push) add_gotos for fct " <<
-          id2string(function_id) << std::endl;
         exceptiont exception;
         // copy targets
         const irept::subt &exception_list=
-          i_it->code.find(ID_exception_list).get_sub();
-        assert(exception_list.size()==i_it->targets.size());
+          instr_it->code.find(ID_exception_list).get_sub();
+        assert(exception_list.size()==instr_it->targets.size());
 
         // Fill the map with the catch type and the target
         unsigned i=0;
         for(goto_programt::targetst::const_iterator
-              it=i_it->targets.begin();
-            it!=i_it->targets.end();
+              it=instr_it->targets.begin();
+            it!=instr_it->targets.end();
             it++, i++)
         {
           exception.catch_handlers.push_back(
@@ -504,15 +492,15 @@ void remove_exceptionst::add_gotos(
         stack_catch.push_back(exception);
       }
 
-      i_it->make_skip();
+      instr_it->make_skip();
     }
-    else if(i_it->type==THROW)
+    else if(instr_it->type==THROW)
     {
-      add_throw_gotos(f_it, i_it, stack_catch);
+      add_throw_gotos(func_it, instr_it, stack_catch);
     }
-    else if(i_it->type==FUNCTION_CALL)
+    else if(instr_it->type==FUNCTION_CALL)
     {
-      add_function_call_gotos(f_it, i_it, stack_catch);
+      add_function_call_gotos(func_it, instr_it, stack_catch);
     }
   }
 }
@@ -558,8 +546,8 @@ void remove_exceptions(
   symbol_tablet &symbol_table,
   goto_functionst &goto_functions)
 {
-  remove_exceptionst rr(symbol_table);
-  rr(goto_functions);
+  remove_exceptionst remove_exceptions(symbol_table);
+  remove_exceptions(goto_functions);
 }
 
 /*******************************************************************\
