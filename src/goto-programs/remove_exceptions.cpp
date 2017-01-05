@@ -7,7 +7,7 @@ Author: Cristina David
 Date:   December 2016
 
 \*******************************************************************/
-//#define DEBUG
+// #define DEBUG
 #ifdef DEBUG
 #include<iostream>
 #endif
@@ -17,6 +17,16 @@ Date:   December 2016
 #include <util/symbol_table.h>
 
 #include "remove_exceptions.h"
+
+class exceptiont
+{
+public:
+  typedef std::vector<std::pair<irep_idt,
+    goto_programt::targett>> catch_handlerst;
+  catch_handlerst catch_handlers;
+};
+
+typedef std::vector<exceptiont> stack_catcht;
 
 class remove_exceptionst
 {
@@ -318,7 +328,7 @@ void remove_exceptionst::add_throw_gotos(
   // find the end of the function
   for(goto_programt::instructionst::iterator inner_it=instr_it;
       inner_it!=goto_program.instructions.end();
-      inner_it++)
+      ++inner_it)
   {
     if(inner_it->is_end_function())
       new_state=inner_it;
@@ -419,7 +429,7 @@ void remove_exceptionst::add_function_call_gotos(
     // add a null check (so that instanceof can ba applied)
     equal_exprt eq_null(typecast_exprt(callee_exc, pointer_typet()),
                         null_pointer_exprt(pointer_typet()));
-    // jump to the next instruction 
+    // jump to the next instruction
     goto_programt::targett t_null=goto_program.insert_after(instr_it);
     t_null->make_goto(next_it);
     t_null->source_location=instr_it->source_location;
@@ -479,13 +489,11 @@ void remove_exceptionst::add_gotos(
 
         // Fill the map with the catch type and the target
         unsigned i=0;
-        for(goto_programt::targetst::const_iterator
-              it=instr_it->targets.begin();
-            it!=instr_it->targets.end();
-            it++, i++)
+        for(auto target : instr_it->targets)
         {
           exception.catch_handlers.push_back(
-            std::make_pair(exception_list[i].id(), *it));
+            std::make_pair(exception_list[i].id(), target));
+          i++;
         }
 
         // Stack it
@@ -523,6 +531,9 @@ void remove_exceptionst::operator()(goto_functionst &goto_functions)
   Forall_goto_functions(it, goto_functions)
   {
     add_exceptional_returns(it);
+  }
+  Forall_goto_functions(it, goto_functions)
+  {
     instrument_exception_handlers(it);
     add_gotos(it);
     instrument_function_calls(it);

@@ -15,20 +15,9 @@ Date:   December 2016
 
 #define EXC_SUFFIX "#exception_value"
 
-class exceptiont
-{
-public:
-  typedef std::vector<std::pair<irep_idt,
-    goto_programt::targett>> catch_handlerst;
-  catch_handlerst catch_handlers;
-};
-
-typedef std::vector<exceptiont> stack_catcht;
-
 // Removes 'throw x' and CATCH-PUSH/CATCH-POP
 // and adds the required instrumentation (GOTOs and assignments)
 
 void remove_exceptions(symbol_tablet &, goto_functionst &);
-
 
 #endif

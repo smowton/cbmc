@@ -820,7 +820,9 @@ codet java_bytecode_convert_methodt::convert_instructions(
 
     if(i_it->statement=="athrow" ||
        i_it->statement=="invokestatic" ||
-       i_it->statement=="invokevirtual")
+       i_it->statement=="invokevirtual" ||
+       i_it->statement=="invokespecial" ||
+       i_it->statement=="invokeinterface")
     {
       // find the corresponding try-catch blocks and add the handlers
       // to the targets
@@ -990,7 +992,6 @@ codet java_bytecode_convert_methodt::convert_instructions(
         handler_block.move_to_operands(catch_handler);
         handler_block.move_to_operands(label_block);
         c=handler_block;
-
         break;
       }
     }
@@ -1986,7 +1987,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
         if(cur_pc==method.exception_table[pos].start_pc && end_pc==-1)
           end_pc=method.exception_table[pos].end_pc;
 
-	// currently explored try-catch?
+        // currently explored try-catch?
         if(cur_pc==method.exception_table[pos].start_pc &&
            method.exception_table[pos].end_pc==end_pc)
         {
@@ -2096,6 +2097,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
         handler_block.move_to_operands(label_block);
 
         c=handler_block;
+
         break;
       }
     }
@@ -2110,6 +2112,18 @@ codet java_bytecode_convert_methodt::convert_instructions(
     {
       address_mapt::iterator a_it2=address_map.find(address);
       assert(a_it2!=address_map.end());
+
+      // we don't worry about exception handlers as we don't load the
+      // operands from the stack anyway -- we keep explicit global
+      // exception variables
+      for(e=0; e<method.exception_table.size(); ++e)
+      {
+        if(address==method.exception_table[e].handler_pc)
+        {
+          stack.resize(0);
+          break;
+        }
+      }
 
       if(!stack.empty() && a_it2->second.predecessors.size()>1)
       {

@@ -781,6 +781,7 @@ void goto_convertt::remove_push_catch(
   side_effect_exprt &expr,
   goto_programt &dest)
 {
+  // we only get here for ID_push_catch, which is only used for Java
   convert_java_try_catch(code_expressiont(expr), dest);
 
   // the result can't be used, these are void

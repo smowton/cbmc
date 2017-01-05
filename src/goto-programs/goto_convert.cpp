@@ -18,6 +18,8 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <ansi-c/c_types.h>
 
+#include <linking/static_lifetime_init.h>
+
 #include "goto_convert.h"
 #include "goto_convert_class.h"
 #include "destructor.h"
@@ -66,14 +68,11 @@ void finish_catch_push_targets(goto_programt &dest)
   {
     if(!it->labels.empty())
     {
-      for(goto_programt::instructiont::labelst::const_iterator
-            l_it=it->labels.begin();
-          l_it!=it->labels.end();
-          l_it++)
+      for(auto label : it->labels)
       {
         // record the label and the corresponding target
         label_targets.insert(
-          std::pair<irep_idt, goto_programt::targett>(*l_it, it));
+          std::pair<irep_idt, goto_programt::targett>(label, it));
       }
     }
   }
@@ -383,7 +382,7 @@ void goto_convertt::goto_convert_rec(
   finish_computed_gotos(dest);
   finish_guarded_gotos(dest);
 
-  const symbolt &init_symbol = symbol_table.lookup(CPROVER_PREFIX "initialize");
+  const symbolt &init_symbol = symbol_table.lookup(INITIALIZE_FUNCTION);
   if(init_symbol.mode==ID_java)
     finish_catch_push_targets(dest);
 }
