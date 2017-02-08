@@ -750,8 +750,21 @@ static void gather_symbol_live_ranges(
     }
   }
   else
+  {
     forall_operands(it, e)
       gather_symbol_live_ranges(pc, *it, result);
+    for(const auto &keyval : e.get_named_sub())
+    {
+      if(keyval.second.get_named_sub().count(ID_type))
+      {
+        // Probably an exprt:
+        gather_symbol_live_ranges(
+          pc,
+          static_cast<const exprt &>(keyval.second),
+          result);
+      }
+    }
+  }
 }
 
 /*******************************************************************\
