@@ -1,0 +1,7 @@
+{
+  "parent": "type",
+  "id": "array",
+  "namedSub": {
+    "size": {"type": "integer"}
+  }
+}

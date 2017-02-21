@@ -1,0 +1,4 @@
+{
+  "id": "c_enum",
+  "sub": [ { "schema": "c_enum_member", "number": "*", "friendly_name": "member" } ]
+}
