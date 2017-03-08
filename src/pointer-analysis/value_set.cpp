@@ -194,22 +194,18 @@ void value_sett::output(
         result=from_expr(ns, identifier, o);
       else
       {
+        result="<"+from_expr(ns, identifier, o)+", ";
         if(o.id()==ID_dynamic_object)
         {
-          dynamic_object_exprt::recencyt recency;
-          std::string recency_str="";
-
-          recency=to_dynamic_object_expr(o).get_recency();
+          dynamic_object_exprt::recencyt recency=
+            to_dynamic_object_expr(o).get_recency();
+            
           if(recency==dynamic_object_exprt::recencyt::MOST_RECENT_ALLOCATION)
-            recency_str="most-recent-allocation";
+            result+=as_string(ID_most_recent_allocation)+", ";
           else if(recency==dynamic_object_exprt::recencyt::ANY_ALLOCATION)
-            recency_str="any-allocation";
-          result="<"+from_expr(ns, identifier, o)+", "+recency_str+", ";
+            result+=as_string(ID_any_allocation)+", ";
         }
-        else
-        {
-          result="<"+from_expr(ns, identifier, o)+", ";
-        }
+        
         if(o_it->second.offset_is_set)
           result+=integer2string(o_it->second.offset)+"";
         else
@@ -911,11 +907,15 @@ void value_sett::get_value_set_rec(
     std::string recency_str="";
 
     if(dynamic_object.get_recency()==
-       dynamic_object_exprt::recencyt::MOST_RECENT_ALLOCATION)
-      recency_str="most-recent-allocation";
+      dynamic_object_exprt::recencyt::MOST_RECENT_ALLOCATION)
+    {
+      recency_str=as_string(ID_most_recent_allocation);
+    }
     else if(dynamic_object.get_recency()==
-            dynamic_object_exprt::recencyt::ANY_ALLOCATION)
-      recency_str="any-allocation";
+      dynamic_object_exprt::recencyt::ANY_ALLOCATION)
+    {
+      recency_str=as_string(ID_any_allocation);
+    }
 
     const std::string prefix=
       "value_set::dynamic_object"+
@@ -1558,11 +1558,15 @@ void value_sett::assign_rec(
     std::string recency_str="";
 
     if(dynamic_object.get_recency()==
-       dynamic_object_exprt::recencyt::MOST_RECENT_ALLOCATION)
-      recency_str="most-recent-allocation";
+      dynamic_object_exprt::recencyt::MOST_RECENT_ALLOCATION)
+    {
+      recency_str=as_string(ID_most_recent_allocation);
+    }
     else if(dynamic_object.get_recency()==
-            dynamic_object_exprt::recencyt::ANY_ALLOCATION)
-      recency_str="any-allocation";
+      dynamic_object_exprt::recencyt::ANY_ALLOCATION)
+    {
+      recency_str=as_string(ID_any_allocation);
+    }
 
     const std::string name=
       "value_set::dynamic_object"+
