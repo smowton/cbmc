@@ -33,10 +33,10 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "add_failed_symbols.h"
 
-const value_sett::object_map_dt value_sett::object_map_dt::blank{};
-object_numberingt value_sett::object_numbering;
+const object_map_dt object_map_dt::blank{};
+object_numberingt basic_value_sett::object_numbering;
 
-bool value_sett::field_sensitive(
+bool basic_value_sett::field_sensitive(
   const irep_idt &id,
   const typet &type,
   const namespacet &ns)
@@ -51,7 +51,7 @@ bool value_sett::field_sensitive(
   return ns.follow(type).id()==ID_struct;
 }
 
-value_sett::entryt &value_sett::get_entry(
+basic_value_sett::entryt &basic_value_sett::get_entry(
   const entryt &e,
   const typet &type,
   const namespacet &ns)
@@ -69,7 +69,7 @@ value_sett::entryt &value_sett::get_entry(
   return r.first->second;
 }
 
-bool value_sett::insert(
+bool basic_value_sett::insert(
   object_mapt &dest,
   unsigned n,
   const objectt &object) const
@@ -94,7 +94,7 @@ bool value_sett::insert(
   }
 }
 
-void value_sett::output(
+void basic_value_sett::output(
   const namespacet &ns,
   std::ostream &out) const
 {
@@ -184,7 +184,7 @@ void value_sett::output(
   }
 }
 
-exprt value_sett::to_expr(const object_map_dt::value_type &it) const
+exprt basic_value_sett::to_expr(const object_map_dt::value_type &it) const
 {
   const exprt &object=object_numbering[it.first];
 
@@ -204,7 +204,7 @@ exprt value_sett::to_expr(const object_map_dt::value_type &it) const
   return od;
 }
 
-bool value_sett::make_union(const value_sett::valuest &new_values)
+bool basic_value_sett::make_union(const basic_value_sett::valuest &new_values)
 {
   bool result=false;
 
@@ -243,7 +243,7 @@ bool value_sett::make_union(const value_sett::valuest &new_values)
   return result;
 }
 
-bool value_sett::make_union(object_mapt &dest, const object_mapt &src) const
+bool basic_value_sett::make_union(object_mapt &dest, const object_mapt &src) const
 {
   bool result=false;
 
@@ -258,7 +258,7 @@ bool value_sett::make_union(object_mapt &dest, const object_mapt &src) const
   return result;
 }
 
-bool value_sett::eval_pointer_offset(
+bool basic_value_sett::eval_pointer_offset(
   exprt &expr,
   const namespacet &ns) const
 {
@@ -269,7 +269,7 @@ bool value_sett::eval_pointer_offset(
     assert(expr.operands().size()==1);
 
     object_mapt reference_set;
-    get_value_set(expr.op0(), reference_set, ns, true);
+    custom_value_set_ops.get_value_set(expr.op0(), reference_set, ns, true);
 
     exprt new_expr;
     mp_integer previous_offset=0;
@@ -311,13 +311,13 @@ bool value_sett::eval_pointer_offset(
   return mod;
 }
 
-void value_sett::get_value_set(
+void basic_value_sett::read_value_set(
   const exprt &expr,
   value_setst::valuest &dest,
   const namespacet &ns) const
 {
   object_mapt object_map;
-  get_value_set(expr, object_map, ns, false);
+  custom_value_set_ops.get_value_set(expr, object_map, ns, false);
 
   for(object_map_dt::const_iterator
       it=object_map.read().begin();
@@ -332,7 +332,7 @@ void value_sett::get_value_set(
   #endif
 }
 
-void value_sett::get_value_set(
+void basic_value_sett::get_value_set(
   const exprt &expr,
   object_mapt &dest,
   const namespacet &ns,
@@ -342,10 +342,10 @@ void value_sett::get_value_set(
   if(!is_simplified)
     simplify(tmp, ns);
 
-  get_value_set_rec(tmp, dest, "", tmp.type(), ns);
+  custom_value_set_ops.get_value_set_rec(tmp, dest, "", tmp.type(), ns);
 }
 
-void value_sett::get_value_set_rec(
+void basic_value_sett::get_value_set_rec(
   const exprt &expr,
   object_mapt &dest,
   const std::string &suffix,
@@ -372,7 +372,8 @@ void value_sett::get_value_set_rec(
     assert(type.id()==ID_array ||
            type.id()==ID_incomplete_array);
 
-    get_value_set_rec(expr.op0(), dest, "[]"+suffix, original_type, ns);
+    custom_value_set_ops.get_value_set_rec(
+      expr.op0(), dest, "[]"+suffix, original_type, ns);
   }
   else if(expr.id()==ID_member)
   {
@@ -388,7 +389,7 @@ void value_sett::get_value_set_rec(
     const std::string &component_name=
       expr.get_string(ID_component_name);
 
-    get_value_set_rec(expr.op0(), dest,
+    custom_value_set_ops.get_value_set_rec(expr.op0(), dest,
       "."+component_name+suffix, original_type, ns);
   }
   else if(expr.id()==ID_symbol)
@@ -439,20 +440,22 @@ void value_sett::get_value_set_rec(
     if(expr.operands().size()!=3)
       throw "if takes three operands";
 
-    get_value_set_rec(expr.op1(), dest, suffix, original_type, ns);
-    get_value_set_rec(expr.op2(), dest, suffix, original_type, ns);
+    custom_value_set_ops.get_value_set_rec(
+      expr.op1(), dest, suffix, original_type, ns);
+    custom_value_set_ops.get_value_set_rec(
+      expr.op2(), dest, suffix, original_type, ns);
   }
   else if(expr.id()==ID_address_of)
   {
     if(expr.operands().size()!=1)
       throw expr.id_string()+" expected to have one operand";
 
-    get_reference_set(expr.op0(), dest, ns);
+    custom_value_set_ops.get_reference_set(expr.op0(), dest, ns);
   }
   else if(expr.id()==ID_dereference)
   {
     object_mapt reference_set;
-    get_reference_set(expr, reference_set, ns);
+    custom_value_set_ops.get_reference_set(expr, reference_set, ns);
     const object_map_dt &object_map=reference_set.read();
 
     if(object_map.begin()==object_map.end())
@@ -465,7 +468,8 @@ void value_sett::get_value_set_rec(
           it1++)
       {
         const exprt &object=object_numbering[it1->first];
-        get_value_set_rec(object, dest, suffix, original_type, ns);
+        custom_value_set_ops.get_value_set_rec(
+          object, dest, suffix, original_type, ns);
       }
     }
   }
@@ -474,7 +478,7 @@ void value_sett::get_value_set_rec(
     // old stuff, will go away
     object_mapt reference_set;
 
-    get_reference_set(expr, reference_set, ns);
+    custom_value_set_ops.get_reference_set(expr, reference_set, ns);
 
     const object_map_dt &object_map=reference_set.read();
 
@@ -488,7 +492,8 @@ void value_sett::get_value_set_rec(
           it++)
       {
         const exprt &object=object_numbering[it->first];
-        get_value_set_rec(object, dest, suffix, original_type, ns);
+        custom_value_set_ops.get_value_set_rec(
+          object, dest, suffix, original_type, ns);
       }
     }
   }
@@ -521,7 +526,8 @@ void value_sett::get_value_set_rec(
     if(op_type.id()==ID_pointer)
     {
       // pointer-to-pointer -- we just ignore these
-      get_value_set_rec(expr.op0(), dest, suffix, original_type, ns);
+      custom_value_set_ops.get_value_set_rec(
+        expr.op0(), dest, suffix, original_type, ns);
     }
     else if(op_type.id()==ID_unsignedbv ||
             op_type.id()==ID_signedbv)
@@ -535,7 +541,8 @@ void value_sett::get_value_set_rec(
         // see if we have something for the integer
         object_mapt tmp;
 
-        get_value_set_rec(expr.op0(), tmp, suffix, original_type, ns);
+        custom_value_set_ops.get_value_set_rec(
+          expr.op0(), tmp, suffix, original_type, ns);
 
         if(tmp.read().empty())
         {
@@ -608,7 +615,7 @@ void value_sett::get_value_set_rec(
         }
       }
 
-      get_value_set_rec(
+      custom_value_set_ops.get_value_set_rec(
         ptr_operand, pointer_expr_set, "", ptr_operand.type(), ns);
     }
     else
@@ -616,7 +623,7 @@ void value_sett::get_value_set_rec(
       // we get the points-to for all operands, even integers
       forall_operands(it, expr)
       {
-        get_value_set_rec(
+        custom_value_set_ops.get_value_set_rec(
           *it, pointer_expr_set, "", it->type(), ns);
       }
     }
@@ -650,7 +657,7 @@ void value_sett::get_value_set_rec(
     // we get the points-to for all operands, even integers
     forall_operands(it, expr)
     {
-      get_value_set_rec(
+      custom_value_set_ops.get_value_set_rec(
         *it, pointer_expr_set, "", it->type(), ns);
     }
 
@@ -708,7 +715,8 @@ void value_sett::get_value_set_rec(
   {
     // a struct constructor, which may contain addresses
     forall_operands(it, expr)
-      get_value_set_rec(*it, dest, suffix, original_type, ns);
+      custom_value_set_ops.get_value_set_rec(
+        *it, dest, suffix, original_type, ns);
   }
   else if(expr.id()==ID_with)
   {
@@ -716,11 +724,13 @@ void value_sett::get_value_set_rec(
 
     // this is the array/struct
     object_mapt tmp_map0;
-    get_value_set_rec(expr.op0(), tmp_map0, suffix, original_type, ns);
+    custom_value_set_ops.get_value_set_rec(
+      expr.op0(), tmp_map0, suffix, original_type, ns);
 
     // this is the update value -- note NO SUFFIX
     object_mapt tmp_map2;
-    get_value_set_rec(expr.op2(), tmp_map2, "", original_type, ns);
+    custom_value_set_ops.get_value_set_rec(
+      expr.op2(), tmp_map2, "", original_type, ns);
 
     if(expr_type.id()==ID_struct)
     {
@@ -765,13 +775,15 @@ void value_sett::get_value_set_rec(
   {
     // an array constructor, possibly containing addresses
     forall_operands(it, expr)
-      get_value_set_rec(*it, dest, suffix, original_type, ns);
+      custom_value_set_ops.get_value_set_rec(
+        *it, dest, suffix, original_type, ns);
   }
   else if(expr.id()==ID_array_of)
   {
     // an array constructor, possibly containing an address
     assert(expr.operands().size()==1);
-    get_value_set_rec(expr.op0(), dest, suffix, original_type, ns);
+    custom_value_set_ops.get_value_set_rec(
+      expr.op0(), dest, suffix, original_type, ns);
   }
   else if(expr.id()==ID_dynamic_object)
   {
@@ -832,7 +844,8 @@ void value_sett::get_value_set_rec(
         found=true;
 
         member_exprt member(expr.op0(), name, c_it->type());
-        get_value_set_rec(member, dest, suffix, original_type, ns);
+        custom_value_set_ops.get_value_set_rec(
+          member, dest, suffix, original_type, ns);
       }
     }
 
@@ -847,13 +860,15 @@ void value_sett::get_value_set_rec(
       {
         const irep_idt &name=c_it->get_name();
         member_exprt member(expr.op0(), name, c_it->type());
-        get_value_set_rec(member, dest, suffix, original_type, ns);
+        custom_value_set_ops.get_value_set_rec(
+          member, dest, suffix, original_type, ns);
       }
     }
 
     if(!found)
       // we just pass through
-      get_value_set_rec(expr.op0(), dest, suffix, original_type, ns);
+      custom_value_set_ops.get_value_set_rec(
+        expr.op0(), dest, suffix, original_type, ns);
   }
   else if(expr.id()==ID_byte_update_little_endian ||
           expr.id()==ID_byte_update_big_endian)
@@ -862,8 +877,10 @@ void value_sett::get_value_set_rec(
       throw "byte_update takes three operands";
 
     // we just pass through
-    get_value_set_rec(expr.op0(), dest, suffix, original_type, ns);
-    get_value_set_rec(expr.op2(), dest, suffix, original_type, ns);
+    custom_value_set_ops.get_value_set_rec(
+      expr.op0(), dest, suffix, original_type, ns);
+    custom_value_set_ops.get_value_set_rec(
+      expr.op2(), dest, suffix, original_type, ns);
 
     // we could have checked object size to be more precise
   }
@@ -888,7 +905,7 @@ void value_sett::get_value_set_rec(
   #endif
 }
 
-void value_sett::dereference_rec(
+void basic_value_sett::dereference_rec(
   const exprt &src,
   exprt &dest) const
 {
@@ -906,13 +923,13 @@ void value_sett::dereference_rec(
     dest=src;
 }
 
-void value_sett::get_reference_set(
+void basic_value_sett::read_reference_set(
   const exprt &expr,
   value_setst::valuest &dest,
   const namespacet &ns) const
 {
   object_mapt object_map;
-  get_reference_set(expr, object_map, ns);
+  custom_value_set_ops.get_reference_set(expr, object_map, ns);
 
   for(object_map_dt::const_iterator
       it=object_map.read().begin();
@@ -921,7 +938,7 @@ void value_sett::get_reference_set(
     dest.push_back(to_expr(*it));
 }
 
-void value_sett::get_reference_set_rec(
+void basic_value_sett::get_reference_set_rec(
   const exprt &expr,
   object_mapt &dest,
   const namespacet &ns) const
@@ -949,7 +966,8 @@ void value_sett::get_reference_set_rec(
     if(expr.operands().size()!=1)
       throw expr.id_string()+" expected to have one operand";
 
-    get_value_set_rec(expr.op0(), dest, "", expr.op0().type(), ns);
+    custom_value_set_ops.get_value_set_rec(
+      expr.op0(), dest, "", expr.op0().type(), ns);
 
     #if 0
     for(expr_sett::const_iterator it=value_set.begin();
@@ -973,7 +991,7 @@ void value_sett::get_reference_set_rec(
            array_type.id()==ID_incomplete_array);
 
     object_mapt array_references;
-    get_reference_set(array, array_references, ns);
+    custom_value_set_ops.get_reference_set(array, array_references, ns);
 
     const object_map_dt &object_map=array_references.read();
 
@@ -1031,7 +1049,7 @@ void value_sett::get_reference_set_rec(
     const exprt &struct_op=expr.op0();
 
     object_mapt struct_references;
-    get_reference_set(struct_op, struct_references, ns);
+    custom_value_set_ops.get_reference_set(struct_op, struct_references, ns);
 
     const object_map_dt &object_map=struct_references.read();
 
@@ -1078,15 +1096,15 @@ void value_sett::get_reference_set_rec(
     if(expr.operands().size()!=3)
       throw "if takes three operands";
 
-    get_reference_set_rec(expr.op1(), dest, ns);
-    get_reference_set_rec(expr.op2(), dest, ns);
+    custom_value_set_ops.get_reference_set_rec(expr.op1(), dest, ns);
+    custom_value_set_ops.get_reference_set_rec(expr.op2(), dest, ns);
     return;
   }
 
   insert(dest, exprt(ID_unknown, expr.type()));
 }
 
-void value_sett::assign(
+void basic_value_sett::assign(
   const exprt &lhs,
   const exprt &rhs,
   const namespacet &ns,
@@ -1133,13 +1151,14 @@ void value_sett::assign(
       else
       {
         if(!base_type_eq(rhs.type(), type, ns))
-          throw "value_sett::assign type mismatch: "
+          throw "basic_value_sett::assign type mismatch: "
                 "rhs.type():\n"+rhs.type().pretty()+"\n"+
                 "type:\n"+type.pretty();
 
         rhs_member=make_member(rhs, name, ns);
 
-        assign(lhs_member, rhs_member, ns, is_simplified, add_to_sets);
+        custom_value_set_ops.assign(
+          lhs_member, rhs_member, ns, is_simplified, add_to_sets);
       }
     }
   }
@@ -1151,7 +1170,7 @@ void value_sett::assign(
     if(rhs.id()==ID_unknown ||
        rhs.id()==ID_invalid)
     {
-      assign(
+      custom_value_set_ops.assign(
         lhs_index,
         exprt(rhs.id(), type.subtype()),
         ns,
@@ -1161,21 +1180,23 @@ void value_sett::assign(
     else
     {
       if(!base_type_eq(rhs.type(), type, ns))
-        throw "value_sett::assign type mismatch: "
+        throw "basic_value_sett::assign type mismatch: "
           "rhs.type():\n"+rhs.type().pretty()+"\n"+
           "type:\n"+type.pretty();
 
       if(rhs.id()==ID_array_of)
       {
         assert(rhs.operands().size()==1);
-        assign(lhs_index, rhs.op0(), ns, is_simplified, add_to_sets);
+        custom_value_set_ops.assign(
+          lhs_index, rhs.op0(), ns, is_simplified, add_to_sets);
       }
       else if(rhs.id()==ID_array ||
               rhs.id()==ID_constant)
       {
         forall_operands(o_it, rhs)
         {
-          assign(lhs_index, *o_it, ns, is_simplified, add_to_sets);
+          custom_value_set_ops.assign(
+            lhs_index, *o_it, ns, is_simplified, add_to_sets);
           add_to_sets=true;
         }
       }
@@ -1186,14 +1207,17 @@ void value_sett::assign(
         exprt op0_index(ID_index, type.subtype());
         op0_index.copy_to_operands(rhs.op0(), exprt(ID_unknown, index_type()));
 
-        assign(lhs_index, op0_index, ns, is_simplified, add_to_sets);
-        assign(lhs_index, rhs.op2(), ns, is_simplified, true);
+        custom_value_set_ops.assign(
+          lhs_index, op0_index, ns, is_simplified, add_to_sets);
+        custom_value_set_ops.assign(
+          lhs_index, rhs.op2(), ns, is_simplified, true);
       }
       else
       {
         exprt rhs_index(ID_index, type.subtype());
         rhs_index.copy_to_operands(rhs, exprt(ID_unknown, index_type()));
-        assign(lhs_index, rhs_index, ns, is_simplified, true);
+        custom_value_set_ops.assign(
+          lhs_index, rhs_index, ns, is_simplified, true);
       }
     }
   }
@@ -1201,13 +1225,13 @@ void value_sett::assign(
   {
     // basic type
     object_mapt values_rhs;
-    get_value_set(rhs, values_rhs, ns, is_simplified);
+    custom_value_set_ops.get_value_set(rhs, values_rhs, ns, is_simplified);
 
-    assign_rec(lhs, values_rhs, "", ns, add_to_sets);
+    custom_value_set_ops.assign_rec(lhs, values_rhs, "", ns, add_to_sets);
   }
 }
 
-void value_sett::do_free(
+void basic_value_sett::do_free(
   const exprt &op,
   const namespacet &ns)
 {
@@ -1217,7 +1241,7 @@ void value_sett::do_free(
 
   // find out what it points to
   object_mapt value_set;
-  get_value_set(op, value_set, ns, false);
+  custom_value_set_ops.get_value_set(op, value_set, ns, false);
 
   const object_map_dt &object_map=value_set.read();
 
@@ -1287,7 +1311,7 @@ void value_sett::do_free(
   }
 }
 
-void value_sett::assign_rec(
+void basic_value_sett::assign_rec(
   const exprt &lhs,
   const object_mapt &values_rhs,
   const std::string &suffix,
@@ -1337,7 +1361,7 @@ void value_sett::assign_rec(
       throw lhs.id_string()+" expected to have one operand";
 
     object_mapt reference_set;
-    get_reference_set(lhs, reference_set, ns);
+    custom_value_set_ops.get_reference_set(lhs, reference_set, ns);
 
     if(reference_set.read().size()!=1)
       add_to_sets=true;
@@ -1350,7 +1374,8 @@ void value_sett::assign_rec(
       const exprt &object=object_numbering[it->first];
 
       if(object.id()!=ID_unknown)
-        assign_rec(object, values_rhs, suffix, ns, add_to_sets);
+        custom_value_set_ops.assign_rec(
+          object, values_rhs, suffix, ns, add_to_sets);
     }
   }
   else if(lhs.id()==ID_index)
@@ -1362,7 +1387,8 @@ void value_sett::assign_rec(
 
     assert(type.id()==ID_array || type.id()==ID_incomplete_array);
 
-    assign_rec(lhs.op0(), values_rhs, "[]"+suffix, ns, true);
+    custom_value_set_ops.assign_rec(
+      lhs.op0(), values_rhs, "[]"+suffix, ns, true);
   }
   else if(lhs.id()==ID_member)
   {
@@ -1378,7 +1404,7 @@ void value_sett::assign_rec(
            type.id()==ID_incomplete_struct ||
            type.id()==ID_incomplete_union);
 
-    assign_rec(
+    custom_value_set_ops.assign_rec(
       lhs.op0(), values_rhs, "."+component_name+suffix, ns, add_to_sets);
   }
   else if(lhs.id()=="valid_object" ||
@@ -1403,13 +1429,14 @@ void value_sett::assign_rec(
   {
     const typecast_exprt &typecast_expr=to_typecast_expr(lhs);
 
-    assign_rec(typecast_expr.op(), values_rhs, suffix, ns, add_to_sets);
+    custom_value_set_ops.assign_rec(
+      typecast_expr.op(), values_rhs, suffix, ns, add_to_sets);
   }
   else if(lhs.id()==ID_byte_extract_little_endian ||
           lhs.id()==ID_byte_extract_big_endian)
   {
     assert(lhs.operands().size()==2);
-    assign_rec(lhs.op0(), values_rhs, suffix, ns, true);
+    custom_value_set_ops.assign_rec(lhs.op0(), values_rhs, suffix, ns, true);
   }
   else if(lhs.id()==ID_integer_address)
   {
@@ -1420,7 +1447,7 @@ void value_sett::assign_rec(
     throw "assign NYI: `"+lhs.id_string()+"'";
 }
 
-void value_sett::do_function_call(
+void basic_value_sett::do_function_call(
   const irep_idt &function,
   const exprt::operandst &arguments,
   const namespacet &ns)
@@ -1439,7 +1466,7 @@ void value_sett::do_function_call(
   {
     const std::string identifier="value_set::dummy_arg_"+std::to_string(i);
     exprt dummy_lhs=symbol_exprt(identifier, arguments[i].type());
-    assign(dummy_lhs, arguments[i], ns, false, false);
+    custom_value_set_ops.assign(dummy_lhs, arguments[i], ns, false, false);
   }
 
   // now assign to 'actual actuals'
@@ -1459,14 +1486,14 @@ void value_sett::do_function_call(
       symbol_exprt("value_set::dummy_arg_"+std::to_string(i), it->type());
 
     exprt actual_lhs=symbol_exprt(identifier, it->type());
-    assign(actual_lhs, v_expr, ns, true, true);
+    custom_value_set_ops.assign(actual_lhs, v_expr, ns, true, true);
     i++;
   }
 
   // we could delete the dummy_arg_* now.
 }
 
-void value_sett::do_end_function(
+void basic_value_sett::do_end_function(
   const exprt &lhs,
   const namespacet &ns)
 {
@@ -1475,10 +1502,10 @@ void value_sett::do_end_function(
 
   symbol_exprt rhs("value_set::return_value", lhs.type());
 
-  assign(lhs, rhs, ns, false, false);
+  custom_value_set_ops.assign(lhs, rhs, ns, false, false);
 }
 
-void value_sett::apply_code(
+void basic_value_sett::apply_code(
   const codet &code,
   const namespacet &ns)
 {
@@ -1487,7 +1514,7 @@ void value_sett::apply_code(
   if(statement==ID_block)
   {
     forall_operands(it, code)
-      apply_code(to_code(*it), ns);
+      custom_value_set_ops.apply_code(to_code(*it), ns);
   }
   else if(statement==ID_function_call)
   {
@@ -1500,7 +1527,7 @@ void value_sett::apply_code(
     if(code.operands().size()!=2)
       throw "assignment expected to have two operands";
 
-    assign(code.op0(), code.op1(), ns, false, false);
+    custom_value_set_ops.assign(code.op0(), code.op1(), ns, false, false);
   }
   else if(statement==ID_decl)
   {
@@ -1525,10 +1552,10 @@ void value_sett::apply_code(
       {
         address_of_exprt address_of_expr(
           failed, to_pointer_type(lhs.type()));
-        assign(lhs, address_of_expr, ns, false, false);
+        custom_value_set_ops.assign(lhs, address_of_expr, ns, false, false);
       }
       else
-        assign(lhs, exprt(ID_invalid), ns, false, false);
+        custom_value_set_ops.assign(lhs, exprt(ID_invalid), ns, false, false);
     }
   }
   else if(statement=="specc_notify" ||
@@ -1576,7 +1603,7 @@ void value_sett::apply_code(
     if(code.operands().size()==1)
     {
       symbol_exprt lhs("value_set::return_value", code.op0().type());
-      assign(lhs, code.op0(), ns, false, false);
+      custom_value_set_ops.assign(lhs, code.op0(), ns, false, false);
     }
   }
   else if(statement==ID_array_set)
@@ -1612,7 +1639,7 @@ void value_sett::apply_code(
   }
 }
 
-void value_sett::guard(
+void basic_value_sett::guard(
   const exprt &expr,
   const namespacet &ns)
 {
@@ -1642,11 +1669,11 @@ void value_sett::guard(
     address_of_exprt address_of(dynamic_object);
     address_of.type()=expr.op0().type();
 
-    assign(expr.op0(), address_of, ns, false, false);
+    custom_value_set_ops.assign(expr.op0(), address_of, ns, false, false);
   }
 }
 
-exprt value_sett::make_member(
+exprt basic_value_sett::make_member(
   const exprt &src,
   const irep_idt &component_name,
   const namespacet &ns)
