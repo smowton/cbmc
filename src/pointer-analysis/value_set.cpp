@@ -195,7 +195,17 @@ void value_sett::output(
       else
       {
         result="<"+from_expr(ns, identifier, o)+", ";
-
+        if(o.id()==ID_dynamic_object)
+        {
+          dynamic_object_exprt::recencyt recency=
+            to_dynamic_object_expr(o).get_recency();
+            
+          if(recency==dynamic_object_exprt::recencyt::MOST_RECENT_ALLOCATION)
+            result+=as_string(ID_most_recent_allocation)+", ";
+          else if(recency==dynamic_object_exprt::recencyt::ANY_ALLOCATION)
+            result+=as_string(ID_any_allocation)+", ";
+        }
+        
         if(o_it->second.offset_is_set)
           result+=integer2string(o_it->second.offset)+"";
         else
@@ -894,10 +904,23 @@ void value_sett::get_value_set_rec(
   {
     const dynamic_object_exprt &dynamic_object=
       to_dynamic_object_expr(expr);
+    std::string recency_str="";
+
+    if(dynamic_object.get_recency()==
+      dynamic_object_exprt::recencyt::MOST_RECENT_ALLOCATION)
+    {
+      recency_str=as_string(ID_most_recent_allocation);
+    }
+    else if(dynamic_object.get_recency()==
+      dynamic_object_exprt::recencyt::ANY_ALLOCATION)
+    {
+      recency_str=as_string(ID_any_allocation);
+    }
 
     const std::string prefix=
       "value_set::dynamic_object"+
-      dynamic_object.instance().get_string(ID_value);
+      dynamic_object.instance().get_string(ID_value)+
+      recency_str;
 
     // first try with suffix
     const std::string full_name=prefix+suffix;
@@ -1532,10 +1555,23 @@ void value_sett::assign_rec(
   {
     const dynamic_object_exprt &dynamic_object=
       to_dynamic_object_expr(lhs);
+    std::string recency_str="";
+
+    if(dynamic_object.get_recency()==
+      dynamic_object_exprt::recencyt::MOST_RECENT_ALLOCATION)
+    {
+      recency_str=as_string(ID_most_recent_allocation);
+    }
+    else if(dynamic_object.get_recency()==
+      dynamic_object_exprt::recencyt::ANY_ALLOCATION)
+    {
+      recency_str=as_string(ID_any_allocation);
+    }
 
     const std::string name=
       "value_set::dynamic_object"+
-      dynamic_object.instance().get_string(ID_value);
+      dynamic_object.instance().get_string(ID_value)+
+      recency_str;
 
     entryt &e=get_entry(entryt(name, suffix), lhs.type(), ns);
 
