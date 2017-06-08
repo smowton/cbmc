@@ -45,8 +45,14 @@ public:
   virtual bool has_set_assumptions() const final { return true; }
   virtual bool has_is_in_conflict() const final { return true; }
 
+  virtual void set_time_limit_seconds(uint32_t lim) override
+  {
+    time_limit_seconds=lim;
+  }
+
 protected:
   T *solver;
+  uint32_t time_limit_seconds;
 
   void add_variables();
   bvt assumptions;
