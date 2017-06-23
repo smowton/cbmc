@@ -982,6 +982,27 @@ static unsigned get_bytecode_type_width(const typet &ty)
   return ty.get_unsigned_int(ID_width);
 }
 
+/// Set code's source location to source_location, and recursively
+/// do the same to operand code. Typically this is used for a code_blockt
+/// as is generated for some Java operations such as "putstatic", but will
+/// also work if they generate conditionals, loops, etc.
+static void set_source_location_rec(
+  codet &code,
+  const source_locationt &source_location)
+{
+  // Don't overwrite source locations that are already populated
+  // and could deviate from the blanket choice given here.
+  // At time of writing this applies to assertions annotated with a property
+  // class and comment by convert_instructions.
+  if(code.add_source_location()==source_locationt())
+    code.add_source_location()=source_location;
+  for(exprt &op : code.operands())
+  {
+    if(op.id()==ID_code)
+      set_source_location_rec(to_code(op), source_location);
+  }
+}
+
 codet java_bytecode_convert_methodt::convert_instructions(
   const methodt &method,
   const code_typet &method_type,
@@ -2372,7 +2393,7 @@ codet java_bytecode_convert_methodt::convert_instructions(
     }
 
     if(!i_it->source_location.get_line().empty())
-      c.add_source_location()=i_it->source_location;
+      set_source_location_rec(c, i_it->source_location);
 
     push(results);
 
