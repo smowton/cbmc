@@ -148,10 +148,16 @@ codet java_bytecode_instrumentt::check_arithmetic_exception(
   const exprt &denominator,
   const source_locationt &original_loc)
 {
-  symbolt exc_symbol;
+  exprt test_denominator;
+
+  // Account for negative zero for float types:
+  if(denominator.type().id()==ID_floatbv)
+    test_denominator=abs_exprt(denominator);
+  else
+    test_denominator=denominator;
 
   const constant_exprt &zero=from_integer(0, denominator.type());
-  const binary_relation_exprt equal_zero(denominator, ID_equal, zero);
+  binary_predicate_exprt equal_zero(test_denominator, ID_equal, zero);
 
   if(throw_runtime_exceptions)
     return throw_exception(
