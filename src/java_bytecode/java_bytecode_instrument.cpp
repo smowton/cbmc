@@ -436,6 +436,19 @@ void java_bytecode_instrumentt::instrument_code(exprt &expr)
     block.copy_to_operands(instrument_expr(code_function_call.lhs()));
     block.copy_to_operands(instrument_expr(code_function_call.function()));
 
+    const code_typet &function_type=
+      to_code_type(code_function_call.function().type());
+
+    // Check for a null this-argument of a virtual call:
+    if(function_type.has_this())
+    {
+      block.copy_to_operands(
+        check_null_dereference(
+          code_function_call.arguments()[0],
+          code_function_call.source_location(),
+          true));
+    }
+
     for(code_function_callt::argumentst::iterator
           a_it=code_function_call.arguments().begin();
         a_it!=code_function_call.arguments().end();
