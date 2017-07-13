@@ -244,7 +244,7 @@ codet java_bytecode_instrumentt::check_class_cast(
       throw_exception(
         not_exprt(class_cast_check),
         original_loc,
-        "ClassCastException");
+        "java.lang.ClassCastException");
   }
   else
   {
