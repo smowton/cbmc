@@ -485,6 +485,7 @@ goto_programt::targett string_abstractiont::abstract(
   case SKIP:
   case OTHER:
   case LOCATION:
+  case LANDINGPAD:
     break;
   case NO_INSTRUCTION_TYPE:
     assert(false);

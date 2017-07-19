@@ -183,6 +183,14 @@ std::ostream &goto_programt::output_instruction(
     out << '\n';
     break;
 
+  case LANDINGPAD:
+    out << "EXCEPTION LANDING PAD ("
+        << from_type(ns, identifier, instruction.code.op0().op0().type())
+        << ' '
+        << from_expr(ns, identifier, instruction.code.op0().op0())
+        << ")\n";
+    break;
+
   case ATOMIC_BEGIN:
     out << "ATOMIC_BEGIN" << '\n';
     break;

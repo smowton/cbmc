@@ -148,6 +148,14 @@ void goto_convertt::convert_java_try_catch(
   dest.destructive_append(end);
 }
 
+void goto_convertt::convert_java_exception_landingpad(
+  const codet &code,
+  goto_programt &dest)
+{
+  PRECONDITION(code.get_statement()==ID_expression);
+  copy(code, LANDINGPAD, dest);
+}
+
 void goto_convertt::convert_try_catch(
   const codet &code,
   goto_programt &dest)

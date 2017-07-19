@@ -187,6 +187,7 @@ goto_programt::const_targett goto_program2codet::convert_instruction(
     case LOCATION:
     case END_FUNCTION:
     case DEAD:
+    case LANDINGPAD:
       // ignore for now
       dest.copy_to_operands(code_skipt());
       return target;

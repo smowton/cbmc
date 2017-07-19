@@ -749,6 +749,7 @@ void goto_rw(goto_programt::const_targett target,
   case ATOMIC_END:
   case THROW:
   case CATCH:
+  case LANDINGPAD:
     // these don't read or write anything
     break;
 

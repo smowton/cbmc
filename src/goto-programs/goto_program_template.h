@@ -46,7 +46,8 @@ enum goto_program_instruction_typet
   DEAD=15,          // marks the end-of-live of a local variable
   FUNCTION_CALL=16, // call a function
   THROW=17,         // throw an exception
-  CATCH=18          // catch an exception
+  CATCH=18,         // push or pop an exception handler
+  LANDINGPAD=19     // catch an exception
 };
 
 std::ostream &operator<<(std::ostream &, goto_program_instruction_typet);
@@ -147,6 +148,7 @@ public:
     void make_skip() { clear(SKIP); }
     void make_throw() { clear(THROW); }
     void make_catch() { clear(CATCH); }
+    void make_landingpad() { clear(LANDINGPAD); }
     void make_assertion(const guardT &g) { clear(ASSERT); guard=g; }
     void make_assumption(const guardT &g) { clear(ASSUME); guard=g; }
     void make_assignment() { clear(ASSIGN); }
@@ -180,6 +182,7 @@ public:
     bool is_function_call() const { return type==FUNCTION_CALL; }
     bool is_throw        () const { return type==THROW;         }
     bool is_catch        () const { return type==CATCH;         }
+    bool is_landingpad   () const { return type==LANDINGPAD;    }
     bool is_skip         () const { return type==SKIP;          }
     bool is_location     () const { return type==LOCATION;      }
     bool is_other        () const { return type==OTHER;         }
