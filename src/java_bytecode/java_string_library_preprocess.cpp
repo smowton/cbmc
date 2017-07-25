@@ -185,12 +185,35 @@ typet string_length_type()
 void java_string_library_preprocesst::add_string_type(
   const irep_idt &class_name, symbol_tablet &symbol_table)
 {
+
+  static std::map<irep_idt, irep_idt> string_class_bases=
+    { { "java.lang.String", "java.lang.Object" },
+      { "java.lang.CharSequence", "java.lang.Object" },
+      { "java.lang.StringBuilder", "java.lang.AbstractStringBuilder" },
+      { "java.lang.StringBuffer", "java.lang.AbstractStringBuilder" } };
+
+  // Disable line-length linting; these are more readable long
+  // than they would be wrapped.
+  static std::map<irep_idt, std::vector<irep_idt> > string_class_interfaces=
+    { { "java.lang.String", { "java.lang.CharSequence", "java.lang.Comparable", "java.io.Serializable" } }, // NOLINT
+      { "java.lang.CharSequence", { } },
+      { "java.lang.StringBuilder", { "java.lang.CharSequence", "java.lang.Appendable", "java.io.Serializable" } }, // NOLINT
+      { "java.lang.StringBuffer", { "java.lang.CharSequence", "java.lang.Appendable", "java.io.Serializable" } } }; // NOLINT
+
+  const irep_idt &base_class=string_class_bases.at(class_name);
+  const std::vector<irep_idt> &interfaces=
+    string_class_interfaces.at(class_name);
+
   class_typet string_type;
   string_type.set_tag(class_name);
   string_type.components().resize(3);
-  string_type.components()[0].set_name("@java.lang.Object");
-  string_type.components()[0].set_pretty_name("@java.lang.Object");
-  string_type.components()[0].type()=symbol_typet("java::java.lang.Object");
+
+  irep_idt base_object_name="@"+id2string(base_class);
+  irep_idt qualified_base_class="java::"+id2string(base_class);
+
+  string_type.components()[0].set_name(base_object_name);
+  string_type.components()[0].set_pretty_name(base_object_name);
+  string_type.components()[0].type()=symbol_typet(qualified_base_class);
   string_type.components()[1].set_name("length");
   string_type.components()[1].set_pretty_name("length");
   string_type.components()[1].type()=string_length_type();
@@ -201,7 +224,13 @@ void java_string_library_preprocesst::add_string_type(
   // be unnecessary.
   string_type.components()[2].type()=pointer_typet(
     array_typet(java_char_type(), infinity_exprt(string_length_type())));
-  string_type.add_base(symbol_typet("java::java.lang.Object"));
+
+  string_type.add_base(symbol_typet(qualified_base_class));
+  for(const irep_idt &interface : interfaces)
+  {
+    irep_idt qualified_interface="java::"+id2string(interface);
+    string_type.add_base(symbol_typet(qualified_interface));
+  }
 
   symbolt tmp_string_symbol;
   tmp_string_symbol.name="java::"+id2string(class_name);
