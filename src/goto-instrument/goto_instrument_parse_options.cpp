@@ -796,7 +796,8 @@ void goto_instrument_parse_optionst::do_indirect_call_and_rtti_removal(
   remove_virtual_functions(goto_model);
   status() << "Catch and throw removal" << eom;
   // This introduces instanceof, so order is important:
-  remove_exceptions(goto_model);
+  remove_exceptions(
+    goto_model, remove_exceptions_typest::dont_remove_instanceof);
   status() << "Java instanceof removal" << eom;
   remove_instanceof(goto_model);
 }

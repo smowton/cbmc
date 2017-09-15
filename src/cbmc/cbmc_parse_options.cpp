@@ -752,6 +752,8 @@ void cbmc_parse_optionst::process_goto_function(
   // Remove inline assembler; this needs to happen before
   // adding the library.
   remove_asm(function, symbol_table);
+  // Similar removal of RTTI inspection:
+  remove_instanceof(function, symbol_table);
 }
 
 bool cbmc_parse_optionst::process_goto_functions(goto_modelt &goto_model, const optionst &options)
@@ -771,9 +773,8 @@ bool cbmc_parse_optionst::process_goto_functions(goto_modelt &goto_model, const 
   // Java virtual functions -> explicit dispatch tables:
   remove_virtual_functions(goto_model);
   // remove catch and throw (introduces instanceof)
-  remove_exceptions(goto_model);
-  // Similar removal of RTTI inspection:
-  remove_instanceof(goto_model);
+  remove_exceptions(
+    goto_model, remove_exceptions_typest::also_remove_instanceof);
 
   mm_io(goto_model);
 
