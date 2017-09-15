@@ -350,6 +350,8 @@ void goto_analyzer_parse_optionst::process_goto_function(
   // adding the library.
   remove_asm(function.body, symbol_table);
   #endif
+  // remove rtti
+  remove_instanceof(function, symbol_table);
 }
 
 bool goto_analyzer_parse_optionst::process_goto_functions(goto_modelt &goto_model, const optionst &options)
@@ -366,10 +368,9 @@ bool goto_analyzer_parse_optionst::process_goto_functions(goto_modelt &goto_mode
   // Java virtual functions -> explicit dispatch tables:
   remove_virtual_functions(goto_model);
   // remove Java throw and catch
-  // This introduces instanceof, so order is important:
-  remove_exceptions(goto_model);
-  // remove rtti
-  remove_instanceof(goto_model);
+
+  remove_exceptions(
+    goto_model, remove_exceptions_typest::also_remove_instanceof);
 
   // do partial inlining
   status() << "Partial Inlining" << eom;
