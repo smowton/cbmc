@@ -183,7 +183,8 @@ void java_bytecode_convert_classt::convert(const classt &c)
       method_identifier,
       method,
       symbol_table);
-    lazy_methods[method_identifier]=std::make_pair(class_symbol, &method);
+    lazy_methods[method_identifier]=
+      std::make_pair(qualified_classname, &method);
   }
 
   // is this a root class?
