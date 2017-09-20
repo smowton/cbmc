@@ -14,21 +14,16 @@ Date: June 2003
 #ifndef CPROVER_GOTO_PROGRAMS_GOTO_CONVERT_FUNCTIONS_H
 #define CPROVER_GOTO_PROGRAMS_GOTO_CONVERT_FUNCTIONS_H
 
-#include "goto_model.h"
+#include "goto_functions.h"
 #include "goto_convert_class.h"
 
-// convert it all!
+/// Convert all functions
 void goto_convert(
   symbol_tablet &symbol_table,
   goto_functionst &functions,
   message_handlert &);
 
-// convert it all!
-void goto_convert(
-  goto_modelt &,
-  message_handlert &);
-
-// just convert a specific function
+/// Convert a specific function
 void goto_convert(
   const irep_idt &identifier,
   symbol_tablet &symbol_table,

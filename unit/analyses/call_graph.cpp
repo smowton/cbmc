@@ -98,7 +98,7 @@ SCENARIO("call_graph",
       create_void_function_symbol("D", code_skipt()));
 
     stream_message_handlert msg(std::cout);
-    goto_convert(goto_model, msg);
+    goto_convert(goto_model.symbol_table, goto_model.goto_functions, msg);
 
     call_grapht call_graph_from_goto_functions(goto_model);
 

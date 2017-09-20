@@ -11,6 +11,9 @@
 
 #include <util/message.h>
 
+#include "lazy_goto_model.h"
+
+
 class symbol_tablet;
 class goto_functionst;
 
@@ -24,9 +27,8 @@ class rebuild_goto_start_functiont: public messaget
 {
 public:
   rebuild_goto_start_functiont(
-    message_handlert &_message_handler,
-    symbol_tablet &symbol_table,
-    goto_functionst &goto_functions);
+    lazy_goto_modelt &goto_model,
+    message_handlert &message_handler);
 
   bool operator()();
 
@@ -35,8 +37,7 @@ private:
 
   void remove_existing_entry_point();
 
-  symbol_tablet &symbol_table;
-  goto_functionst &goto_functions;
+  lazy_goto_modelt &goto_model;
 };
 
 #endif // CPROVER_GOTO_PROGRAMS_REBUILD_GOTO_START_FUNCTION_H

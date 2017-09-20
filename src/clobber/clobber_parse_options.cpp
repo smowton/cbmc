@@ -120,12 +120,17 @@ int clobber_parse_optionst::doit()
 
   eval_verbosity();
 
-  goto_modelt goto_model;
-
   try
   {
-    if(initialize_goto_model(goto_model, cmdline, get_message_handler()))
+    lazy_goto_modelt lazy_goto_model(get_message_handler());
+
+    if(initialize_goto_model(lazy_goto_model, cmdline, get_message_handler()))
       return 6;
+
+    status() << "Generating GOTO Program" << messaget::eom;
+    lazy_goto_model.load_all_functions();
+
+    goto_modelt &goto_model=lazy_goto_model.freeze();
 
     label_properties(goto_model);
 

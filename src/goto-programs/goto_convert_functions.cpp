@@ -222,16 +222,6 @@ void goto_convert_functionst::convert_function(const irep_idt &identifier)
 }
 
 void goto_convert(
-  goto_modelt &goto_model,
-  message_handlert &message_handler)
-{
-  goto_convert(
-    goto_model.symbol_table,
-    goto_model.goto_functions,
-    message_handler);
-}
-
-void goto_convert(
   symbol_tablet &symbol_table,
   goto_functionst &functions,
   message_handlert &message_handler)

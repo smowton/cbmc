@@ -160,10 +160,17 @@ int goto_analyzer_parse_optionst::doit()
 
   register_languages();
 
-  if(initialize_goto_model(goto_model, cmdline, get_message_handler()))
+  lazy_goto_modelt lazy_goto_model(get_message_handler());
+
+  if(initialize_goto_model(lazy_goto_model, cmdline, get_message_handler()))
     return 6;
 
-  if(process_goto_program(options))
+  status() << "Generating GOTO Program" << messaget::eom;
+  lazy_goto_model.load_all_functions();
+
+  goto_modelt &goto_model=lazy_goto_model.freeze();
+
+  if(process_goto_program(goto_model, options))
     return 6;
 
   if(cmdline.isset("taint"))
@@ -282,7 +289,7 @@ int goto_analyzer_parse_optionst::doit()
     return 0;
   }
 
-  if(set_properties())
+  if(set_properties(goto_model))
     return 7;
 
   if(cmdline.isset("show-intervals"))
@@ -307,7 +314,7 @@ int goto_analyzer_parse_optionst::doit()
   return 6;
 }
 
-bool goto_analyzer_parse_optionst::set_properties()
+bool goto_analyzer_parse_optionst::set_properties(goto_modelt &goto_model)
 {
   try
   {
@@ -336,7 +343,7 @@ bool goto_analyzer_parse_optionst::set_properties()
 }
 
 bool goto_analyzer_parse_optionst::process_goto_program(
-  const optionst &options)
+  goto_modelt &goto_model, const optionst &options)
 {
   try
   {

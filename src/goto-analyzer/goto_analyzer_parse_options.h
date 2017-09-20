@@ -61,14 +61,15 @@ public:
 
 protected:
   ui_message_handlert ui_message_handler;
-  goto_modelt goto_model;
 
   virtual void register_languages();
 
   virtual void get_command_line_options(optionst &options);
 
-  virtual bool process_goto_program(const optionst &options);
-  bool set_properties();
+  virtual bool process_goto_program(
+    goto_modelt &goto_model,
+    const optionst &options);
+  bool set_properties(goto_modelt &goto_model);
 
   void eval_verbosity();
 

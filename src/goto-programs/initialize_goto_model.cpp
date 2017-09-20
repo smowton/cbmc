@@ -22,12 +22,10 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <langapi/language_ui.h>
 
 #include <goto-programs/rebuild_goto_start_function.h>
-
-#include "goto_convert_functions.h"
 #include "read_goto_binary.h"
 
 bool initialize_goto_model(
-  goto_modelt &goto_model,
+  lazy_goto_modelt &goto_model,
   const cmdlinet &cmdline,
   message_handlert &message_handler)
 {
@@ -53,9 +51,6 @@ bool initialize_goto_model(
         sources.push_back(file);
     }
 
-    language_filest language_files;
-    language_files.set_message_handler(message_handler);
-
     if(!sources.empty())
     {
       for(const auto &filename : sources)
@@ -74,7 +69,7 @@ bool initialize_goto_model(
         }
 
         std::pair<language_filest::file_mapt::iterator, bool>
-          result=language_files.file_map.insert(
+          result=goto_model.language_files.file_map.insert(
             std::pair<std::string, language_filet>(filename, language_filet()));
 
         language_filet &lf=result.first->second;
@@ -108,7 +103,7 @@ bool initialize_goto_model(
 
       msg.status() << "Converting" << messaget::eom;
 
-      if(language_files.typecheck(goto_model.symbol_table))
+      if(goto_model.language_files.typecheck(goto_model.symbol_table))
       {
         msg.error() << "CONVERSION ERROR" << messaget::eom;
         return true;
@@ -119,8 +114,14 @@ bool initialize_goto_model(
     {
       msg.status() << "Reading GOTO program from file" << messaget::eom;
 
-      if(read_object_and_link(file, goto_model, message_handler))
+      if(read_object_and_link(
+        file,
+        goto_model.symbol_table,
+        goto_model.function_map,
+        message_handler))
+      {
         return true;
+      }
     }
 
     bool binaries_provided_start=
@@ -133,9 +134,8 @@ bool initialize_goto_model(
       // Rebuild the entry-point, using the language annotation of the
       // existing __CPROVER_start function:
       rebuild_goto_start_functiont rebuild_existing_start(
-        msg.get_message_handler(),
-        goto_model.symbol_table,
-        goto_model.goto_functions);
+        goto_model,
+        msg.get_message_handler());
       entry_point_generation_failed=rebuild_existing_start();
     }
     else if(!binaries_provided_start)
@@ -143,7 +143,8 @@ bool initialize_goto_model(
       // Allow all language front-ends to try to provide the user-specified
       // (--function) entry-point, or some language-specific default:
       entry_point_generation_failed=
-        language_files.generate_support_functions(goto_model.symbol_table);
+        goto_model.language_files.generate_support_functions(
+          goto_model.symbol_table);
     }
 
     if(entry_point_generation_failed)
@@ -152,18 +153,11 @@ bool initialize_goto_model(
       return true;
     }
 
-    if(language_files.final(goto_model.symbol_table))
+    if(goto_model.language_files.final(goto_model.symbol_table))
     {
       msg.error() << "FINAL STAGE CONVERSION ERROR" << messaget::eom;
       return true;
     }
-
-    msg.status() << "Generating GOTO Program" << messaget::eom;
-
-    goto_convert(
-      goto_model.symbol_table,
-      goto_model.goto_functions,
-      message_handler);
 
     // stupid hack
     config.set_object_bits_from_symbol_table(

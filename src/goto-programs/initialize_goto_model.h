@@ -15,11 +15,11 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/message.h>
 #include <util/cmdline.h>
 
-#include "goto_model.h"
+#include "lazy_goto_model.h"
 
 
 bool initialize_goto_model(
-  goto_modelt &goto_model,
+  lazy_goto_modelt &goto_model,
   const cmdlinet & cmdline,
   message_handlert &message_handler);
 

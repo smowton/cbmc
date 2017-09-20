@@ -530,7 +530,8 @@ int cbmc_parse_optionst::doit()
     return 0;
   }
 
-  int get_goto_program_ret=get_goto_program(options);
+  goto_modelt goto_model;
+  int get_goto_program_ret=get_goto_program(goto_model, options);
 
   if(get_goto_program_ret!=-1)
     return get_goto_program_ret;
@@ -542,7 +543,7 @@ int cbmc_parse_optionst::doit()
     return 0; // should contemplate EX_OK from sysexits.h
   }
 
-  if(set_properties())
+  if(set_properties(goto_model))
     return 7; // should contemplate EX_USAGE from sysexits.h
 
   // unwinds <clinit> loops to number of enum elements
@@ -579,10 +580,10 @@ int cbmc_parse_optionst::doit()
     prop_conv);
 
   // do actual BMC
-  return do_bmc(bmc);
+  return do_bmc(bmc, goto_model);
 }
 
-bool cbmc_parse_optionst::set_properties()
+bool cbmc_parse_optionst::set_properties(goto_modelt &goto_model)
 {
   try
   {
@@ -614,6 +615,7 @@ bool cbmc_parse_optionst::set_properties()
 }
 
 int cbmc_parse_optionst::get_goto_program(
+  goto_modelt &goto_model,
   const optionst &options)
 {
   if(cmdline.args.empty())
@@ -624,18 +626,27 @@ int cbmc_parse_optionst::get_goto_program(
 
   try
   {
-    if(initialize_goto_model(goto_model, cmdline, get_message_handler()))
+    lazy_goto_modelt lazy_goto_model(get_message_handler());
+    if(initialize_goto_model(lazy_goto_model, cmdline, get_message_handler()))
     // Remove all binaries from the command line as they
     // are already compiled
       return 6;
 
+    status() << "Generating GOTO Program" << messaget::eom;
+    lazy_goto_model.load_all_functions();
+
     if(cmdline.isset("show-symbol-table"))
     {
-      show_symbol_table(goto_model, ui_message_handler.get_ui());
+      show_symbol_table(
+        lazy_goto_model.symbol_table, ui_message_handler.get_ui());
       return 0;
     }
 
-    if(process_goto_program(options))
+    // Move the model out of the local lazy_goto_model
+    // and into the caller's goto_model
+    goto_model=std::move(lazy_goto_model.freeze());
+
+    if(process_goto_program(goto_model, options))
       return 6;
 
     // show it?
@@ -737,6 +748,7 @@ void cbmc_parse_optionst::preprocessing()
 }
 
 bool cbmc_parse_optionst::process_goto_program(
+  goto_modelt &goto_model,
   const optionst &options)
 {
   try
@@ -903,7 +915,7 @@ bool cbmc_parse_optionst::process_goto_program(
 }
 
 /// invoke main modules
-int cbmc_parse_optionst::do_bmc(bmct &bmc)
+int cbmc_parse_optionst::do_bmc(bmct &bmc, goto_modelt &goto_model)
 {
   bmc.set_ui(ui_message_handler.get_ui());
 
