@@ -320,7 +320,7 @@ void java_record_outputs(
 }
 
 main_function_resultt get_main_symbol(
-  symbol_tablet &symbol_table,
+  const symbol_tablet &symbol_table,
   const irep_idt &main_class,
   message_handlert &message_handler,
   bool allow_no_body)
