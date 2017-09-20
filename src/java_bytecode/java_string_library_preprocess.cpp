@@ -718,7 +718,7 @@ codet java_string_library_preprocesst::code_assign_components_to_java_string(
   const exprt &lhs,
   const exprt &rhs_array,
   const exprt &rhs_length,
-  symbol_tablet &symbol_table)
+  const symbol_tablet &symbol_table)
 {
   PRECONDITION(implements_java_char_sequence(lhs.type()));
   dereference_exprt deref=checked_dereference(lhs, lhs.type().subtype());
@@ -1773,10 +1773,11 @@ codet java_string_library_preprocesst::make_string_length_code(
 ///   supported String functions, nil_exprt otherwise.
 exprt java_string_library_preprocesst::code_for_function(
   const irep_idt &function_id,
-  const code_typet &type,
-  const source_locationt &loc,
+  const symbolt &symbol,
   symbol_tablet &symbol_table)
 {
+  const code_typet &type=to_code_type(symbol.type);
+  const source_locationt &loc=symbol.location;
   auto it_id=cprover_equivalent_to_java_function.find(function_id);
   if(it_id!=cprover_equivalent_to_java_function.end())
     return make_function_from_call(it_id->second, type, loc, symbol_table);

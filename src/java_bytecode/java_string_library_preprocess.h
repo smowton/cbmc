@@ -41,8 +41,7 @@ public:
 
   exprt code_for_function(
     const irep_idt &function_id,
-    const code_typet &type,
-    const source_locationt &loc,
+    const symbolt &symbol,
     symbol_tablet &symbol_table);
 
   codet replace_character_call(code_function_callt call)
@@ -275,7 +274,7 @@ private:
     const exprt &lhs,
     const exprt &rhs_array,
     const exprt &rhs_length,
-    symbol_tablet &symbol_table);
+    const symbol_tablet &symbol_table);
 
   codet code_assign_string_expr_to_java_string(
     const exprt &lhs, const string_exprt &rhs, symbol_tablet &symbol_table);
