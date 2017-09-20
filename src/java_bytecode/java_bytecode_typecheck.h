@@ -15,7 +15,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <set>
 #include <map>
 
-#include <util/symbol_table.h>
+#include <util/recording_symbol_table.h>
 #include <util/typecheck.h>
 #include <util/namespace.h>
 #include <util/std_code.h>
@@ -24,6 +24,11 @@ Author: Daniel Kroening, kroening@kroening.com
 
 bool java_bytecode_typecheck(
   symbol_tablet &symbol_table,
+  message_handlert &message_handler,
+  bool string_refinement_enabled);
+
+void java_bytecode_typecheck_updated_symbols(
+  recording_symbol_tablet &symbol_table,
   message_handlert &message_handler,
   bool string_refinement_enabled);
 
@@ -49,6 +54,7 @@ public:
   virtual ~java_bytecode_typecheckt() { }
 
   virtual void typecheck();
+  void typecheck(const recording_symbol_tablet::changesett &identifiers);
   virtual void typecheck_expr(exprt &expr);
 
 protected:
