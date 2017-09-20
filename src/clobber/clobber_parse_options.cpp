@@ -139,6 +139,21 @@ int clobber_parse_optionst::doit()
       return 6;
     goto_modelt &goto_model=*maybe_goto_model;
 
+
+    // show it?
+    if(cmdline.isset("show-loops"))
+    {
+      show_loop_ids(get_ui(), goto_model);
+      return 6;
+    }
+
+    // show it?
+    if(cmdline.isset("show-goto-functions"))
+    {
+      show_goto_functions(goto_model, get_ui());
+      return 6;
+    }
+
     label_properties(goto_model);
 
     if(cmdline.isset("show-properties"))
@@ -230,20 +245,6 @@ bool clobber_parse_optionst::process_goto_functions(
 
   if(cmdline.isset("cover-assertions"))
     make_assertions_false(goto_model);
-
-  // show it?
-  if(cmdline.isset("show-loops"))
-  {
-    show_loop_ids(get_ui(), goto_model);
-    return true;
-  }
-
-  // show it?
-  if(cmdline.isset("show-goto-functions"))
-  {
-    show_goto_functions(goto_model, get_ui());
-    return true;
-  }
 
   return false;
 }
