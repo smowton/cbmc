@@ -169,11 +169,25 @@ int goto_analyzer_parse_optionst::doit()
   status() << "Generating GOTO Program" << messaget::eom;
   lazy_goto_model.load_all_functions();
 
+  // show it?
+  if(cmdline.isset("show-symbol-table"))
+  {
+    ::show_symbol_table(lazy_goto_model.symbol_table, get_ui());
+    return 6;
+  }
+
   optionalt<goto_modelt> maybe_goto_model=
     lazy_goto_modelt::freeze(std::move(lazy_goto_model));
   if(!maybe_goto_model)
     return 6;
   goto_modelt &goto_model=*maybe_goto_model;
+
+  // show it?
+  if(cmdline.isset("show-goto-functions"))
+  {
+    show_goto_functions(goto_model, get_ui());
+    return 6;
+  }
 
   if(cmdline.isset("taint"))
   {
@@ -393,20 +407,6 @@ bool goto_analyzer_parse_optionst::process_goto_functions(goto_modelt &goto_mode
 
   // recalculate numbers, etc.
   goto_model.goto_functions.update();
-
-  // show it?
-  if(cmdline.isset("show-goto-functions"))
-  {
-    show_goto_functions(goto_model, get_ui());
-    return true;
-  }
-
-  // show it?
-  if(cmdline.isset("show-symbol-table"))
-  {
-    ::show_symbol_table(goto_model, get_ui());
-    return true;
-  }
 
   return false;
 }
