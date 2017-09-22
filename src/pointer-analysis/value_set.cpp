@@ -1632,6 +1632,10 @@ void basic_value_sett::apply_code(
   {
     // doesn't do anything
   }
+  else if(statement==ID_dead)
+  {
+    // ignore (could potentially prune value set in future)
+  }
   else
   {
     // std::cerr << code.pretty() << '\n';
