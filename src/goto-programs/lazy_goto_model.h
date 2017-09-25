@@ -59,15 +59,7 @@ private:
 
 public:
   /// Eagerly loads all functions from the symbol table.
-  void load_all_functions()
-  {
-    goto_convert(
-      symbol_table,
-      goto_model.goto_functions,
-      language_files.get_message_handler());
-    // As lazy goto functions are not required, language files is done with
-    language_files.clear();
-  }
+  void load_all_functions();
 
   /// The model returned here has access to the functions we've already
   /// loaded but is frozen in the sense that, with regard to the facility to
