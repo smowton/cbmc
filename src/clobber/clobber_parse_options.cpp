@@ -122,7 +122,8 @@ int clobber_parse_optionst::doit()
 
   try
   {
-    lazy_goto_modelt lazy_goto_model(get_message_handler());
+    lazy_goto_modelt lazy_goto_model=create_lazy_model_from_handler_object(
+      *this, options, get_message_handler());
 
     if(initialize_goto_model(lazy_goto_model, cmdline, get_message_handler()))
       return 6;
@@ -193,9 +194,16 @@ bool clobber_parse_optionst::set_properties(goto_functionst &goto_functions)
   return false;
 }
 
-bool clobber_parse_optionst::process_goto_program(
-  const optionst &options,
-  goto_modelt &goto_model)
+void clobber_parse_optionst::process_goto_function(
+  const irep_idt &function_name,
+  goto_functionst::goto_functiont &function,
+  symbol_tablet &symbol_table)
+{
+}
+
+bool clobber_parse_optionst::process_goto_functions(
+  goto_modelt &goto_model,
+  const optionst &options)
 {
   {
     // do partial inlining

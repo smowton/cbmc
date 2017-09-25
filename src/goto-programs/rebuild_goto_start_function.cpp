@@ -55,14 +55,7 @@ bool rebuild_goto_start_functiont::operator()()
   // Remove the function from the goto functions so it is copied back in
   // from the symbol table during goto_convert
   if(!return_code)
-  {
-    const auto &start_function=
-      goto_model.function_map.function_map.find(goto_functionst::entry_point());
-    if(start_function!=goto_model.function_map.function_map.end())
-    {
-      goto_model.function_map.function_map.erase(start_function);
-    }
-  }
+    goto_model.function_map.unload(goto_functionst::entry_point());
 
   return return_code;
 }

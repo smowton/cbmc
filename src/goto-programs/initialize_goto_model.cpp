@@ -22,7 +22,6 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <langapi/language_ui.h>
 
 #include <goto-programs/rebuild_goto_start_function.h>
-#include "read_goto_binary.h"
 
 bool initialize_goto_model(
   lazy_goto_modelt &goto_model,
@@ -110,18 +109,11 @@ bool initialize_goto_model(
       }
     }
 
-    for(const auto &file : binaries)
+    for(const std::string &file : binaries)
     {
       msg.status() << "Reading GOTO program from file" << messaget::eom;
-
-      if(read_object_and_link(
-        file,
-        goto_model.symbol_table,
-        goto_model.function_map,
-        message_handler))
-      {
+      if(goto_model.read_binary_object_and_link(file))
         return true;
-      }
     }
 
     bool binaries_provided_start=

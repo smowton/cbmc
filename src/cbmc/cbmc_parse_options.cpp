@@ -626,10 +626,10 @@ int cbmc_parse_optionst::get_goto_program(
 
   try
   {
-    lazy_goto_modelt lazy_goto_model(get_message_handler());
+    lazy_goto_modelt lazy_goto_model=create_lazy_model_from_handler_object(
+      *this, options, get_message_handler());
+
     if(initialize_goto_model(lazy_goto_model, cmdline, get_message_handler()))
-    // Remove all binaries from the command line as they
-    // are already compiled
       return 6;
 
     status() << "Generating GOTO Program" << messaget::eom;
@@ -645,9 +645,6 @@ int cbmc_parse_optionst::get_goto_program(
     // Move the model out of the local lazy_goto_model
     // and into the caller's goto_model
     goto_model=std::move(lazy_goto_model.freeze());
-
-    if(process_goto_program(goto_model, options))
-      return 6;
 
     // show it?
     if(cmdline.isset("show-loops"))
@@ -747,16 +744,21 @@ void cbmc_parse_optionst::preprocessing()
   }
 }
 
-bool cbmc_parse_optionst::process_goto_program(
-  goto_modelt &goto_model,
-  const optionst &options)
+void cbmc_parse_optionst::process_goto_function(
+  const irep_idt &function_name,
+  goto_functionst::goto_functiont &function,
+  symbol_tablet &symbol_table)
 {
-  try
   {
     // Remove inline assembler; this needs to happen before
     // adding the library.
-    remove_asm(goto_model);
+    remove_asm(function, symbol_table);
+  }
+}
 
+bool cbmc_parse_optionst::process_goto_functions(goto_modelt &goto_model, const optionst &options)
+{
+  {
     // add the library
     link_to_library(goto_model, get_message_handler());
 
@@ -842,9 +844,6 @@ bool cbmc_parse_optionst::process_goto_program(
     // recalculate numbers, etc.
     goto_model.goto_functions.update();
 
-    // add loop ids
-    goto_model.goto_functions.compute_loop_numbers();
-
     if(cmdline.isset("drop-unused-functions"))
     {
       // Entry point will have been set before and function pointers removed
@@ -886,29 +885,6 @@ bool cbmc_parse_optionst::process_goto_program(
     // remove any skips introduced since coverage instrumentation
     remove_skip(goto_model);
     goto_model.goto_functions.update();
-  }
-
-  catch(const char *e)
-  {
-    error() << e << eom;
-    return true;
-  }
-
-  catch(const std::string e)
-  {
-    error() << e << eom;
-    return true;
-  }
-
-  catch(int)
-  {
-    return true;
-  }
-
-  catch(std::bad_alloc)
-  {
-    error() << "Out of memory" << eom;
-    return true;
   }
 
   return false;

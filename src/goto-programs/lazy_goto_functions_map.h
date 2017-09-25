@@ -118,6 +118,13 @@ public:
     return ensure_entry_loaded(name).second;
   }
 
+  void unload(const key_type &name) const
+  {
+    const auto &it=goto_functions.find(name);
+    if(it!=goto_functions.end())
+      goto_functions.erase(it);
+  }
+
 private:
   // This returns a non-const reference, but you should const it before
   // returning it to clients from a const method

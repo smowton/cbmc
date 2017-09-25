@@ -56,10 +56,14 @@ protected:
 
   void get_command_line_options(optionst &);
 
-  bool process_goto_program(
-    const optionst &options,
-    goto_modelt &);
+public:
+  void process_goto_function(
+    const irep_idt &function_name,
+    goto_functionst::goto_functiont &function,
+    symbol_tablet &symbol_table);
+  bool process_goto_functions(goto_modelt &goto_model, const optionst &options);
 
+protected:
   bool set_properties(goto_functionst &);
 
   void report_success();
