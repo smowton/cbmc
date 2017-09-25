@@ -160,7 +160,8 @@ int goto_analyzer_parse_optionst::doit()
 
   register_languages();
 
-  lazy_goto_modelt lazy_goto_model(get_message_handler());
+  lazy_goto_modelt lazy_goto_model=create_lazy_model_from_handler_object(
+    *this, options, get_message_handler());
 
   if(initialize_goto_model(lazy_goto_model, cmdline, get_message_handler()))
     return 6;
@@ -169,9 +170,6 @@ int goto_analyzer_parse_optionst::doit()
   lazy_goto_model.load_all_functions();
 
   goto_modelt &goto_model=lazy_goto_model.freeze();
-
-  if(process_goto_program(goto_model, options))
-    return 6;
 
   if(cmdline.isset("taint"))
   {
@@ -342,16 +340,24 @@ bool goto_analyzer_parse_optionst::set_properties(goto_modelt &goto_model)
   return false;
 }
 
-bool goto_analyzer_parse_optionst::process_goto_program(
-  goto_modelt &goto_model, const optionst &options)
+void goto_analyzer_parse_optionst::process_goto_function(
+  const irep_idt &function_name,
+  goto_functionst::goto_functiont &function,
+  symbol_tablet &symbol_table)
 {
-  try
   {
     #if 0
     // Remove inline assembler; this needs to happen before
     // adding the library.
-    remove_asm(goto_model);
+    remove_asm(function.body, symbol_table);
+    #endif
+  }
+}
 
+bool goto_analyzer_parse_optionst::process_goto_functions(goto_modelt &goto_model, const optionst &options)
+{
+  {
+    #if 0
     // add the library
     link_to_library(goto_model, ui_message_handler);
     #endif
@@ -386,9 +392,6 @@ bool goto_analyzer_parse_optionst::process_goto_program(
     // recalculate numbers, etc.
     goto_model.goto_functions.update();
 
-    // add loop ids
-    goto_model.goto_functions.compute_loop_numbers();
-
     // show it?
     if(cmdline.isset("show-goto-functions"))
     {
@@ -402,29 +405,6 @@ bool goto_analyzer_parse_optionst::process_goto_program(
       ::show_symbol_table(goto_model, get_ui());
       return true;
     }
-  }
-
-  catch(const char *e)
-  {
-    error() << e << eom;
-    return true;
-  }
-
-  catch(const std::string e)
-  {
-    error() << e << eom;
-    return true;
-  }
-
-  catch(int)
-  {
-    return true;
-  }
-
-  catch(std::bad_alloc)
-  {
-    error() << "Out of memory" << eom;
-    return true;
   }
 
   return false;
