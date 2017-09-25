@@ -6,6 +6,7 @@
 #ifndef CPROVER_GOTO_PROGRAMS_LAZY_GOTO_MODEL_H
 #define CPROVER_GOTO_PROGRAMS_LAZY_GOTO_MODEL_H
 
+#include <util/optional.h>
 #include <util/language_file.h>
 
 #include "goto_model.h"
@@ -39,21 +40,7 @@ public:
   lazy_goto_modelt(
       const post_process_functiont &post_process_function,
       const post_process_functionst &post_process_functions,
-      message_handlert &message_handler)
-    : symbol_table(goto_model.symbol_table),
-      function_map(
-        goto_model.goto_functions.function_map,
-        language_files,
-        goto_model.symbol_table,
-        [this, post_process_function] (
-          const irep_idt &function_name,
-          goto_functionst::goto_functiont &function)
-        { return post_process_function(function_name, function, symbol_table); },
-        message_handler),
-      post_process_functions(std::move(post_process_functions))
-  {
-    language_files.set_message_handler(message_handler);
-  }
+      message_handlert &message_handler);
 
 public:
   /// Add functions from binary file to the symbol table and function map
@@ -66,6 +53,11 @@ public:
       language_files.get_message_handler());
   }
 
+private:
+  static bool is_function_symbol(const symbolt &symbol)
+  { return !symbol.is_type && !symbol.is_macro && symbol.type.id()==ID_code; }
+
+public:
   /// Eagerly loads all functions from the symbol table.
   void load_all_functions()
   {
@@ -77,14 +69,20 @@ public:
     language_files.clear();
   }
 
-  goto_modelt &freeze()
+  /// The model returned here has access to the functions we've already
+  /// loaded but is frozen in the sense that, with regard to the facility to
+  /// load new functions, it has let it go.
+  /// \param model: The lazy_goto_modelt to freeze
+  /// \returns The frozen goto_modelt or an empty optional if freezing fails
+  static optionalt<goto_modelt> freeze(lazy_goto_modelt &&model)
   {
-    // The object returned here has access to the functions we've already
-    // loaded but is frozen in the sense that, with regard to the facility to
-    // load new functions, it has let it go.
-    post_process_functions(goto_model);
-    return goto_model;
+    if(!model.freeze())
+      return optionalt<goto_modelt>();
+    return std::move(model.goto_model);
   }
+
+private:
+  bool freeze();
 };
 
 class optionst;

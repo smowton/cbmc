@@ -629,8 +629,11 @@ int cbmc_parse_optionst::get_goto_program(
     lazy_goto_modelt lazy_goto_model=create_lazy_model_from_handler_object(
       *this, options, get_message_handler());
 
-    if(initialize_goto_model(lazy_goto_model, cmdline, get_message_handler()))
+    if(initialize_goto_model(
+      lazy_goto_model, cmdline, get_message_handler()))
+    {
       return 6;
+    }
 
     status() << "Generating GOTO Program" << messaget::eom;
     lazy_goto_model.load_all_functions();
@@ -644,7 +647,11 @@ int cbmc_parse_optionst::get_goto_program(
 
     // Move the model out of the local lazy_goto_model
     // and into the caller's goto_model
-    goto_model=std::move(lazy_goto_model.freeze());
+    optionalt<goto_modelt> maybe_goto_model=
+      lazy_goto_modelt::freeze(std::move(lazy_goto_model));
+    if(!maybe_goto_model)
+      return 6;
+    goto_model=std::move(*maybe_goto_model);
 
     // show it?
     if(cmdline.isset("show-loops"))

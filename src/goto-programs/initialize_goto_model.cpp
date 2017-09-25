@@ -145,12 +145,6 @@ bool initialize_goto_model(
       return true;
     }
 
-    if(goto_model.language_files.final(goto_model.symbol_table))
-    {
-      msg.error() << "FINAL STAGE CONVERSION ERROR" << messaget::eom;
-      return true;
-    }
-
     // stupid hack
     config.set_object_bits_from_symbol_table(
       goto_model.symbol_table);
