@@ -131,7 +131,13 @@ int clobber_parse_optionst::doit()
     status() << "Generating GOTO Program" << messaget::eom;
     lazy_goto_model.load_all_functions();
 
-    goto_modelt &goto_model=lazy_goto_model.freeze();
+    // Move the model out of the local lazy_goto_model
+    // and into the caller's goto_model
+    optionalt<goto_modelt> maybe_goto_model=
+      lazy_goto_modelt::freeze(std::move(lazy_goto_model));
+    if(!maybe_goto_model)
+      return 6;
+    goto_modelt &goto_model=*maybe_goto_model;
 
     label_properties(goto_model);
 
