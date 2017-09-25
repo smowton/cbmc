@@ -109,6 +109,9 @@ public:
   {
     return !is_static_lifetime;
   }
+
+  bool is_function() const
+  { return !is_type && !is_macro && type.id()==ID_code; }
 };
 
 std::ostream &operator<<(std::ostream &out, const symbolt &symbol);
