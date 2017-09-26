@@ -213,20 +213,6 @@ bool java_bytecode_languaget::typecheck(
     if(do_ci_lazy_method_conversion(symbol_table, lazy_methods))
       return true;
   }
-  else if(lazy_methods_mode==LAZY_METHODS_MODE_EAGER)
-  {
-    // Simply elaborate all methods symbols now.
-    for(const auto &method_sig : lazy_methods)
-    {
-      java_bytecode_convert_method(
-        *symbol_table.lookup(method_sig.second.first),
-        *method_sig.second.second,
-        symbol_table,
-        get_message_handler(),
-        max_user_array_length,
-        string_preprocess);
-    }
-  }
   // Otherwise our caller is in charge of elaborating methods on demand.
 
   // now instrument runtime exceptions
