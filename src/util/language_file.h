@@ -59,21 +59,36 @@ public:
 
 class language_filest:public messaget
 {
-public:
+private:
   typedef std::map<std::string, language_filet> file_mapt;
   file_mapt file_map;
 
-  // Contains pointers into file_mapt!
   typedef std::map<std::string, language_modulet> module_mapt;
   module_mapt module_map;
 
-  // Contains pointers into filemapt!
+  // Contains pointers into file_map!
   // This is safe-ish as long as this is std::map.
   typedef std::map<irep_idt, language_filet *> lazy_method_mapt;
   lazy_method_mapt lazy_method_map;
 
+public:
+  language_filet &add_file(const std::string &filename)
+  {
+    language_filet language_file;
+    language_file.filename=filename;
+    return file_map.emplace(filename, std::move(language_file)).first->second;
+  }
+
+  void remove_file(const std::string &filename)
+  {
+    // TODO: Clear relevant entries from lazy_method_map
+    // where second == &file_map.at(filename)
+    file_map.erase(filename);
+  }
+
   void clear_files()
   {
+    lazy_method_map.clear();
     file_map.clear();
   }
 
