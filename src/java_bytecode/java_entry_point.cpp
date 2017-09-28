@@ -322,8 +322,7 @@ void java_record_outputs(
 main_function_resultt get_main_symbol(
   const symbol_tablet &symbol_table,
   const irep_idt &main_class,
-  message_handlert &message_handler,
-  bool allow_no_body)
+  message_handlert &message_handler)
 {
   messaget message(message_handler);
 
@@ -349,14 +348,6 @@ main_function_resultt get_main_symbol(
     INVARIANT(
       symbol,
       "resolve_friendly_method_name should return a symbol-table identifier");
-
-    // check if it has a body
-    if(symbol->get().value.is_nil() && !allow_no_body)
-    {
-      message.error()
-        << "main method `" << main_class << "' has no body" << messaget::eom;
-      return main_function_resultt::Error;
-    }
 
     return main_function_resultt(*symbol);   // Return found function
   }
@@ -397,18 +388,7 @@ main_function_resultt get_main_symbol(
       return main_function_resultt::Error;  // give up with error, no main
     }
 
-    // function symbol
-    const symbolt &symbol=**matches.begin();
-
-    // check if it has a body
-    if(symbol.value.is_nil() && !allow_no_body)
-    {
-      message.error()
-        << "main method `" << main_class << "' has no body" << messaget::eom;
-      return main_function_resultt::Error;  // give up with error
-    }
-
-    return symbol;  // Return found function
+    return **matches.begin();   // Return found function
   }
 }
 
@@ -466,7 +446,6 @@ bool java_entry_point(
     return true;
   symbolt symbol=res.main_function;
 
-  assert(!symbol.value.is_nil());
   assert(symbol.type.id()==ID_code);
 
   create_initialize(symbol_table);
