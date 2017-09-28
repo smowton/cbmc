@@ -282,10 +282,7 @@ void java_record_outputs(
       param_number<parameters.size();
       param_number++)
   {
-    const symbolt &p_symbol=
-      *symbol_table.lookup(parameters[param_number].get_identifier());
-
-    if(p_symbol.type.id()==ID_pointer)
+    if(parameters[param_number].type().id()==ID_pointer)
     {
       // record as an output
       codet output(ID_output);
@@ -293,7 +290,7 @@ void java_record_outputs(
       output.op0()=
         address_of_exprt(
           index_exprt(
-            string_constantt(p_symbol.base_name),
+            string_constantt(parameters[param_number].get_base_name()),
             from_integer(0, index_type())));
       output.op1()=main_arguments[param_number];
       output.add_source_location()=function.location;
