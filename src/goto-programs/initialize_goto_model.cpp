@@ -67,12 +67,7 @@ bool initialize_goto_model(
           return true;
         }
 
-        std::pair<language_filest::file_mapt::iterator, bool>
-          result=goto_model.language_files.file_map.insert(
-            std::pair<std::string, language_filet>(filename, language_filet()));
-
-        language_filet &lf=result.first->second;
-
+        language_filet &lf=goto_model.language_files.add_file(filename);
         lf.filename=filename;
         lf.language=get_language_from_filename(filename);
 
