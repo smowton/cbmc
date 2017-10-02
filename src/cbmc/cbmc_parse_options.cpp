@@ -52,6 +52,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-programs/show_properties.h>
 #include <goto-programs/string_abstraction.h>
 #include <goto-programs/string_instrumentation.h>
+#include <goto-programs/remove_java_new.h>
 
 #include <goto-symex/rewrite_union.h>
 #include <goto-symex/adjust_float_expressions.h>
@@ -765,6 +766,8 @@ void cbmc_parse_optionst::process_goto_function(
 
 bool cbmc_parse_optionst::process_goto_functions(goto_modelt &goto_model, const optionst &options)
 {
+  remove_java_new(goto_model, get_message_handler());
+
   // add the library
   link_to_library(goto_model, get_message_handler());
 
