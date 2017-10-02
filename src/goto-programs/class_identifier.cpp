@@ -71,3 +71,27 @@ exprt get_class_identifier_field(
   exprt deref=dereference_exprt(this_expr, this_expr.type().subtype());
   return build_class_identifier(deref, ns);
 }
+
+void set_class_identifier(
+  struct_exprt &expr,
+  const namespacet &ns,
+  const symbol_typet &class_type)
+{
+  const struct_typet &struct_type=to_struct_type(ns.follow(expr.type()));
+  const struct_typet::componentst &components=struct_type.components();
+
+  if(components.empty())
+    return;
+  assert(!expr.operands().empty());
+
+  if(components.front().get_name()=="@class_identifier")
+  {
+    assert(expr.op0().id()==ID_constant);
+    expr.op0()=constant_exprt(class_type.get_identifier(), string_typet());
+  }
+  else
+  {
+    assert(expr.op0().id()==ID_struct);
+    set_class_identifier(to_struct_expr(expr.op0()), ns, class_type);
+  }
+}
