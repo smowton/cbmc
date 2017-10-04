@@ -345,7 +345,7 @@ bool goto_analyzer_parse_optionst::set_properties(goto_modelt &goto_model)
     return true;
   }
 
-  catch(const std::string e)
+  catch(const std::string &e)
   {
     error() << e << eom;
     return true;

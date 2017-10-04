@@ -149,7 +149,7 @@ bool initialize_goto_model(
     msg.error() << e << messaget::eom;
     return true;
   }
-  catch(const std::string e)
+  catch(const std::string &e)
   {
     msg.error() << e << messaget::eom;
     return true;
@@ -158,7 +158,7 @@ bool initialize_goto_model(
   {
     return true;
   }
-  catch(std::bad_alloc)
+  catch(const std::bad_alloc &)
   {
     msg.error() << "Out of memory" << messaget::eom;
     return true;

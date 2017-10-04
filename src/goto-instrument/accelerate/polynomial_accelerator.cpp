@@ -427,7 +427,7 @@ bool polynomial_acceleratort::fit_polynomial_sliced(
       return true;
     }
   }
-  catch(std::string s)
+  catch(const std::string &s)
   {
     std::cout << "Error in fitting polynomial SAT check: " << s << '\n';
   }
@@ -488,7 +488,7 @@ bool polynomial_acceleratort::fit_const(
       return true;
     }
   }
-  catch(std::string s)
+  catch(const std::string &s)
   {
     std::cout << "Error in fitting polynomial SAT check: " << s << '\n';
   }
@@ -722,7 +722,7 @@ bool polynomial_acceleratort::check_inductive(
       return true;
     }
   }
-  catch(std::string s)
+  catch(const std::string &s)
   {
     std::cout << "Error in inductiveness SAT check: " << s << '\n';
     return false;

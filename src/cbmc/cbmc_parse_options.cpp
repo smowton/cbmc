@@ -443,7 +443,7 @@ int cbmc_parse_optionst::doit()
     return 6; // should contemplate EX_SOFTWARE from sysexits.h
   }
 
-  catch(const std::string error_msg)
+  catch(const std::string &error_msg)
   {
     error() << error_msg << eom;
     return 6; // should contemplate EX_SOFTWARE from sysexits.h
@@ -601,7 +601,7 @@ bool cbmc_parse_optionst::set_properties(goto_modelt &goto_model)
     return true;
   }
 
-  catch(const std::string e)
+  catch(const std::string &e)
   {
     error() << e << eom;
     return true;
@@ -677,7 +677,7 @@ int cbmc_parse_optionst::get_goto_program(
     return 6;
   }
 
-  catch(const std::string e)
+  catch(const std::string &e)
   {
     error() << e << eom;
     return 6;
@@ -688,7 +688,7 @@ int cbmc_parse_optionst::get_goto_program(
     return 6;
   }
 
-  catch(std::bad_alloc)
+  catch(const std::bad_alloc &)
   {
     error() << "Out of memory" << eom;
     return 6;
@@ -737,7 +737,7 @@ void cbmc_parse_optionst::preprocessing()
     error() << e << eom;
   }
 
-  catch(const std::string e)
+  catch(const std::string &e)
   {
     error() << e << eom;
   }
@@ -746,7 +746,7 @@ void cbmc_parse_optionst::preprocessing()
   {
   }
 
-  catch(std::bad_alloc)
+  catch(const std::bad_alloc &)
   {
     error() << "Out of memory" << eom;
   }
