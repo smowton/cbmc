@@ -177,7 +177,7 @@ void shared_bufferst::assignment(
 
     t++;
   }
-  catch(std::string s)
+  catch(const std::string &s)
   {
     message.warning() << s << messaget::eom;
   }
