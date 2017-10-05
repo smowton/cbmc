@@ -205,40 +205,38 @@ bool clobber_parse_optionst::process_goto_functions(
   goto_modelt &goto_model,
   const optionst &options)
 {
+  // do partial inlining
+  status() << "Partial Inlining" << eom;
+  goto_partial_inline(goto_model, get_message_handler());
+
+  // add generic checks
+  status() << "Generic Property Instrumentation" << eom;
+  goto_check(options, goto_model);
+
+  // recalculate numbers, etc.
+  goto_model.goto_functions.update();
+
+  // add loop ids
+  goto_model.goto_functions.compute_loop_numbers();
+
+  // if we aim to cover, replace
+  // all assertions by false to prevent simplification
+
+  if(cmdline.isset("cover-assertions"))
+    make_assertions_false(goto_model);
+
+  // show it?
+  if(cmdline.isset("show-loops"))
   {
-    // do partial inlining
-    status() << "Partial Inlining" << eom;
-    goto_partial_inline(goto_model, get_message_handler());
+    show_loop_ids(get_ui(), goto_model);
+    return true;
+  }
 
-    // add generic checks
-    status() << "Generic Property Instrumentation" << eom;
-    goto_check(options, goto_model);
-
-    // recalculate numbers, etc.
-    goto_model.goto_functions.update();
-
-    // add loop ids
-    goto_model.goto_functions.compute_loop_numbers();
-
-    // if we aim to cover, replace
-    // all assertions by false to prevent simplification
-
-    if(cmdline.isset("cover-assertions"))
-      make_assertions_false(goto_model);
-
-    // show it?
-    if(cmdline.isset("show-loops"))
-    {
-      show_loop_ids(get_ui(), goto_model);
-      return true;
-    }
-
-    // show it?
-    if(cmdline.isset("show-goto-functions"))
-    {
-      show_goto_functions(goto_model, get_ui());
-      return true;
-    }
+  // show it?
+  if(cmdline.isset("show-goto-functions"))
+  {
+    show_goto_functions(goto_model, get_ui());
+    return true;
   }
 
   return false;

@@ -345,66 +345,62 @@ void goto_analyzer_parse_optionst::process_goto_function(
   goto_functionst::goto_functiont &function,
   symbol_tablet &symbol_table)
 {
-  {
-    #if 0
-    // Remove inline assembler; this needs to happen before
-    // adding the library.
-    remove_asm(function.body, symbol_table);
-    #endif
-  }
+  #if 0
+  // Remove inline assembler; this needs to happen before
+  // adding the library.
+  remove_asm(function.body, symbol_table);
+  #endif
 }
 
 bool goto_analyzer_parse_optionst::process_goto_functions(goto_modelt &goto_model, const optionst &options)
 {
+  #if 0
+  // add the library
+  link_to_library(goto_model, ui_message_handler);
+  #endif
+
+  // remove function pointers
+  status() << "Removing function pointers and virtual functions" << eom;
+  remove_function_pointers(
+    get_message_handler(), goto_model, cmdline.isset("pointer-check"));
+  // Java virtual functions -> explicit dispatch tables:
+  remove_virtual_functions(goto_model);
+  // remove Java throw and catch
+  // This introduces instanceof, so order is important:
+  remove_exceptions(goto_model);
+  // remove rtti
+  remove_instanceof(goto_model);
+
+  // do partial inlining
+  status() << "Partial Inlining" << eom;
+  goto_partial_inline(goto_model, ui_message_handler);
+
+  // remove returns, gcc vectors, complex
+  remove_returns(goto_model);
+  remove_vector(goto_model);
+  remove_complex(goto_model);
+
+  #if 0
+  // add generic checks
+  status() << "Generic Property Instrumentation" << eom;
+  goto_check(options, goto_model);
+  #endif
+
+  // recalculate numbers, etc.
+  goto_model.goto_functions.update();
+
+  // show it?
+  if(cmdline.isset("show-goto-functions"))
   {
-    #if 0
-    // add the library
-    link_to_library(goto_model, ui_message_handler);
-    #endif
+    show_goto_functions(goto_model, get_ui());
+    return true;
+  }
 
-    // remove function pointers
-    status() << "Removing function pointers and virtual functions" << eom;
-    remove_function_pointers(
-      get_message_handler(), goto_model, cmdline.isset("pointer-check"));
-    // Java virtual functions -> explicit dispatch tables:
-    remove_virtual_functions(goto_model);
-    // remove Java throw and catch
-    // This introduces instanceof, so order is important:
-    remove_exceptions(goto_model);
-    // remove rtti
-    remove_instanceof(goto_model);
-
-    // do partial inlining
-    status() << "Partial Inlining" << eom;
-    goto_partial_inline(goto_model, ui_message_handler);
-
-    // remove returns, gcc vectors, complex
-    remove_returns(goto_model);
-    remove_vector(goto_model);
-    remove_complex(goto_model);
-
-    #if 0
-    // add generic checks
-    status() << "Generic Property Instrumentation" << eom;
-    goto_check(options, goto_model);
-    #endif
-
-    // recalculate numbers, etc.
-    goto_model.goto_functions.update();
-
-    // show it?
-    if(cmdline.isset("show-goto-functions"))
-    {
-      show_goto_functions(goto_model, get_ui());
-      return true;
-    }
-
-    // show it?
-    if(cmdline.isset("show-symbol-table"))
-    {
-      ::show_symbol_table(goto_model, get_ui());
-      return true;
-    }
+  // show it?
+  if(cmdline.isset("show-symbol-table"))
+  {
+    ::show_symbol_table(goto_model, get_ui());
+    return true;
   }
 
   return false;
