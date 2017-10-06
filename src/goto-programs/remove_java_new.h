@@ -1,4 +1,4 @@
-// Copyright 2017 DiffBlue Limited. All Rights Reserved.
+// Copyright 2017 Diffblue Limited. All Rights Reserved.
 
 /// \file
 /// Function-level/module-level pass to remove java_new and replace with
