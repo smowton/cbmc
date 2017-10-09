@@ -26,7 +26,9 @@ class namespacet;
 class value_sett
 {
 public:
-  value_sett():location_number(0)
+  value_sett():
+    location_number(0),
+    context_number(0)
   {
   }
 
@@ -36,6 +38,7 @@ public:
     const namespacet &);
 
   unsigned location_number;
+  unsigned context_number;
   irep_idt function;
   static object_numberingt object_numbering;
 
