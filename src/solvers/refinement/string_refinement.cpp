@@ -200,7 +200,7 @@ string_refinementt::string_refinementt(const infot &info):
 
 /// display the current index set, for debugging
 static void display_index_set(
-  messaget::mstreamt stream,
+  messaget::mstreamt &stream,
   const namespacet &ns,
   const std::map<exprt, std::set<exprt>> &current_index_set,
   const std::map<exprt, std::set<exprt>> &index_set)
