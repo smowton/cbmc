@@ -1685,6 +1685,10 @@ void value_sett::apply_code(
   {
     // doesn't do anything
   }
+  else if(statement==ID_dead)
+  {
+    // Ignore (could improve this in future)
+  }
   else
   {
     // std::cerr << code.pretty() << '\n';
