@@ -16,6 +16,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <map>
 
 #include <goto-programs/goto_model.h>
+#include <util/graph.h>
 
 class call_grapht
 {
@@ -40,6 +41,20 @@ public:
   void add(const irep_idt &caller, const irep_idt &callee);
   void add(const irep_idt &caller, const irep_idt &callee, locationt callsite);
   call_grapht get_inverted() const;
+
+  struct edge_with_callsitest
+  {
+    locationst callsites;
+  };
+
+  struct function_nodet:public graph_nodet<edge_with_callsitest>
+  {
+    irep_idt function;
+  };
+
+  typedef ::grapht<function_nodet> directed_call_grapht;
+
+  directed_call_grapht get_directed_graph() const;
 
 protected:
   void add(const irep_idt &function,
