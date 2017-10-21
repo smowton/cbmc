@@ -6,7 +6,7 @@
 
 \*******************************************************************/
 
-#include <testing-utils/catch.hpp>
+#include <catch.hpp>
 #include <util/message.h>
 #include <sstream>
 #include <string.h>
