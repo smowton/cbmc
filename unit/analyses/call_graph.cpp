@@ -11,6 +11,7 @@ Author:
 #include <testing-utils/catch.hpp>
 
 #include <analyses/call_graph.h>
+#include <analyses/call_graph_helpers.h>
 
 #include <util/symbol_table.h>
 #include <util/std_code.h>
@@ -162,13 +163,18 @@ SCENARIO("call_graph",
 
     WHEN("The call graph is exported as a grapht")
     {
-      call_grapht::directed_call_grapht exported=
+      call_grapht::directed_grapht exported=
         call_graph_from_goto_functions.get_directed_graph();
 
-      typedef call_grapht::directed_call_grapht::node_indext node_indext;
+      typedef call_grapht::directed_grapht::node_indext node_indext;
       std::map<irep_idt, node_indext> nodes_by_name;
       for(node_indext i=0; i<exported.size(); ++i)
         nodes_by_name[exported[i].function]=i;
+
+      auto find_id = [](const std::vector<irep_idt> &v, const irep_idt &id)
+      {
+        return std::find(v.begin(), v.end(), id);
+      };
 
       THEN("We expect edges A -> { A, B }, B -> { C, D }")
       {
@@ -179,15 +185,51 @@ SCENARIO("call_graph",
         REQUIRE(exported.has_edge(nodes_by_name["B"], nodes_by_name["C"]));
         REQUIRE(exported.has_edge(nodes_by_name["B"], nodes_by_name["D"]));
       }
+
+      THEN("We expect A to have successors {A, B}")
+      {
+        std::vector<irep_idt> successors = get_successors(exported, "A");
+        REQUIRE(successors.size() == 2);
+        REQUIRE(find_id(successors, "A") != successors.end());
+        REQUIRE(find_id(successors, "B") != successors.end());
+      }
+
+      THEN("We expect C to have predecessors {B}")
+      {
+        std::vector<irep_idt> predecessors = get_predecessors(exported, "C");
+        REQUIRE(predecessors.size() == 1);
+        REQUIRE(find_id(predecessors, "B") != predecessors.end());
+      }
+
+      THEN("We expect all of {A, B, C, D} to be reachable from A")
+      {
+        std::vector<irep_idt> successors =
+          get_transitive_successors(exported, "A");
+        REQUIRE(successors.size() == 4);
+        REQUIRE(find_id(successors, "A") != successors.end());
+        REQUIRE(find_id(successors, "B") != successors.end());
+        REQUIRE(find_id(successors, "C") != successors.end());
+        REQUIRE(find_id(successors, "D") != successors.end());
+      }
+
+      THEN("We expect {D, B, A} to be able to reach D")
+      {
+        std::vector<irep_idt> predecessors =
+          get_transitive_predecessors(exported, "D");
+        REQUIRE(predecessors.size() == 3);
+        REQUIRE(find_id(predecessors, "A") != predecessors.end());
+        REQUIRE(find_id(predecessors, "B") != predecessors.end());
+        REQUIRE(find_id(predecessors, "D") != predecessors.end());
+      }
     }
 
     WHEN("The call graph, with call sites, is exported as a grapht")
     {
       call_grapht call_graph_from_goto_functions(goto_model, true);
-      call_grapht::directed_call_grapht exported=
+      call_grapht::directed_grapht exported=
         call_graph_from_goto_functions.get_directed_graph();
 
-      typedef call_grapht::directed_call_grapht::node_indext node_indext;
+      typedef call_grapht::directed_grapht::node_indext node_indext;
       std::map<irep_idt, node_indext> nodes_by_name;
       for(node_indext i=0; i<exported.size(); ++i)
         nodes_by_name[exported[i].function]=i;

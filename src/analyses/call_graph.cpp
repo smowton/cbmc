@@ -14,16 +14,27 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/std_expr.h>
 #include <util/xml.h>
 
+/// Create empty call graph
+/// \param collect_callsites: if true, then each added graph edge will have
+///   the calling instruction recorded in `callsites` map.
 call_grapht::call_grapht(bool collect_callsites):
   collect_callsites(collect_callsites)
 {
 }
 
+/// Create complete call graph
+/// \param goto_model: model to search for callsites
+/// \param collect_callsites: if true, then each added graph edge will have
+///   the calling instruction recorded in `callsites` map.
 call_grapht::call_grapht(const goto_modelt &goto_model, bool collect_callsites):
   call_grapht(goto_model.goto_functions, collect_callsites)
 {
 }
 
+/// Create complete call graph
+/// \param goto_functions: functions to search for callsites
+/// \param collect_callsites: if true, then each added graph edge will have
+///   the calling instruction recorded in `callsites` map.
 call_grapht::call_grapht(
   const goto_functionst &goto_functions, bool collect_callsites):
   collect_callsites(collect_callsites)
@@ -35,9 +46,9 @@ call_grapht::call_grapht(
   }
 }
 
-void call_grapht::add(
-  const irep_idt &function,
-  const goto_programt &body)
+static void forall_callsites(
+  const goto_programt &body,
+  std::function<void(goto_programt::const_targett, const irep_idt &)> callback)
 {
   forall_goto_program_instructions(i_it, body)
   {
@@ -47,14 +58,73 @@ void call_grapht::add(
       if(function_expr.id()==ID_symbol)
       {
         const irep_idt &callee=to_symbol_expr(function_expr).get_identifier();
-        add(function, callee);
-        if(collect_callsites)
-          callsites[{function, callee}].insert(i_it);
+        callback(i_it, callee);
       }
     }
   }
 }
 
+/// Create call graph restricted to functions reachable from `root`
+/// \param functions: functions to search for callsites
+/// \param root: function to start exploring the graph
+/// \param collect_callsites: if true, then each added graph edge will have
+///   the calling instruction recorded in `callsites` map.
+call_grapht::call_grapht(
+  const goto_functionst &goto_functions,
+  const irep_idt &root,
+  bool collect_callsites)
+{
+  std::stack<irep_idt, std::vector<irep_idt>> pending_stack;
+  pending_stack.push(root);
+
+  while(!pending_stack.empty())
+  {
+    irep_idt function=pending_stack.top();
+    pending_stack.pop();
+    const goto_programt &goto_program=
+      goto_functions.function_map.at(function).body;
+
+    forall_callsites(
+      goto_program,
+      [&](goto_programt::const_targett i_it, const irep_idt &callee)
+      {
+        add(function, callee, i_it);
+        if(graph.find(callee)==graph.end())
+          pending_stack.push(callee);
+      }
+    );
+  }
+}
+
+/// Create call graph restricted to functions reachable from `root`
+/// \param goto_model: model to search for callsites
+/// \param root: function to start exploring the graph
+/// \param collect_callsites: if true, then each added graph edge will have
+///   the calling instruction recorded in `callsites` map.
+call_grapht::call_grapht(
+  const goto_modelt &goto_model,
+  const irep_idt &root,
+  bool collect_callsites):
+  call_grapht(goto_model.goto_functions, root, collect_callsites)
+{
+}
+
+void call_grapht::add(
+  const irep_idt &function,
+  const goto_programt &body)
+{
+  forall_callsites(
+    body,
+    [&](goto_programt::const_targett i_it, const irep_idt &callee)
+    {
+      add(function, callee, i_it);
+    }
+  );
+}
+
+/// Add edge
+/// \param caller: caller function
+/// \param callee: callee function
 void call_grapht::add(
   const irep_idt &caller,
   const irep_idt &callee)
@@ -62,13 +132,19 @@ void call_grapht::add(
   graph.insert(std::pair<irep_idt, irep_idt>(caller, callee));
 }
 
+/// Add edge with optional callsite information
+/// \param caller: caller function
+/// \param callee: callee function
+/// \param callsite: call instruction responsible for this edge. Note this is
+///   only stored if `collect_callsites` was specified during construction.
 void call_grapht::add(
   const irep_idt &caller,
   const irep_idt &callee,
   locationt callsite)
 {
   add(caller, callee);
-  callsites[{caller, callee}].insert(callsite);
+  if(collect_callsites)
+    callsites[{caller, callee}].insert(callsite);
 }
 
 /// Returns an inverted copy of this call graph
@@ -85,12 +161,13 @@ call_grapht call_grapht::get_inverted() const
 /// and adds nodes to the graph on demand.
 class function_indicest
 {
-  typedef call_grapht::directed_call_grapht::node_indext node_indext;
-  std::map<irep_idt, node_indext> function_indices;
-  call_grapht::directed_call_grapht &graph;
+  typedef call_grapht::directed_grapht::node_indext node_indext;
+  call_grapht::directed_grapht &graph;
 
 public:
-  explicit function_indicest(call_grapht::directed_call_grapht &graph):
+  std::unordered_map<irep_idt, node_indext, irep_id_hash> function_indices;
+
+  explicit function_indicest(call_grapht::directed_grapht &graph):
     graph(graph)
   {
   }
@@ -115,9 +192,9 @@ public:
 /// was set when this call-graph was constructed the edge will be annotated
 /// with the call-site set.
 /// \return grapht representation of this call_grapht
-call_grapht::directed_call_grapht call_grapht::get_directed_graph() const
+call_grapht::directed_grapht call_grapht::get_directed_graph() const
 {
-  call_grapht::directed_call_grapht ret;
+  call_grapht::directed_grapht ret;
   function_indicest function_indices(ret);
 
   for(const auto &edge : graph)
@@ -134,9 +211,14 @@ call_grapht::directed_call_grapht call_grapht::get_directed_graph() const
     }
   }
 
+  ret.nodes_by_name=std::move(function_indices.function_indices);
   return ret;
 }
 
+/// Prints callsites responsible for a graph edge as comma-separated
+/// location numbers, e.g. "{1, 2, 3}".
+/// \param edge: graph edge
+/// \return pretty representation of edge callsites
 std::string call_grapht::format_callsites(const edget &edge) const
 {
   PRECONDITION(collect_callsites);
@@ -190,4 +272,14 @@ void call_grapht::output_xml(std::ostream &out) const
     xmlt::escape_attribute(id2string(edge.second), out);
     out << "\">\n";
   }
+}
+
+optionalt<std::size_t> call_grapht::directed_grapht::get_node_index(
+  const irep_idt &function) const
+{
+  auto findit=nodes_by_name.find(function);
+  if(findit==nodes_by_name.end())
+    return optionalt<node_indext>();
+  else
+    return findit->second;
 }

@@ -246,6 +246,8 @@ public:
 
   void visit_reachable(node_indext src);
 
+  std::vector<node_indext> get_reachable(node_indext src, bool forwards) const;
+
   void make_chordal();
 
   // return value: number of connected subgraphs
@@ -467,6 +469,37 @@ void grapht<N>::visit_reachable(node_indext src)
       if(!nodes[it->first].visited)
         s.push(it->first);
   }
+}
+
+template<class N>
+std::vector<typename N::node_indext>
+grapht<N>::get_reachable(node_indext src, bool forwards) const
+{
+  std::vector<node_indext> result;
+  std::vector<bool> visited(size(), false);
+
+  std::stack<node_indext, std::vector<node_indext>> s;
+  s.push(src);
+
+  while(!s.empty())
+  {
+    node_indext n = s.top();
+    s.pop();
+
+    if(visited[n])
+      continue;
+
+    result.push_back(n);
+    visited[n] = true;
+
+    const auto &node = nodes[n];
+    const auto &succs = forwards ? node.out : node.in;
+    for(const auto succ : succs)
+      if(!visited[succ.first])
+        s.push(succ.first);
+  }
+
+  return result;
 }
 
 template<class N>
