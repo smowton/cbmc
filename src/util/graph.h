@@ -265,7 +265,6 @@ public:
   void output_dot(std::ostream &out) const;
   void output_dot_node(std::ostream &out, node_indext n) const;
 
-protected:
   class tarjant
   {
   public:
@@ -290,7 +289,7 @@ protected:
     }
   };
 
-  void tarjan(class tarjant &t, node_indext v);
+  void tarjan(class tarjant &t, node_indext v) const;
 
   void shortest_path(
     node_indext src,
@@ -515,7 +514,7 @@ std::size_t grapht<N>::connected_subgraphs(
 }
 
 template<class N>
-void grapht<N>::tarjan(tarjant &t, node_indext v)
+void grapht<N>::tarjan(tarjant &t, node_indext v) const
 {
   t.scc_stack.push(v);
   t.in_scc[v]=true;
