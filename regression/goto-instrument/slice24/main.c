@@ -1,5 +1,5 @@
 #include <assert.h>
-#include <malloc.h>
+#include <stdlib.h>
 
 struct rrr
 {
@@ -23,4 +23,3 @@ int main(int argc, char* argv[])
   }
   return -1;
 }
-
