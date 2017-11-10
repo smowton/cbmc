@@ -39,11 +39,11 @@ public:
   }
 
   // overloading
-  void initialize(const goto_programt &goto_program)
+  void initialize(const goto_programt &goto_program) override
   {
     baset::initialize(goto_program);
   }
-  void initialize(const goto_functionst &goto_functions)
+  void initialize(const goto_functionst &goto_functions) override
   {
     baset::initialize(goto_functions);
   }
@@ -105,7 +105,7 @@ public:
   virtual void get_values(
     locationt l,
     const exprt &expr,
-    value_setst::valuest &dest)
+    value_setst::valuest &dest) override
   {
     ((const value_sett&)(*this)[l].value_set).get_value_set(
       expr,
