@@ -734,7 +734,7 @@ void value_sett::get_value_set_rec(
     }
     else if(statement==ID_cpp_new ||
             statement==ID_cpp_new_array ||
-            statement==ID_java_new_array )
+            statement==ID_java_new_array_data)
     {
       assert(suffix=="");
       assert(expr_type.id()==ID_pointer);
