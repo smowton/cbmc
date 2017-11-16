@@ -36,7 +36,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "java_types.h"
 #include "java_utils.h"
 
-static void create_initialize(symbol_tablet &symbol_table)
+static void create_initialize(symbol_table_baset &symbol_table)
 {
   // If __CPROVER_initialize already exists, replace it. It may already exist
   // if a GOTO binary provided it. This behaviour mirrors the ANSI-C frontend.
@@ -89,8 +89,8 @@ static bool is_non_null_library_global(const irep_idt &symbolid)
   return non_null_globals.count(symbolid);
 }
 
-void java_static_lifetime_init(
-  symbol_tablet &symbol_table,
+static void java_static_lifetime_init(
+  symbol_table_baset &symbol_table,
   const source_locationt &source_location,
   bool assume_init_pointers_not_null,
   const object_factory_parameterst &object_factory_parameters,
@@ -162,7 +162,7 @@ void java_static_lifetime_init(
 exprt::operandst java_build_arguments(
   const symbolt &function,
   code_blockt &init_code,
-  symbol_tablet &symbol_table,
+  symbol_table_baset &symbol_table,
   bool assume_init_pointers_not_null,
   object_factory_parameterst object_factory_parameters,
   const select_pointer_typet &pointer_type_selector)
@@ -246,7 +246,7 @@ void java_record_outputs(
   const symbolt &function,
   const exprt::operandst &main_arguments,
   code_blockt &init_code,
-  symbol_tablet &symbol_table)
+  symbol_table_baset &symbol_table)
 {
   const code_typet::parameterst &parameters=
     to_code_type(function.type).parameters();
@@ -319,7 +319,7 @@ void java_record_outputs(
 }
 
 main_function_resultt get_main_symbol(
-  symbol_tablet &symbol_table,
+  const symbol_table_baset &symbol_table,
   const irep_idt &main_class,
   message_handlert &message_handler,
   bool allow_no_body)
@@ -343,10 +343,9 @@ main_function_resultt get_main_symbol(
       return main_function_resultt::Error;
     }
 
-    const symbolt *symbol=
-      symbol_table.lookup(main_symbol_id);
+    const symbolt *symbol = symbol_table.lookup(main_symbol_id);
     INVARIANT(
-      symbol,
+      symbol != nullptr,
       "resolve_friendly_method_name should return a symbol-table identifier");
 
     // check if it has a body
@@ -357,7 +356,7 @@ main_function_resultt get_main_symbol(
       return main_function_resultt::Error;
     }
 
-    return main_function_resultt(*symbol);   // Return found function
+    return *symbol; // Return found function
   }
   else
   {
@@ -366,9 +365,9 @@ main_function_resultt get_main_symbol(
 
     // are we given a main class?
     if(main_class.empty())
-      return main_function_resultt::NotFound;   // silently ignore
+      return main_function_resultt::NotFound; // silently ignore
 
-    std::string entry_method=id2string(main_class)+".main";
+    std::string entry_method = id2string(main_class) + ".main";
 
     std::string prefix="java::"+entry_method+":";
 
@@ -377,7 +376,7 @@ main_function_resultt get_main_symbol(
 
     for(const auto &named_symbol : symbol_table.symbols)
     {
-      if(named_symbol.second.type.id()==ID_code
+      if(named_symbol.second.type.id() == ID_code
         && has_prefix(id2string(named_symbol.first), prefix))
       {
         matches.insert(&named_symbol.second);
@@ -388,7 +387,7 @@ main_function_resultt get_main_symbol(
       // Not found, silently ignore
       return main_function_resultt::NotFound;
 
-    if(matches.size()>1)
+    if(matches.size() > 1)
     {
       message.error()
         << "main method in `" << main_class
@@ -397,7 +396,7 @@ main_function_resultt get_main_symbol(
     }
 
     // function symbol
-    const symbolt &symbol=**matches.begin();
+    const symbolt &symbol = **matches.begin();
 
     // check if it has a body
     if(symbol.value.is_nil() && !allow_no_body)
@@ -407,7 +406,7 @@ main_function_resultt get_main_symbol(
       return main_function_resultt::Error;  // give up with error
     }
 
-    return symbol;  // Return found function
+    return symbol; // Return found function
   }
 }
 
@@ -446,7 +445,7 @@ main_function_resultt get_main_symbol(
 ///
 /// \returns true if error occurred on entry point search
 bool java_entry_point(
-  symbol_tablet &symbol_table,
+  symbol_table_baset &symbol_table,
   const irep_idt &main_class,
   message_handlert &message_handler,
   bool assume_init_pointers_not_null,
@@ -501,7 +500,7 @@ bool java_entry_point(
 /// \returns true if error occurred on entry point search, false otherwise
 bool generate_java_start_function(
   const symbolt &symbol,
-  symbol_tablet &symbol_table,
+  symbol_table_baset &symbol_table,
   message_handlert &message_handler,
   bool assume_init_pointers_not_null,
   const object_factory_parameterst& object_factory_parameters,

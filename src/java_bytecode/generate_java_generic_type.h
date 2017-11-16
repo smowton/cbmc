@@ -28,11 +28,20 @@ private:
     const java_generic_typet &existing_generic_type,
     const java_class_typet &original_class) const;
 
+  typet substitute_type(
+    const typet &parameter_type,
+    const java_generic_class_typet &replacement_type,
+    const java_generic_typet &generic_reference) const;
+
+  java_class_typet construct_specialised_generic_type(
+    const java_generic_class_typet &generic_class_definition,
+    const irep_idt &new_tag,
+    const struct_typet::componentst &new_components) const;
+
+  type_symbolt build_symbol_from_specialised_class(
+    const java_class_typet &specialised_class) const;
+
   message_handlert &message_handler;
 };
-
-void instantiate_generics(
-  message_handlert &message_handler,
-  symbol_tablet &symbol_table);
 
 #endif // CPROVER_JAVA_BYTECODE_GENERATE_JAVA_GENERIC_TYPE_H

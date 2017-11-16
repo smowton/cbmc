@@ -33,7 +33,7 @@ ci_lazy_methodst::ci_lazy_methodst(
     java_class_loader(java_class_loader),
     pointer_type_selector(pointer_type_selector)
 {
-  // build the class hierarclass_hierarchyy
+  // build the class hierarchy
   class_hierarchy(symbol_table);
 }
 
@@ -60,7 +60,7 @@ bool ci_lazy_methodst::operator()(
   std::vector<irep_idt> method_worklist1;
   std::vector<irep_idt> method_worklist2;
 
-  main_function_resultt main_function=
+  main_function_resultt main_function =
     get_main_symbol(symbol_table, main_class, get_message_handler(), true);
   if(!main_function.is_success())
   {
@@ -70,7 +70,7 @@ bool ci_lazy_methodst::operator()(
     if(!main_class.empty())
       reachable_classes.push_back(main_class);
     else
-      reachable_classes=main_jar_classes;
+      reachable_classes = main_jar_classes;
     for(const auto &classname : reachable_classes)
     {
       const auto &methods=
@@ -190,9 +190,9 @@ bool ci_lazy_methodst::operator()(
     unreachable_symbols.erase(sym.first);
   }
 
-  debug()
-    << "CI lazy methods: removed " << unreachable_symbols.size()
-    << " unreachable methods and globals" << eom;
+  debug() << "CI lazy methods: removed "
+          << unreachable_symbols.size()
+          << " unreachable methods and globals" << eom;
 
   for(const irep_idt &symbol_name : unreachable_symbols)
     symbol_table.remove(symbol_name);

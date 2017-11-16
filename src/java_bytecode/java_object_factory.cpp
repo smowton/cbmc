@@ -35,10 +35,10 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "java_root_class.h"
 
 static symbolt &new_tmp_symbol(
-  symbol_tablet &symbol_table,
+  symbol_table_baset &symbol_table,
   const source_locationt &loc,
   const typet &type,
-  const std::string &prefix="tmp_object_factory")
+  const std::string &prefix = "tmp_object_factory")
 {
   return get_fresh_aux_symbol(
     type,
@@ -69,7 +69,7 @@ class java_object_factoryt
   std::unordered_set<irep_idt, irep_id_hash> recursion_set;
 
   /// The symbol table.
-  symbol_tablet &symbol_table;
+  symbol_table_baset &symbol_table;
 
   /// A namespace built from exclusively one symbol table - the one above.
   namespacet ns;
@@ -102,9 +102,9 @@ public:
     std::vector<const symbolt *> &_symbols_created,
     const source_locationt &loc,
     const object_factory_parameterst _object_factory_parameters,
-    symbol_tablet &_symbol_table,
-    const select_pointer_typet &pointer_type_selector):
-      symbols_created(_symbols_created),
+    symbol_table_baset &_symbol_table,
+    const select_pointer_typet &pointer_type_selector)
+    : symbols_created(_symbols_created),
       loc(loc),
       object_factory_parameters(_object_factory_parameters),
       symbol_table(_symbol_table),
@@ -182,7 +182,7 @@ private:
 exprt allocate_dynamic_object(
   const exprt &target_expr,
   const typet &allocate_type,
-  symbol_tablet &symbol_table,
+  symbol_table_baset &symbol_table,
   const source_locationt &loc,
   code_blockt &output_code,
   std::vector<const symbolt *> &symbols_created,
@@ -195,8 +195,9 @@ exprt allocate_dynamic_object(
   {
     INVARIANT(!object_size.is_nil(), "Size of Java objects should be known");
     // malloc expression
-    exprt malloc_expr=side_effect_exprt(ID_malloc);
+    exprt malloc_expr=side_effect_exprt(ID_allocate);
     malloc_expr.copy_to_operands(object_size);
+    malloc_expr.copy_to_operands(false_exprt());
     typet result_type=pointer_type(allocate_type);
     malloc_expr.type()=result_type;
     // create a symbol for the malloc expression so we can initialize
@@ -240,7 +241,7 @@ exprt allocate_dynamic_object(
 /// \param output_code: code block to which the necessary code is added
 void allocate_dynamic_object_with_decl(
   const exprt &target_expr,
-  symbol_tablet &symbol_table,
+  symbol_table_baset &symbol_table,
   const source_locationt &loc,
   code_blockt &output_code)
 {
@@ -542,7 +543,8 @@ codet initialize_nondet_string_struct(
   const exprt &obj,
   const std::size_t &max_nondet_string_length,
   const source_locationt &loc,
-  symbol_tablet &symbol_table)
+  symbol_table_baset &symbol_table,
+  bool printable)
 {
   PRECONDITION(
     java_string_library_preprocesst::implements_java_char_sequence(obj.type()));
@@ -605,6 +607,13 @@ codet initialize_nondet_string_struct(
 
     add_array_to_length_association(
       data_expr, length_expr, symbol_table, loc, code);
+
+    // Printable ASCII characters are between ' ' and '~'.
+    if(printable)
+    {
+      add_character_set_constraint(
+        array_pointer, length_expr, " -~", symbol_table, loc, code);
+    }
   }
 
   // tmp_object = struct_expr;
@@ -616,6 +625,7 @@ codet initialize_nondet_string_struct(
 /// content and association of its address to the pointer `expr`.
 /// \param expr: pointer to be affected
 /// \param max_nondet_string_length: maximum length of strings to initialize
+/// \param printable: Boolean, true to force content to be printable
 /// \param symbol_table: the symbol table
 /// \param loc: location in the source
 /// \param [out] code: code block in which initialization code is added
@@ -625,7 +635,8 @@ codet initialize_nondet_string_struct(
 static bool add_nondet_string_pointer_initialization(
   const exprt &expr,
   const std::size_t &max_nondet_string_length,
-  symbol_tablet &symbol_table,
+  bool printable,
+  symbol_table_baset &symbol_table,
   const source_locationt &loc,
   code_blockt &code)
 {
@@ -644,7 +655,8 @@ static bool add_nondet_string_pointer_initialization(
       dereference_exprt(expr, struct_type),
       max_nondet_string_length,
       loc,
-      symbol_table));
+      symbol_table,
+      printable));
   return false;
 }
 
@@ -784,6 +796,7 @@ void java_object_factoryt::gen_nondet_pointer_init(
     add_nondet_string_pointer_initialization(
       expr,
       object_factory_parameters.max_nondet_string_length,
+      object_factory_parameters.string_printable,
       symbol_table,
       loc,
       assignments);
@@ -1348,7 +1361,7 @@ exprt object_factory(
   const irep_idt base_name,
   code_blockt &init_code,
   bool allow_null,
-  symbol_tablet &symbol_table,
+  symbol_table_baset &symbol_table,
   const object_factory_parameterst &parameters,
   allocation_typet alloc_type,
   const source_locationt &loc,
@@ -1444,7 +1457,7 @@ exprt object_factory(
 void gen_nondet_init(
   const exprt &expr,
   code_blockt &init_code,
-  symbol_tablet &symbol_table,
+  symbol_table_baset &symbol_table,
   const source_locationt &loc,
   bool skip_classid,
   allocation_typet alloc_type,
@@ -1508,7 +1521,7 @@ exprt object_factory(
 void gen_nondet_init(
   const exprt &expr,
   code_blockt &init_code,
-  symbol_tablet &symbol_table,
+  symbol_table_baset &symbol_table,
   const source_locationt &loc,
   bool skip_classid,
   allocation_typet alloc_type,

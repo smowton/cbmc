@@ -75,6 +75,9 @@ struct object_factory_parameterst final
   /// dereference a pointer using a 'depth counter'. We set a pointer to null if
   /// such depth becomes >= than this maximum value.
   size_t max_nondet_tree_depth=MAX_NONDET_TREE_DEPTH;
+
+  /// Force string content to be ASCII printable characters when set to true.
+  bool string_printable = false;
 };
 
 typedef std::pair<
@@ -105,10 +108,9 @@ public:
     symbol_tablet &context,
     const std::string &module) override;
 
-  void replace_string_methods(symbol_tablet &context);
+  void replace_string_methods(symbol_table_baset &context);
 
-  virtual bool final(
-    symbol_tablet &context) override;
+  virtual bool final(symbol_table_baset &context) override;
 
   void show_parse(std::ostream &out) override;
 

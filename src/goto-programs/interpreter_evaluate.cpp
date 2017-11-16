@@ -21,8 +21,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/pointer_offset_size.h>
 #include <string.h>
 
-/// reads a memory address and loads it into the dest variable marks cell as
-/// read before written if cell has never been written
+/// Reads a memory address and loads it into the `dest` variable.
+/// Marks cell as `READ_BEFORE_WRITTEN` if cell has never been written.
 void interpretert::read(
   const mp_integer &address,
   mp_vectort &dest) const
@@ -102,7 +102,12 @@ void interpretert::clear_input_flags()
   }
 }
 
-/// \return Number of leaf primitive types; returns true on error
+/// Count the number of leaf subtypes of `ty`, a leaf type is a type that is
+/// not an array or a struct. For instance the count for a type such as
+/// `struct { (int[3])[5]; int }` would be 16 = (3 * 5 + 1).
+/// \param ty: a type
+/// \param [out] result: Number of leaf primitive types in `ty`
+/// \return returns true on error
 bool interpretert::count_type_leaves(const typet &ty, mp_integer &result)
 {
   if(ty.id()==ID_struct)
@@ -299,6 +304,9 @@ bool interpretert::memory_offset_to_byte_offset(
   }
 }
 
+/// Evaluate an expression
+/// \param expr: expression to evaluate
+/// \param [out] dest: vector in which the result of the evaluation is stored
 void interpretert::evaluate(
   const exprt &expr,
   mp_vectort &dest)
@@ -440,18 +448,19 @@ void interpretert::evaluate(
         error() << "nondet not implemented" << eom;
       return;
     }
-    else if(side_effect.get_statement()==ID_malloc)
+    else if(side_effect.get_statement()==ID_allocate)
     {
       if(show)
-        error() << "malloc not fully implemented "
+        error() << "heap memory allocation not fully implemented "
                 << expr.type().subtype().pretty()
                 << eom;
       std::stringstream buffer;
       num_dynamic_objects++;
-      buffer << "interpreter::malloc_object" << num_dynamic_objects;
+      buffer << "interpreter::dynamic_object" << num_dynamic_objects;
       irep_idt id(buffer.str().c_str());
       mp_integer address=build_memory_map(id, expr.type().subtype());
       // TODO: check array of type
+      // TODO: interpret zero-initialization argument
       dest.push_back(address);
       return;
     }
