@@ -81,6 +81,7 @@ SRC = arith_tools.cpp \
       string_utils.cpp \
       substitute.cpp \
       symbol.cpp \
+      symbol_table_base.cpp \
       symbol_table.cpp \
       symbol_utils.cpp \
       tempdir.cpp \

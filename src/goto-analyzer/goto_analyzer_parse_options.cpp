@@ -171,7 +171,7 @@ int goto_analyzer_parse_optionst::doit()
     return true;
   }
 
-  catch(const std::string e)
+  catch(const std::string &e)
   {
     error() << e << eom;
     return true;
