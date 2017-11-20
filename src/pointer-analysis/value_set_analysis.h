@@ -24,13 +24,13 @@ Author: Daniel Kroening, kroening@kroening.com
 
 class xmlt;
 
-template<class Value_Sett>
+template<class Value_Set_Domaint>
 class value_set_analysis_baset:
   public value_setst,
-  public static_analysist<value_set_domaint<Value_Sett> >
+  public static_analysist<Value_Set_Domaint>
 {
 public:
-  typedef value_set_domaint<Value_Sett> domaint;
+  typedef Value_Set_Domaint domaint;
   typedef static_analysist<domaint> baset;
   typedef typename baset::locationt locationt;
 
@@ -134,7 +134,8 @@ public:
   }
 };
 
-typedef value_set_analysis_baset<value_sett> value_set_analysist;
+typedef value_set_analysis_baset<value_set_domaint<value_sett> >
+  value_set_analysist;
 
 void convert(
   const goto_functionst &goto_functions,
