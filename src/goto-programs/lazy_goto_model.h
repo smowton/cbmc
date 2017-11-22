@@ -32,12 +32,9 @@ public:
   // Fields
 private:
   std::unique_ptr<goto_modelt> goto_model;
+  const lazy_goto_functions_mapt<goto_programt> goto_functions;
   language_filest language_files;
 
-public:
-  const lazy_goto_functions_mapt<goto_programt> goto_functions;
-
-private:
   // Function/module processing functions
   const post_process_functiont post_process_function;
   const post_process_functionst post_process_functions;
@@ -104,6 +101,8 @@ public:
 
   /// Eagerly loads all functions from the symbol table.
   void load_all_functions() const;
+
+  void unload(const irep_idt &name) const { goto_functions.unload(name); }
 
   language_filet &add_language_file(const std::string &filename)
   {

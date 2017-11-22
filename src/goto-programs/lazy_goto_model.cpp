@@ -44,7 +44,6 @@ lazy_goto_modelt::lazy_goto_modelt(
 
 lazy_goto_modelt::lazy_goto_modelt(lazy_goto_modelt &&other)
   : goto_model(std::move(other.goto_model)),
-    language_files(std::move(other.language_files)),
     goto_functions(
       goto_model->goto_functions.function_map,
       language_files,
@@ -56,6 +55,7 @@ lazy_goto_modelt::lazy_goto_modelt(lazy_goto_modelt &&other)
         this->post_process_function(function_name, function, symbol_table);
       },
       other.message_handler),
+    language_files(std::move(other.language_files)),
     post_process_function(std::move(other.post_process_function)),
     post_process_functions(std::move(other.post_process_functions)),
     message_handler(other.message_handler),
@@ -104,7 +104,7 @@ void lazy_goto_modelt::initialize(const cmdlinet &cmdline)
         throw 0;
       }
 
-      language_filet &lf=language_files.add_file(filename);
+      language_filet &lf=add_language_file(filename);
       lf.language=get_language_from_filename(filename);
 
       if(lf.language==nullptr)
