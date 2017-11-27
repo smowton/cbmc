@@ -205,9 +205,8 @@ void lazy_goto_modelt::load_all_functions() const
         fn_ids_to_convert.push_back(named_symbol.first);
     }
 
-    // Access all functions to convert them
     for(const irep_idt &symbol_name : fn_ids_to_convert)
-      goto_functions.at(symbol_name);
+      goto_functions.ensure_function_loaded(symbol_name);
 
     // Repeat while new symbols are being added in case any of those are
     // stubbed functions. Even stubs can create new stubs while being
@@ -234,7 +233,7 @@ bool lazy_goto_modelt::freeze()
     {
       // Re-convert any that already exist
       goto_functions.unload(updated_symbol_id);
-      goto_functions.at(updated_symbol_id);
+      goto_functions.ensure_function_loaded(updated_symbol_id);
     }
   }
 

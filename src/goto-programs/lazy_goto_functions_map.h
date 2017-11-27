@@ -88,7 +88,7 @@ public:
   /// \return The function body corresponding to the given function.
   const_mapped_type at(const key_type &name) const
   {
-    return ensure_entry_loaded(name).second;
+    return ensure_function_loaded(name).second;
   }
 
   /// Gets the body for a given function.
@@ -96,15 +96,14 @@ public:
   /// \return The function body corresponding to the given function.
   mapped_type at(const key_type &name)
   {
-    return ensure_entry_loaded(name).second;
+    return ensure_function_loaded(name).second;
   }
 
   void unload(const key_type &name) const { goto_functions.erase(name); }
 
-private:
   // This returns a non-const reference, but you should const it before
   // returning it to clients from a const method
-  reference ensure_entry_loaded(const key_type &name) const
+  reference ensure_function_loaded(const key_type &name) const
   {
     reference named_function=ensure_entry_converted(name);
     mapped_type function=named_function.second;
@@ -119,6 +118,7 @@ private:
     return named_function;
   }
 
+private:
   // This returns a non-const reference, but you should const it before
   // returning it to clients from a const method
   reference ensure_entry_converted(const key_type &name) const
