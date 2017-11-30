@@ -845,6 +845,7 @@ IREP_ID_ONE(havoc_object)
 IREP_ID_TWO(overflow_shl, overflow-shl)
 IREP_ID_ONE(lvsa_evs_type)
 IREP_ID_ONE(is_initializer)
+IREP_ID_TWO(C_is_taint_wrapper_type, #is_taint_wrapper_type)
 
 #undef IREP_ID_ONE
 #undef IREP_ID_TWO
