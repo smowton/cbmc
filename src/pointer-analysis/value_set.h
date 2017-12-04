@@ -221,6 +221,11 @@ public:
     value_setst::valuest &dest,
     const namespacet &ns) const;
 
+  void get_may_alias_set(
+    const exprt &expr,
+    value_setst::valuest &dest,
+    const namespacet &ns) const;
+
   expr_sett &get(
     const idt &identifier,
     const std::string &suffix);
