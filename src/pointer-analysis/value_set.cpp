@@ -369,6 +369,9 @@ void value_sett::get_value_set(
   #endif
 }
 
+/// \brief Builds a version of expr suitable for alias-comparison
+/// \param expr The expression to be converted to the alias-uniform structure
+/// \return expr without information which is irrelevant to alias-comparison
 static exprt get_uniform_expr(const exprt &expr)
 {
   if(expr.id()==ID_object_descriptor)
@@ -387,6 +390,9 @@ static exprt get_uniform_expr(const exprt &expr)
   return expr;
 }
 
+/// \brief Reconstructs a type of a pointer to the object expr
+/// \param expr An object in a points-to set we make an alias type for
+/// \return A type of a pointer to the object expr
 static typet get_alias_type(const exprt &expr)
 {
   if(expr.id()==ID_object_descriptor)

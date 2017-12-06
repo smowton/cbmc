@@ -113,6 +113,10 @@ public:
       baset::ns);
   }
 
+  /// \brief Fills in dest with all pointers to any object pointed to be expr
+  /// \param l A program location w.r.t which the operation will be performed
+  /// \param expr Identifies a points-to set whose aliases we will compute
+  /// \param dest Output container for aliases
   virtual void get_may_alias_values(
     locationt l,
     const exprt &expr,
