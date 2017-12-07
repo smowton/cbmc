@@ -369,67 +369,6 @@ void value_sett::get_value_set(
   #endif
 }
 
-/// Builds a version of expr suitable for alias-comparison
-/// \param expr: The expression to be converted to the alias-uniform structure
-/// \return expr without information which is irrelevant to alias-comparison
-static exprt get_uniform_expr(const exprt &expr)
-{
-  if(expr.id()==ID_object_descriptor)
-  {
-    object_descriptor_exprt ob;
-    ob.object() = get_uniform_expr(to_object_descriptor_expr(expr).object());
-    ob.offset() = to_object_descriptor_expr(expr).offset();
-    return ob;
-  }
-  if(expr.id()==ID_external_value_set)
-  {
-    exprt copy = expr;
-    copy.set(ID_is_initializer, ID_0);
-    return copy;
-  }
-  return expr;
-}
-
-/// Reconstructs a type of a pointer to the object expr
-/// \param expr: An object in a points-to set we make an alias type for
-/// \return A type of a pointer to the object expr
-static typet get_alias_type(const exprt &expr)
-{
-  if(expr.id()==ID_object_descriptor)
-  {
-    object_descriptor_exprt ob_expr=to_object_descriptor_expr(expr);
-    if(ob_expr.offset().id()==ID_invalid || ob_expr.offset().id()==ID_unknown)
-      return pointer_type(ob_expr.object().type());
-  }
-  return pointer_type(expr.type());
-}
-
-void value_sett::get_may_alias_set(
-  const exprt &expr,
-  value_setst::valuest &dest,
-  const namespacet &ns) const
-{
-  object_mapt pointed_objects;
-  get_value_set(expr, pointed_objects, ns, false);
-  std::vector<exprt> uniform_pointed_objects;
-  for(const auto &num_obj : pointed_objects.read())
-    uniform_pointed_objects.push_back(get_uniform_expr(to_expr(num_obj)));
-
-  for(const auto &name_entry : values)
-    for(const auto &enum_eobj : name_entry.second.object_map.read())
-    {
-      if(std::find(uniform_pointed_objects.cbegin(),
-                   uniform_pointed_objects.cend(),
-                   get_uniform_expr(to_expr(enum_eobj)))!=
-         uniform_pointed_objects.cend())
-      {
-        dest.push_back(symbol_exprt(
-          name_entry.second.identifier,
-          get_alias_type(to_expr(enum_eobj))));
-      }
-    }
-}
-
 void value_sett::get_value_set(
   const exprt &expr,
   object_mapt &dest,

@@ -113,21 +113,6 @@ public:
       baset::ns);
   }
 
-  /// Fills in dest with all pointers to any object pointed to be expr
-  /// \param l: A program location w.r.t which the operation will be performed
-  /// \param expr: Identifies a points-to set whose aliases we will compute
-  /// \param dest: Output container for aliases
-  virtual void get_may_alias_values(
-    locationt l,
-    const exprt &expr,
-    value_setst::valuest &dest)
-  {
-    ((const value_sett&)(*this)[l].value_set).get_may_alias_set(
-      expr,
-      dest,
-      baset::ns);
-  }
-
   /*******************************************************************\
 
   Function: value_set_analysis_baset::is_singular
