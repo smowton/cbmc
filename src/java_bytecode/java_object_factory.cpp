@@ -511,6 +511,19 @@ static mp_integer max_value(const typet &type)
   UNREACHABLE;
 }
 
+/// Create code allocating object of size `size` and assigning it to `lhs`
+/// \param lhs : pointer which will be allocated
+/// \param size : size of the object
+/// \return code allocation object and assigning `lhs`
+static codet make_allocate_code(const symbol_exprt &lhs, const exprt &size)
+{
+  side_effect_exprt alloc(ID_allocate);
+  alloc.copy_to_operands(size);
+  alloc.copy_to_operands(false_exprt());
+  alloc.type() = lhs.type();
+  return code_assignt(lhs, alloc);
+}
+
 /// Initialize a nondeterministic String structure
 /// \param obj: struct to initialize, must have been declared using
 ///   code of the form:
@@ -527,15 +540,19 @@ static mp_integer max_value(const typet &type)
 /// tmp_object_factory$1 = NONDET(int);
 /// __CPROVER_assume(tmp_object_factory$1 >= 0);
 /// __CPROVER_assume(tmp_object_factory$1 <= max_nondet_string_length);
+/// char (*string_data_pointer)[INFINITY()];
+/// string_data_pointer = ALLOCATE(char [INFINITY()], INFINITY(), false);
 /// char nondet_infinite_array$2[INFINITY()];
 /// nondet_infinite_array$2 = NONDET(char [INFINITY()]);
-/// cprover_associate_array_to_pointer_func
-///   (nondet_infinite_array$2, &nondet_infinite_array$2[0]);
-/// prover_associate_length_to_array_func
-///   (nondet_infinite_array$2, tmp_object_factory$1);
-/// arg = { .\@java.lang.Object={ .\@class_identifier="java.lang.String",
-///   .\@lock=false }, .length=tmp_object_factory$1,
-///   .data=nondet_infinite_array$2 };
+/// *string_data_pointer = nondet_infinite_array$2;
+/// cprover_associate_array_to_pointer_func(
+///   *string_data_pointer, *string_data_pointer);
+/// cprover_associate_length_to_array_func(
+///   *string_data_pointer, tmp_object_factory);
+/// arg = { .@java.lang.Object={
+///   .@class_identifier=\"java::java.lang.String\", .@lock=false },
+///   .length=tmp_object_factory,
+///   .data=*string_data_pointer };
 /// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 /// Unit tests in `unit/java_bytecode/java_object_factory/` ensure
 /// it is the case.
@@ -554,9 +571,19 @@ codet initialize_nondet_string_struct(
 
   // `obj` is `*expr`
   const struct_typet &struct_type = to_struct_type(ns.follow(obj.type()));
-  const irep_idt &class_id = struct_type.get_tag();
+  // @clsid = java::java.lang.String or similar.
+  // We allow type StringBuffer and StringBuilder to be initialized
+  // in the same way has String, because they have the same structure and
+  // are treated in the same way by CBMC.
+  // Note that CharSequence cannot be used as classid because it's abstract,
+  // so it is replaced by String.
+  // \todo allow StringBuffer and StringBuilder as classid for Charsequence
+  const irep_idt &class_id =
+    struct_type.get_tag() == "java.lang.CharSequence"
+    ? "java::java.lang.String"
+    : "java::" + id2string(struct_type.get_tag());
 
-  // @clsid = String and @lock = false:
+  // @lock = false:
   const symbol_typet jlo_symbol("java::java.lang.Object");
   const struct_typet &jlo_type = to_struct_type(ns.follow(jlo_symbol));
   struct_exprt jlo_init(jlo_symbol);
@@ -570,6 +597,7 @@ codet initialize_nondet_string_struct(
   // just contains the standard Object field and no length and data fields.
   if(struct_type.has_component("length"))
   {
+    /// \todo Refactor with make_nondet_string_expr
     // length_expr = nondet(int);
     const symbolt length_sym =
       new_tmp_symbol(symbol_table, loc, java_int_type());
@@ -593,20 +621,37 @@ codet initialize_nondet_string_struct(
         code_assumet(binary_relation_exprt(length_expr, ID_le, max_length)));
     }
 
+    // char (*array_data_init)[INFINITY];
+    const typet data_ptr_type = pointer_type(
+      array_typet(java_char_type(), infinity_exprt(java_int_type())));
+
+    symbolt &data_pointer_sym = get_fresh_aux_symbol(
+      data_ptr_type, "", "string_data_pointer", loc, ID_java, symbol_table);
+    const auto data_pointer = data_pointer_sym.symbol_expr();
+    code.add(code_declt(data_pointer));
+
+    // Dynamic allocation: `data array = allocate char[INFINITY]`
+    code.add(make_allocate_code(data_pointer, infinity_exprt(java_int_type())));
+
+    // `data_expr` is `*data_pointer`
     // data_expr = nondet(char[INFINITY]) // we use infinity for variable size
-    exprt data_expr = make_nondet_infinite_char_array(symbol_table, loc, code);
+    const dereference_exprt data_expr(data_pointer);
+    const exprt nondet_array =
+      make_nondet_infinite_char_array(symbol_table, loc, code);
+    code.add(code_assignt(data_expr, nondet_array));
 
     struct_expr.copy_to_operands(length_expr);
 
     const address_of_exprt array_pointer(
       index_exprt(data_expr, from_integer(0, java_int_type())));
-    struct_expr.copy_to_operands(array_pointer);
 
     add_pointer_to_array_association(
       array_pointer, data_expr, symbol_table, loc, code);
 
     add_array_to_length_association(
       data_expr, length_expr, symbol_table, loc, code);
+
+    struct_expr.copy_to_operands(array_pointer);
 
     // Printable ASCII characters are between ' ' and '~'.
     if(printable)
@@ -926,6 +971,8 @@ symbol_exprt java_object_factoryt::gen_nondet_subtype_pointer_init(
 /// Initializes an object tree rooted at `expr`, allocating child objects as
 /// necessary and nondet-initializes their members, or if MUST_UPDATE_IN_PLACE
 /// is set, re-initializes already-allocated objects.
+/// After initialization calls validation method
+/// `expr.cproverNondetInitialize()` if it was provided by the user.
 ///
 /// \param assignments:
 ///   The code block to append the new instructions to.
@@ -1027,6 +1074,26 @@ void java_object_factoryt::gen_nondet_struct_init(
         depth,
         substruct_in_place);
     }
+  }
+
+  // If <class_identifier>.cproverValidate() can be found in the
+  // symbol table, we add a call:
+  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  // expr.cproverValidate();
+  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  const irep_idt validate_method_name =
+    "java::" + id2string(class_identifier) + ".cproverNondetInitialize:()V";
+
+  if(const auto func = symbol_table.lookup(validate_method_name))
+  {
+    const code_typet &type = to_code_type(func->type);
+    code_function_callt fun_call;
+    fun_call.function() = func->symbol_expr();
+    if(type.has_this())
+      fun_call.arguments().push_back(address_of_exprt(expr));
+
+    assignments.add(fun_call);
   }
 }
 

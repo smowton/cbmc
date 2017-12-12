@@ -11,6 +11,7 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <util/invariant.h>
 #include <algorithm>
+#include <set>
 
 #include <util/type.h>
 #include <util/std_types.h>
@@ -107,6 +108,23 @@ public:
   {
     PRECONDITION(!type_variables().empty());
     return type_variables().front();
+  }
+
+  type_variablet &type_variable_ref()
+  {
+    PRECONDITION(!type_variables().empty());
+    return const_cast<type_variablet &>(type_variables().front());
+  }
+
+  const std::string get_parameter_class_name() const
+  {
+    const std::string &parameter_name =
+      type_variable().get_identifier().c_str();
+    PRECONDITION(has_prefix(parameter_name, "java::"));
+    int prefix_length = std::string("java::").length();
+    const std::string name = parameter_name.substr(
+      prefix_length, parameter_name.rfind("::") - prefix_length);
+    return name;
   }
 
 private:
@@ -312,6 +330,65 @@ inline const typet &java_generic_class_type_bound(size_t index, const typet &t)
   return gen_type.subtype();
 }
 
+/// Type to hold a Java class that is implicitly generic, e.g., an inner
+/// class of a generic outer class or a derived class of a generic base
+/// class. Extends the java class type.
+class java_implicitly_generic_class_typet : public java_class_typet
+{
+public:
+  typedef std::vector<java_generic_parametert> implicit_generic_typest;
+
+  explicit java_implicitly_generic_class_typet(
+    const java_class_typet &class_type,
+    const implicit_generic_typest &generic_types)
+    : java_class_typet(class_type)
+  {
+    set(ID_C_java_implicitly_generic_class_type, true);
+    for(const auto &type : generic_types)
+    {
+      implicit_generic_types().push_back(type);
+    }
+  }
+
+  const implicit_generic_typest &implicit_generic_types() const
+  {
+    return (
+      const implicit_generic_typest
+        &)(find(ID_implicit_generic_types).get_sub());
+  }
+
+  implicit_generic_typest &implicit_generic_types()
+  {
+    return (
+      implicit_generic_typest &)(add(ID_implicit_generic_types).get_sub());
+  }
+};
+
+/// \param type: the type to check
+/// \return true if type is a implicitly generic java class type
+inline bool is_java_implicitly_generic_class_type(const typet &type)
+{
+  return type.get_bool(ID_C_java_implicitly_generic_class_type);
+}
+
+/// \param type: the type to check
+/// \return cast of type to java_generics_class_typet
+inline const java_implicitly_generic_class_typet &
+to_java_implicitly_generic_class_type(const java_class_typet &type)
+{
+  PRECONDITION(is_java_implicitly_generic_class_type(type));
+  return static_cast<const java_implicitly_generic_class_typet &>(type);
+}
+
+/// \param type: source type
+/// \return cast of type into a java class type with generics
+inline java_implicitly_generic_class_typet &
+to_java_implicitly_generic_class_type(java_class_typet &type)
+{
+  PRECONDITION(is_java_implicitly_generic_class_type(type));
+  return static_cast<java_implicitly_generic_class_typet &>(type);
+}
+
 /// An exception that is raised for unsupported class signature.
 /// Currently we do not parse multiple bounds.
 class unsupported_java_class_signature_exceptiont:public std::logic_error
@@ -344,26 +421,111 @@ inline typet java_type_from_string_with_exception(
 /// \param identifier The string identifier of the type of the component.
 /// \return Optional with the size if the identifier was found.
 inline const optionalt<size_t> java_generics_get_index_for_subtype(
-  const java_generic_class_typet &t,
+  const std::vector<java_generic_parametert> &gen_types,
   const irep_idt &identifier)
 {
-  const std::vector<java_generic_parametert> &gen_types=
-    t.generic_types();
-
   const auto iter = std::find_if(
     gen_types.cbegin(),
     gen_types.cend(),
     [&identifier](const java_generic_parametert &ref)
     {
-      return ref.type_variable().get_identifier()==identifier;
+      return ref.type_variable().get_identifier() == identifier;
     });
 
-  if(iter==gen_types.cend())
+  if(iter == gen_types.cend())
   {
     return {};
   }
 
   return std::distance(gen_types.cbegin(), iter);
 }
+
+void get_dependencies_from_generic_parameters(
+  const std::string &,
+  std::set<irep_idt> &);
+void get_dependencies_from_generic_parameters(
+  const typet &,
+  std::set<irep_idt> &);
+
+class java_specialized_generic_class_typet : public java_class_typet
+{
+public:
+  typedef std::vector<reference_typet> generic_type_argumentst;
+
+  /// Build the specialised version of the specific class, with the specified
+  /// parameters and name.
+  /// \param generic_name: The new name for the class
+  ///   (like Generic<java::Float>)
+  /// \param tag: The name for the original class (like java::Generic)
+  /// \param new_components: The specialised components
+  /// \return The newly constructed class.
+  java_specialized_generic_class_typet(
+    const irep_idt &generic_name,
+    const irep_idt &tag,
+    const struct_typet::componentst &new_components,
+    const generic_type_argumentst &specialised_parameters)
+  {
+    set(ID_C_specialized_generic_java_class, true);
+    set(ID_name, "java::" + id2string(generic_name));
+    set(ID_base_name, id2string(generic_name));
+    components() = new_components;
+    set_tag(tag);
+
+    generic_type_arguments() = specialised_parameters;
+  }
+
+  /// \return vector of type variables
+  const generic_type_argumentst &generic_type_arguments() const
+  {
+    return (const generic_type_argumentst &)(find(ID_type_variables).get_sub());
+  }
+
+private:
+  /// \return vector of type variables
+  generic_type_argumentst &generic_type_arguments()
+  {
+    return (generic_type_argumentst &)(add(ID_type_variables).get_sub());
+  }
+};
+
+inline bool is_java_specialized_generic_class_type(const typet &type)
+{
+  return type.get_bool(ID_C_specialized_generic_java_class);
+}
+
+inline bool is_java_specialized_generic_class_type(typet &type)
+{
+  return type.get_bool(ID_C_specialized_generic_java_class);
+}
+
+inline java_specialized_generic_class_typet
+to_java_specialized_generic_class_type(const typet &type)
+{
+  INVARIANT(
+    is_java_specialized_generic_class_type(type),
+    "Tried to convert a type that was not a specialised generic java class");
+  return static_cast<const java_specialized_generic_class_typet &>(type);
+}
+
+inline java_specialized_generic_class_typet
+to_java_specialized_generic_class_type(typet &type)
+{
+  INVARIANT(
+    is_java_specialized_generic_class_type(type),
+    "Tried to convert a type that was not a specialised generic java class");
+  return static_cast<const java_specialized_generic_class_typet &>(type);
+}
+
+/// Take a signature string and remove everything in angle brackets allowing for
+/// the type to be parsed normally, for example
+/// `java.util.HashSet<java.lang.Integer>` will be turned into
+/// `java.util.HashSet`
+std::string erase_type_arguments(const std::string &src);
+/// Returns the full class name, skipping over the generics. This turns any of
+/// these:
+///   1. Signature: Lcom/package/OuterClass<TT;>.Inner;
+///   2. Descriptor: Lcom.pacakge.OuterClass$Inner;
+/// into `com.package.OuterClass.Inner`
+std::string gather_full_class_name(const std::string &src);
 
 #endif // CPROVER_JAVA_BYTECODE_JAVA_TYPES_H

@@ -12,6 +12,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #ifndef CPROVER_POINTER_ANALYSIS_SHOW_VALUE_SETS_H
 #define CPROVER_POINTER_ANALYSIS_SHOW_VALUE_SETS_H
 
+#include <pointer-analysis/value_set_analysis.h>
 #include <util/ui_message.h>
 #include "value_set_analysis.h"
 

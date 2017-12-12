@@ -165,7 +165,8 @@ void escape_domaint::transform(
   locationt from,
   locationt to,
   ai_baset &ai,
-  const namespacet &ns)
+  const namespacet &ns,
+  ai_domain_baset::edge_typet /*edge_type*/)
 {
   if(has_values.is_false())
     return;
@@ -304,16 +305,8 @@ bool escape_domaint::merge(
   locationt from,
   locationt to)
 {
-  if(b.has_values.is_false())
-    return false; // no change
-
-  if(has_values.is_false())
-  {
-    *this=b;
-    return true; // change
-  }
-
-  bool changed=false;
+  bool changed=has_values.is_false();
+  has_values=tvt::unknown();
 
   for(const auto &cleanup : b.cleanup_map)
   {

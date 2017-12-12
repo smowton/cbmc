@@ -10,37 +10,16 @@
 #include <testing-utils/catch.hpp>
 #include <testing-utils/load_java_class.h>
 #include <testing-utils/require_type.h>
-
-#include <util/symbol_table.h>
+#include <testing-utils/generic_utils.h>
 
 #include <java_bytecode/generate_java_generic_type.h>
-#include <testing-utils/require_type.h>
-#include <testing-utils/generic_utils.h>
 #include <util/ui_message.h>
-
-/// Helper function to specalise a generic class from a named component of a
-/// named class
-/// \param class_name: The name of the class that has a generic component.
-/// \param component_name: The name of the generic component
-/// \param new_symbol_table: The symbol table to use.
-void specialise_generic_from_component(
-  const irep_idt &class_name,
-  const irep_idt &component_name,
-  symbol_tablet &new_symbol_table)
-{
-  const symbolt &harness_symbol = new_symbol_table.lookup_ref(class_name);
-  const struct_typet::componentt &harness_component =
-    require_type::require_component(
-      to_struct_type(harness_symbol.type), component_name);
-  generic_utils::specialise_generic(
-    to_java_generic_type(harness_component.type()), new_symbol_table);
-}
 
 SCENARIO(
   "generate_java_generic_type_from_file",
   "[core][java_bytecode][generate_java_generic_type]")
 {
-  auto expected_symbol=
+  auto expected_symbol =
     "java::generic_two_fields$bound_element<java::java.lang.Integer>";
 
   GIVEN("A generic java type with two generic fields and a concrete "
@@ -50,13 +29,13 @@ SCENARIO(
       load_java_class("generic_two_fields",
                       "./java_bytecode/generate_concrete_generic_type");
 
-    specialise_generic_from_component(
+    generic_utils::specialise_generic_from_component(
       "java::generic_two_fields", "belem", new_symbol_table);
 
     REQUIRE(new_symbol_table.has_symbol(expected_symbol));
     THEN("The class should contain two instantiated fields.")
     {
-      const auto &class_symbol=new_symbol_table.lookup(
+      const auto &class_symbol = new_symbol_table.lookup(
         "java::generic_two_fields$bound_element<java::java.lang.Integer>");
       const typet &symbol_type=class_symbol->type;
 
@@ -89,10 +68,9 @@ SCENARIO(
   "generate_java_generic_type_from_file_two_params",
   "[core][java_bytecode][generate_java_generic_type]")
 {
-  auto expected_symbol=
-    "java::generic_two_parameters$KeyValuePair"
-      "<java::java.lang.String,"
-      "java::java.lang.Integer>";
+  auto expected_symbol =
+    "java::generic_two_parameters$KeyValuePair<java::java.lang.String, "
+    "java::java.lang.Integer>";
 
   GIVEN("A generic java type with two generic parameters, like a Hashtable")
   {
@@ -100,7 +78,7 @@ SCENARIO(
       load_java_class("generic_two_parameters",
                       "./java_bytecode/generate_concrete_generic_type");
 
-    specialise_generic_from_component(
+    generic_utils::specialise_generic_from_component(
       "java::generic_two_parameters", "bomb", new_symbol_table);
 
     REQUIRE(new_symbol_table.has_symbol(
@@ -133,9 +111,9 @@ SCENARIO(
   // After we have loaded the class and converted the generics,
   // the presence of these two symbols in the symbol table is
   // proof enough that we did the work we needed to do correctly.
-  auto first_expected_symbol=
+  auto first_expected_symbol =
     "java::generic_two_instances$element<java::java.lang.Boolean>";
-  auto second_expected_symbol=
+  auto second_expected_symbol =
     "java::generic_two_instances$element<java::java.lang.Integer>";
 
   GIVEN("A generic java type with a field that refers to another generic with"
@@ -145,9 +123,9 @@ SCENARIO(
       load_java_class("generic_two_instances",
                       "./java_bytecode/generate_concrete_generic_type");
 
-    specialise_generic_from_component(
+    generic_utils::specialise_generic_from_component(
       "java::generic_two_instances", "bool_element", new_symbol_table);
-    specialise_generic_from_component(
+    generic_utils::specialise_generic_from_component(
       "java::generic_two_instances", "int_element", new_symbol_table);
 
     REQUIRE(new_symbol_table.has_symbol(first_expected_symbol));
@@ -184,7 +162,7 @@ SCENARIO(
   // We want to test that the specialized/instantiated class has it's field
   // type updated, so find the specialized class, not the generic class.
   const irep_idt test_class =
-    "java::generic_field_array_instantiation$generic<java::array[reference]"
+    "java::generic_field_array_instantiation$generic<array[reference]"
     "of_java::java.lang.Float>";
 
   GIVEN("A generic type instantiated with an array type")
@@ -229,15 +207,14 @@ SCENARIO(
     GIVEN("A generic type instantiated with different array types")
     {
       const irep_idt test_class_integer =
-        "java::generic_field_array_instantiation$generic<java::array[reference]"
-        "of_"
-        "java::java.lang.Integer>";
+        "java::generic_field_array_instantiation$generic<array[reference]"
+        "of_java::java.lang.Integer>";
 
       const irep_idt test_class_int =
-        "java::generic_field_array_instantiation$generic<java::array[int]>";
+        "java::generic_field_array_instantiation$generic<array[int]>";
 
       const irep_idt test_class_float =
-        "java::generic_field_array_instantiation$generic<java::array[float]>";
+        "java::generic_field_array_instantiation$generic<array[float]>";
 
       const struct_typet::componentt &component_g =
         require_type::require_component(
@@ -278,7 +255,7 @@ SCENARIO(
 
     WHEN("We specialise that class from a reference to it")
     {
-      specialise_generic_from_component(
+      generic_utils::specialise_generic_from_component(
         harness_class, "genericArrayField", new_symbol_table);
       THEN(
         "There should be a specialised version of the class in the symbol "
@@ -329,15 +306,14 @@ SCENARIO(
     WHEN(
       "We specialise the class with an array we should have appropriate types")
     {
-      specialise_generic_from_component(
+      generic_utils::specialise_generic_from_component(
         harness_class, "genericArrayArrayField", new_symbol_table);
       THEN(
         "There should be a specialised version of the class in the symbol "
         "table")
       {
         const std::string specialised_string =
-          "<java::array[reference]of_"
-          "java::java.lang.Float>";
+          "<array[reference]of_java::java.lang.Float>";
         const irep_idt specialised_class_name = id2string(harness_class) + "$" +
                                                 id2string(inner_class) +
                                                 specialised_string;

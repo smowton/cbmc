@@ -507,6 +507,7 @@ refined_string_exprt java_string_library_preprocesst::make_nondet_string_expr(
   symbol_table_baset &symbol_table,
   code_blockt &code)
 {
+  /// \todo refactor with initialize_nonddet_string_struct
   const refined_string_exprt str = decl_string_expr(loc, symbol_table, code);
 
   side_effect_expr_nondett nondet_length(str.length().type());
@@ -900,7 +901,6 @@ codet java_string_library_preprocesst::make_equals_function_code(
   const source_locationt &loc,
   symbol_table_baset &symbol_table)
 {
-  // TODO: Code should return false if Object is not String.
   code_blockt code;
   exprt::operandst ops;
   for(const auto &p : type.parameters())
@@ -910,8 +910,30 @@ codet java_string_library_preprocesst::make_equals_function_code(
   }
   exprt::operandst args=process_equals_function_operands(
     ops, loc, symbol_table, code);
-  code.add(code_return_function_application(
-    ID_cprover_string_equal_func, args, type.return_type(), symbol_table));
+
+  member_exprt class_identifier(
+    checked_dereference(ops[1], ops[1].type().subtype()),
+    "@class_identifier",
+    string_typet());
+
+  // Check the object argument is a String.
+  equal_exprt arg_is_string(
+    class_identifier, constant_exprt("java::java.lang.String", string_typet()));
+
+  // Check content equality
+  const symbolt string_equals_sym = get_fresh_aux_symbol(
+    java_boolean_type(), "string_equals", "str_eq", loc, ID_java, symbol_table);
+  const symbol_exprt string_equals = string_equals_sym.symbol_expr();
+  code.add(code_declt(string_equals));
+  code.add(code_assignt(
+    string_equals,
+    make_function_application(
+      ID_cprover_string_equal_func, args, type.return_type(), symbol_table)));
+
+  code.add(code_returnt(if_exprt(
+    arg_is_string,
+    string_equals,
+    from_integer(false, java_boolean_type()))));
   return code;
 }
 
@@ -937,7 +959,7 @@ codet java_string_library_preprocesst::make_float_to_string_code(
   exprt str=allocate_fresh_string(type.return_type(), loc, symbol_table, code);
 
   // Expression representing 0.0
-  ieee_float_spect float_spec=ieee_float_spect::single_precision();
+  ieee_float_spect float_spec(to_floatbv_type(params[0].type()));
   ieee_floatt zero_float(float_spec);
   zero_float.from_float(0.0);
   constant_exprt zero=zero_float.to_expr();
@@ -1683,14 +1705,6 @@ codet java_string_library_preprocesst::make_init_from_array_code(
   /// \todo this assumes the array to be constant between all calls to
   /// string primitives, which may not be true in general.
   refined_string_exprt string_arg = to_string_expr(args[1]);
-  add_pointer_to_array_association(
-    string_arg.content(),
-    dereference_exprt(
-      string_arg.content(),
-      array_typet(java_char_type(), infinity_exprt(java_int_type()))),
-    symbol_table,
-    loc,
-    code);
 
   // The third argument is `count`, whereas the third argument of substring
   // is `end` which corresponds to `offset+count`
@@ -1732,6 +1746,39 @@ codet java_string_library_preprocesst::make_string_length_code(
   return code_returnt(get_length(deref, symbol_table));
 }
 
+bool java_string_library_preprocesst::implements_function(
+  const irep_idt &function_id) const
+{
+  for(const id_mapt *map : id_maps)
+    if(map->count(function_id) != 0)
+      return true;
+
+  return conversion_table.count(function_id) != 0;
+}
+
+template <typename TMap, typename TContainer>
+void add_keys_to_container(const TMap &map, TContainer &container)
+{
+  static_assert(
+    std::is_same<typename TMap::key_type,
+                 typename TContainer::value_type>::value,
+    "TContainer value_type doesn't match TMap key_type");
+  std::transform(
+    map.begin(),
+    map.end(),
+    std::inserter(container, container.begin()),
+    [](const typename TMap::value_type &pair) { return pair.first; });
+}
+
+void java_string_library_preprocesst::get_all_function_names(
+  id_sett &methods) const
+{
+  for(const id_mapt *map : id_maps)
+    add_keys_to_container(*map, methods);
+
+  add_keys_to_container(conversion_table, methods);
+}
+
 /// Should be called to provide code for string functions that are used in the
 /// code but for which no implementation is provided.
 /// \param function_id: name of the function
@@ -1741,11 +1788,12 @@ codet java_string_library_preprocesst::make_string_length_code(
 /// \return Code for the body of the String functions if they are part of the
 ///   supported String functions, nil_exprt otherwise.
 exprt java_string_library_preprocesst::code_for_function(
-  const irep_idt &function_id,
-  const code_typet &type,
-  const source_locationt &loc,
+  const symbolt &symbol,
   symbol_table_baset &symbol_table)
 {
+  const irep_idt &function_id = symbol.name;
+  const code_typet &type = to_code_type(symbol.type);
+  const source_locationt &loc = symbol.location;
   auto it_id=cprover_equivalent_to_java_function.find(function_id);
   if(it_id!=cprover_equivalent_to_java_function.end())
     return make_function_from_call(it_id->second, type, loc, symbol_table);

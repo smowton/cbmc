@@ -14,38 +14,30 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #define USE_DEPRECATED_STATIC_ANALYSIS_H
 #include <analyses/static_analysis.h>
-#include <util/xml_expr.h>
-#include <util/xml.h>
-#include <util/expr_util.h>
 
 #include "value_set_domain.h"
 #include "value_sets.h"
-#include "value_set.h"
 
 class xmlt;
 
-template<class Value_Set_Domaint>
-class value_set_analysis_baset:
+void value_sets_to_xml(
+  std::function<const value_sett &(goto_programt::const_targett)> get_value_set,
+  const goto_programt &goto_program,
+  const irep_idt &identifier,
+  xmlt &dest);
+
+template<class VSDT>
+class value_set_analysis_templatet:
   public value_setst,
-  public static_analysist<Value_Set_Domaint>
+  public static_analysist<VSDT>
 {
 public:
-  typedef Value_Set_Domaint domaint;
+  typedef VSDT domaint;
   typedef static_analysist<domaint> baset;
   typedef typename baset::locationt locationt;
 
-  explicit value_set_analysis_baset(const namespacet &_ns):baset(_ns)
+  explicit value_set_analysis_templatet(const namespacet &ns):baset(ns)
   {
-  }
-
-  // overloading
-  void initialize(const goto_programt &goto_program) override
-  {
-    baset::initialize(goto_program);
-  }
-  void initialize(const goto_functionst &goto_functions) override
-  {
-    baset::initialize(goto_functions);
   }
 
   void convert(
@@ -53,51 +45,11 @@ public:
     const irep_idt &identifier,
     xmlt &dest) const
   {
-    source_locationt previous_location;
-
-    forall_goto_program_instructions(i_it, goto_program)
-    {
-      const source_locationt &location=i_it->source_location;
-
-      if(location==previous_location)
-        continue;
-
-      if(location.is_nil() || location.get_file().empty())
-        continue;
-
-      // find value set
-      const value_sett &value_set=(*this)[i_it].value_set;
-
-      xmlt &i=dest.new_element("instruction");
-      i.new_element()=::xml(location);
-
-      for(value_sett::valuest::const_iterator
-            v_it=value_set.values.begin();
-          v_it!=value_set.values.end();
-          v_it++)
-      {
-        xmlt &var=i.new_element("variable");
-        var.new_element("identifier").data=
-          id2string(v_it->first);
-
-#if 0
-        const value_sett::expr_sett &expr_set=
-          v_it->second.expr_set();
-
-        for(value_sett::expr_sett::const_iterator
-              e_it=expr_set.begin();
-            e_it!=expr_set.end();
-            e_it++)
-        {
-          std::string value_str=
-            from_expr(ns, identifier, *e_it);
-
-          var.new_element("value").data=
-            xmlt::escape(value_str);
-        }
-#endif
-      }
-    }
+    value_sets_to_xml(
+      [this](locationt l) { return (*this)[l].value_set; },
+      goto_program,
+      identifier,
+      dest);
   }
 
 public:
@@ -107,34 +59,21 @@ public:
     const exprt &expr,
     value_setst::valuest &dest) override
   {
-    ((const value_sett&)(*this)[l].value_set).get_value_set(
-      expr,
-      dest,
-      baset::ns);
+    (*this)[l].value_set.get_value_set(expr, dest, baset::ns);
   }
 
-  /*******************************************************************\
-
-  Function: value_set_analysis_baset::is_singular
-
-    Inputs: The set of expressions to check.
-
-   Outputs: true, if it contains only one expression and
-            that expression is a symbol,
-            false, otherwise.
-
-   Purpose: Get whether a set of expressions can have a strong update
-            or not.
-
-  \*******************************************************************/
-
+  /// Get whether a set of expressions can have a strong update or not.
+  /// \param values: The set of expressions to check.
+  /// \return true, if it contains only one expression and that expression is a
+  ///   symbol, false, otherwise.
   virtual bool is_singular(const std::set<exprt> &values)
   {
     return values.size()==1 && values.begin()->id()==ID_symbol;
   }
 };
 
-typedef value_set_analysis_baset<value_set_domaint<value_sett> >
+typedef
+  value_set_analysis_templatet<value_set_domain_templatet<value_sett>>
   value_set_analysist;
 
 void convert(

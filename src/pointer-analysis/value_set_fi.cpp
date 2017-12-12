@@ -104,8 +104,8 @@ void value_set_fit::output(
       {
         result="<"+from_expr(ns, identifier, o)+", ";
 
-        if(o_it->second.offset_is_set)
-          result+=integer2string(o_it->second.offset)+"";
+        if(o_it->second)
+          result += integer2string(*o_it->second) + "";
         else
           result+='*';
 
@@ -199,13 +199,12 @@ void value_set_fit::flatten_rec(
             t_it!=temp.write().end();
             t_it++)
         {
-          if(t_it->second.offset_is_set &&
-             it->second.offset_is_set)
+          if(t_it->second && it->second)
           {
-            t_it->second.offset += it->second.offset;
+            *t_it->second += *it->second;
           }
           else
-            t_it->second.offset_is_set=false;
+            t_it->second.reset();
         }
 
         forall_objects(oit, temp.read())
@@ -219,7 +218,7 @@ void value_set_fit::flatten_rec(
   if(generalize_index) // this means we had recursive symbols in there
   {
     Forall_objects(it, dest.write())
-      it->second.offset_is_set = false;
+      it->second.reset();
   }
 
   seen.erase(identifier + e.suffix);
@@ -237,8 +236,8 @@ exprt value_set_fit::to_expr(const object_map_dt::value_type &it) const
 
   od.object()=object;
 
-  if(it.second.offset_is_set)
-    od.offset()=from_integer(it.second.offset, index_type());
+  if(it.second)
+    od.offset() = from_integer(*it.second, index_type());
 
   od.type()=od.object().type();
 
@@ -326,13 +325,12 @@ void value_set_fit::get_value_set(
             t_it!=temp.write().end();
             t_it++)
         {
-          if(t_it->second.offset_is_set &&
-             it->second.offset_is_set)
+          if(t_it->second && it->second)
           {
-            t_it->second.offset += it->second.offset;
+            *t_it->second += *it->second;
           }
           else
-            t_it->second.offset_is_set=false;
+            t_it->second.reset();
 
           flat_map.write()[t_it->first]=t_it->second;
         }
@@ -575,32 +573,31 @@ void value_set_fit::get_value_set_rec(
 
       forall_objects(it, pointer_expr_set.read())
       {
-        objectt object=it->second;
+        offsett offset = it->second;
 
-        if(object.offset_is_zero() &&
-           expr.operands().size()==2)
+        if(offset_is_zero(offset) && expr.operands().size() == 2)
         {
           if(expr.op0().type().id()!=ID_pointer)
           {
             mp_integer i;
             if(to_integer(expr.op0(), i))
-              object.offset_is_set=false;
+              offset.reset();
             else
-              object.offset=(expr.id()==ID_plus)? i : -i;
+              *offset = (expr.id() == ID_plus) ? i : -i;
           }
           else
           {
             mp_integer i;
             if(to_integer(expr.op1(), i))
-              object.offset_is_set=false;
+              offset.reset();
             else
-              object.offset=(expr.id()==ID_plus)? i : -i;
+              *offset = (expr.id() == ID_plus) ? i : -i;
           }
         }
         else
-          object.offset_is_set=false;
+          offset.reset();
 
-        insert(dest, it->first, object);
+        insert(dest, it->first, offset);
       }
 
       return;
@@ -735,13 +732,12 @@ void value_set_fit::get_reference_set(
             t_it!=omt.write().end();
             t_it++)
         {
-          if(t_it->second.offset_is_set &&
-             it->second.offset_is_set)
+          if(t_it->second && it->second)
           {
-            t_it->second.offset += it->second.offset;
+            *t_it->second += *it->second;
           }
           else
-            t_it->second.offset_is_set=false;
+            t_it->second.reset();
         }
 
         forall_objects(it, omt.read())
@@ -824,13 +820,12 @@ void value_set_fit::get_reference_set_sharing_rec(
               t_it!=t2.write().end();
               t_it++)
           {
-            if(t_it->second.offset_is_set &&
-               it->second.offset_is_set)
+            if(t_it->second && it->second)
             {
-              t_it->second.offset += it->second.offset;
+              *t_it->second += *it->second;
             }
             else
-              t_it->second.offset_is_set=false;
+              t_it->second.reset();
           }
 
           forall_objects(it2, t2.read())
@@ -887,17 +882,16 @@ void value_set_fit::get_reference_set_sharing_rec(
            ns.follow(object.type())!=array_type)
           index_expr.make_typecast(array.type());
 
-        objectt o=a_it->second;
+        offsett o = a_it->second;
         mp_integer i;
 
         if(offset.is_zero())
         {
         }
-        else if(!to_integer(offset, i) &&
-                o.offset_is_zero())
-          o.offset=i;
+        else if(!to_integer(offset, i) && offset_is_zero(o))
+          *o = i;
         else
-          o.offset_is_set=false;
+          o.reset();
 
         insert(dest, index_expr, o);
       }
@@ -934,7 +928,7 @@ void value_set_fit::get_reference_set_sharing_rec(
       }
       else
       {
-        objectt o=it->second;
+        offsett o = it->second;
 
         exprt member_expr(ID_member, expr.type());
         member_expr.copy_to_operands(object);
@@ -1193,7 +1187,7 @@ void value_set_fit::do_free(
         else
         {
           // adjust
-          objectt o=o_it->second;
+          offsett o = o_it->second;
           exprt tmp(object);
           to_dynamic_object_expr(tmp).valid()=exprt(ID_unknown);
           insert(new_object_map, tmp, o);
