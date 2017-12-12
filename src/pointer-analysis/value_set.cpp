@@ -14,6 +14,7 @@
 
 #include <util/symbol_table.h>
 #include <util/simplify_expr.h>
+#include <util/simplify_expr_class.h>
 #include <util/base_type.h>
 #include <util/std_expr.h>
 #include <util/prefix.h>
@@ -32,6 +33,9 @@
 
 #include "add_failed_symbols.h"
 #include "dynamic_object_name.h"
+
+// Due to a large number of functions defined inline, `value_sett` and
+// associated types are documented in its header file, `value_set.h`.
 
 const value_sett::object_map_dt value_sett::object_map_dt::blank{};
 object_numberingt value_sett::object_numbering;
@@ -72,24 +76,23 @@ value_sett::entryt &value_sett::get_entry(
 bool value_sett::insert(
   object_mapt &dest,
   object_numberingt::number_type n,
-  const objectt &object) const
+  const offsett &offset) const
 {
   auto entry=dest.read().find(n);
 
   if(entry==dest.read().end())
   {
     // new
-    dest.write()[n]=object;
+    dest.write()[n] = offset;
     return true;
   }
-  else if(!entry->second.offset_is_set)
+  else if(!entry->second)
     return false; // no change
-  else if(object.offset_is_set &&
-          entry->second.offset==object.offset)
+  else if(offset && *entry->second == *offset)
     return false; // no change
   else
   {
-    dest.write()[n].offset_is_set=false;
+    dest.write()[n].reset();
     return true;
   }
 }
@@ -121,7 +124,7 @@ void value_sett::output(
     {
       #if 0
       const symbolt &symbol=ns.lookup(e.identifier);
-      display_name=symbol.display_name()+e.suffix;
+      display_name=id2string(symbol.display_name())+e.suffix;
       identifier=symbol.name;
       #else
       identifier=id2string(e.identifier);
@@ -162,8 +165,8 @@ void value_sett::output(
             result+=as_string(ID_any_allocation)+", ";
         }
 
-        if(o_it->second.offset_is_set)
-          result+=integer2string(o_it->second.offset)+"";
+        if(o_it->second)
+          result += integer2string(*o_it->second) + "";
         else
           result+='*';
 
@@ -233,8 +236,8 @@ exprt value_sett::to_expr(const object_map_dt::value_type &it) const
 
   od.object()=object;
 
-  if(it.second.offset_is_set)
-    od.offset()=from_integer(it.second.offset, index_type());
+  if(it.second)
+    od.offset() = from_integer(*it.second, index_type());
 
   od.type()=od.object().type();
 
@@ -316,7 +319,7 @@ bool value_sett::eval_pointer_offset(
         it=object_map.begin();
         it!=object_map.end();
         it++)
-      if(!it->second.offset_is_set)
+      if(!it->second)
         return false;
       else
       {
@@ -326,7 +329,7 @@ bool value_sett::eval_pointer_offset(
         if(ptr_offset<0)
           return false;
 
-        ptr_offset+=it->second.offset;
+        ptr_offset += *it->second;
 
         if(mod && ptr_offset!=previous_offset)
           return false;
@@ -377,7 +380,11 @@ void value_sett::get_value_set(
 {
   exprt tmp(expr);
   if(!is_simplified)
-    simplify(tmp, ns);
+  {
+    simplify_exprt s(ns);
+    s.keep_identical_structs=true;
+    s.simplify(tmp);
+  }
 
   get_value_set_rec(tmp, dest, "", tmp.type(), ns);
 }
@@ -669,15 +676,15 @@ void value_sett::get_value_set_rec(
         it!=pointer_expr_set.read().end();
         it++)
     {
-      objectt object=it->second;
+      offsett offset = it->second;
 
       // adjust by offset
-      if(object.offset_is_set && i_is_set)
-        object.offset+=i;
+      if(offset && i_is_set)
+        *offset += i;
       else
-        object.offset_is_set=false;
+        offset.reset();
 
-      insert(dest, it->first, object);
+      insert(dest, it->first, offset);
     }
   }
   else if(expr.id()==ID_mult)
@@ -702,12 +709,12 @@ void value_sett::get_value_set_rec(
         it!=pointer_expr_set.read().end();
         it++)
     {
-      objectt object=it->second;
+      offsett offset = it->second;
 
       // kill any offset
-      object.offset_is_set=false;
+      offset.reset();
 
-      insert(dest, it->first, object);
+      insert(dest, it->first, offset);
     }
   }
   else if(expr.id()==ID_side_effect)
@@ -916,14 +923,11 @@ void value_sett::get_value_set_rec(
     #endif
   }
 
-  #if 0
+  #ifdef DEBUG
   std::cout << "GET_VALUE_SET_REC RESULT:\n";
-  for(object_map_dt::const_iterator
-      it=dest.read().begin();
-      it!=dest.read().end();
-      it++)
+  for(const auto &obj : dest.read())
   {
-    const exprt &e=to_expr(it);
+    const exprt &e=to_expr(obj);
     std::cout << "  " << from_expr(ns, "", e) << "\n";
   }
   std::cout << "\n";
@@ -1075,24 +1079,23 @@ void value_sett::get_reference_set_rec(
         if(ns.follow(object.type())!=array_type)
           index_expr.make_typecast(array.type());
 
-        objectt o=a_it->second;
+        offsett o = a_it->second;
         mp_integer i;
 
         if(offset.is_zero())
         {
         }
-        else if(!to_integer(offset, i) &&
-                o.offset_is_set)
+        else if(!to_integer(offset, i) && o)
         {
           mp_integer size=pointer_offset_size(array_type.subtype(), ns);
 
           if(size<=0)
-            o.offset_is_set=false;
+            o.reset();
           else
-            o.offset=i*size;
+            *o = i * size;
         }
         else
-          o.offset_is_set=false;
+          o.reset();
 
         insert(dest, index_expr, o);
       }
@@ -1125,7 +1128,7 @@ void value_sett::get_reference_set_rec(
         insert(dest, exprt(ID_unknown, expr.type()));
       else
       {
-        objectt o=it->second;
+        offsett o = it->second;
 
         member_exprt member_expr(object, component_name, expr.type());
 
@@ -1287,6 +1290,12 @@ void value_sett::assign(
     object_mapt values_rhs;
     get_value_set(rhs, values_rhs, ns, is_simplified);
 
+    // Permit custom subclass to alter the read values prior to write:
+    adjust_assign_rhs_values(rhs, ns, values_rhs);
+
+    // Permit custom subclass to perform global side-effects prior to write:
+    apply_assign_side_effects(lhs, rhs, ns);
+
     assign_rec(lhs, values_rhs, "", ns, add_to_sets);
   }
 }
@@ -1362,7 +1371,7 @@ void value_sett::do_free(
         else
         {
           // adjust
-          objectt o=o_it->second;
+          offsett o = o_it->second;
           exprt tmp(object);
           to_dynamic_object_expr(tmp).valid()=exprt(ID_unknown);
           insert(new_object_map, tmp, o);
@@ -1569,7 +1578,7 @@ void value_sett::do_end_function(
   assign(lhs, rhs, ns, false, false);
 }
 
-void value_sett::apply_code(
+void value_sett::apply_code_rec(
   const codet &code,
   const namespacet &ns)
 {
@@ -1578,7 +1587,7 @@ void value_sett::apply_code(
   if(statement==ID_block)
   {
     forall_operands(it, code)
-      apply_code(to_code(*it), ns);
+      apply_code_rec(to_code(*it), ns);
   }
   else if(statement==ID_function_call)
   {
@@ -1705,6 +1714,10 @@ void value_sett::apply_code(
   else if(statement==ID_input || statement==ID_output)
   {
     // doesn't do anything
+  }
+  else if(statement==ID_dead)
+  {
+    // Ignore by default; could prune the value set.
   }
   else
   {

@@ -53,25 +53,13 @@ public:
 
   typedef irep_idt idt;
 
-  class objectt
+  /// Represents the offset into an object: either a unique integer offset,
+  /// or an unknown value, represented by `!offset`.
+  typedef optionalt<mp_integer> offsett;
+  bool offset_is_zero(const offsett &offset) const
   {
-  public:
-    objectt() :
-      offset_is_set(false)
-    {
-    }
-
-    explicit objectt(const mp_integer &_offset):
-      offset(_offset),
-      offset_is_set(true)
-    {
-    }
-
-    mp_integer offset;
-    bool offset_is_set;
-    bool offset_is_zero() const
-    { return offset_is_set && offset.is_zero(); }
-  };
+    return offset && offset->is_zero();
+  }
 
   class object_map_dt
   {
@@ -79,7 +67,7 @@ public:
     object_map_dt() {}
     static const object_map_dt blank;
 
-    typedef std::map<unsigned, objectt> objmapt;
+    typedef std::map<object_numberingt::number_type, offsett> objmapt;
     objmapt objmap;
 
     // NOLINTNEXTLINE(readability/identifiers)
@@ -87,7 +75,10 @@ public:
     // NOLINTNEXTLINE(readability/identifiers)
     typedef objmapt::iterator iterator;
 
-    const_iterator find(unsigned k) { return objmap.find(k); }
+    const_iterator find(object_numberingt::number_type k)
+    {
+      return objmap.find(k);
+    }
     iterator begin() { return objmap.begin(); }
     const_iterator begin() const { return objmap.begin(); }
     iterator end() { return objmap.end(); }
@@ -96,17 +87,19 @@ public:
     bool empty() const { return objmap.empty(); }
     void clear() { objmap.clear(); validity_ranges.clear(); }
 
-    objectt &operator[](unsigned k)
+    offsett &operator[](object_numberingt::number_type k)
     {
       return objmap[k];
     }
 
     // operator[] is the only way to insert something!
-    std::pair<iterator, bool> insert(const std::pair<unsigned, objectt>&)
+    std::pair<iterator, bool>
+    insert(const std::pair<object_numberingt::number_type, offsett> &)
     {
       UNREACHABLE;
     }
-    iterator insert(iterator, const std::pair<unsigned, objectt>&)
+    iterator
+    insert(iterator, const std::pair<object_numberingt::number_type, offsett> &)
     {
       UNREACHABLE;
     }
@@ -158,25 +151,26 @@ public:
 
   bool insert_to(object_mapt &dest, const exprt &src) const
   {
-    return insert_to(dest, object_numbering.number(src), objectt());
+    return insert_to(dest, object_numbering.number(src), offsett());
   }
 
   bool insert_to(
     object_mapt &dest,
     const exprt &src,
-    const mp_integer &offset) const
+    const mp_integer &offset_value) const
   {
-    return insert_to(dest, object_numbering.number(src), objectt(offset));
+    return insert_to(dest, object_numbering.number(src), offsett(offset_value));
   }
-
-  bool insert_to(object_mapt &dest, unsigned n, const objectt &object) const;
 
   bool insert_to(
     object_mapt &dest,
-    const exprt &expr,
-    const objectt &object) const
+    object_numberingt::number_type n,
+    const offsett &offset) const;
+
+  bool
+  insert_to(object_mapt &dest, const exprt &expr, const offsett &offset) const
   {
-    return insert_to(dest, object_numbering.number(expr), object);
+    return insert_to(dest, object_numbering.number(expr), offset);
   }
 
   bool insert_from(object_mapt &dest, object_map_dt::const_iterator it) const
@@ -186,25 +180,27 @@ public:
 
   bool insert_from(object_mapt &dest, const exprt &src) const
   {
-    return insert_from(dest, object_numbering.number(src), objectt());
+    return insert_from(dest, object_numbering.number(src), offsett());
   }
 
   bool insert_from(
     object_mapt &dest,
     const exprt &src,
-    const mp_integer &offset) const
+    const mp_integer &offset_value) const
   {
-    return insert_from(dest, object_numbering.number(src), objectt(offset));
+    return insert_from(
+      dest, object_numbering.number(src), offsett(offset_value));
   }
-
-  bool insert_from(object_mapt &dest, unsigned n, const objectt &object) const;
 
   bool insert_from(
     object_mapt &dest,
-    const exprt &expr,
-    const objectt &object) const
+    object_numberingt::number_type n,
+    const offsett &offset) const;
+
+  bool
+  insert_from(object_mapt &dest, const exprt &expr, const offsett &offset) const
   {
-    return insert_from(dest, object_numbering.number(expr), object);
+    return insert_from(dest, object_numbering.number(expr), offset);
   }
 
   struct entryt

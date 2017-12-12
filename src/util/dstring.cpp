@@ -21,7 +21,7 @@ void dstringt::serialize(serializert &serializer)
   {
     std::string str;
     serializer.serialize("dstring", str);
-    no=string_container[str];
+    no=get_string_container()[str];
   }
   else
   {

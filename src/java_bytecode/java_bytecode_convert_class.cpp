@@ -35,15 +35,15 @@ public:
     symbol_tablet &_symbol_table,
     message_handlert &_message_handler,
     size_t _max_array_length,
-    lazy_methodst& _lazy_methods,
+    method_bytecodet &method_bytecode,
     lazy_methods_modet _lazy_methods_mode,
-    java_string_library_preprocesst &_string_preprocess):
-    messaget(_message_handler),
-    symbol_table(_symbol_table),
-    max_array_length(_max_array_length),
-    lazy_methods(_lazy_methods),
-    lazy_methods_mode(_lazy_methods_mode),
-    string_preprocess(_string_preprocess)
+    java_string_library_preprocesst &_string_preprocess)
+    : messaget(_message_handler),
+      symbol_table(_symbol_table),
+      max_array_length(_max_array_length),
+      method_bytecode(method_bytecode),
+      lazy_methods_mode(_lazy_methods_mode),
+      string_preprocess(_string_preprocess)
   {
   }
 
@@ -73,7 +73,7 @@ public:
 protected:
   symbol_tablet &symbol_table;
   const size_t max_array_length;
-  lazy_methodst &lazy_methods;
+  method_bytecodet &method_bytecode;
   lazy_methods_modet lazy_methods_mode;
   java_string_library_preprocesst &string_preprocess;
 
@@ -205,7 +205,7 @@ void java_bytecode_convert_classt::convert(const classt &c)
       method,
       symbol_table,
       get_message_handler());
-    lazy_methods[method_identifier]=std::make_pair(class_symbol, &method);
+    method_bytecode.add(qualified_classname, method_identifier, method);
   }
 
   // is this a root class?
@@ -483,7 +483,7 @@ bool java_bytecode_convert_class(
   symbol_tablet &symbol_table,
   message_handlert &message_handler,
   size_t max_array_length,
-  lazy_methodst &lazy_methods,
+  method_bytecodet &method_bytecode,
   lazy_methods_modet lazy_methods_mode,
   java_string_library_preprocesst &string_preprocess)
 {
@@ -491,7 +491,7 @@ bool java_bytecode_convert_class(
     symbol_table,
     message_handler,
     max_array_length,
-    lazy_methods,
+    method_bytecode,
     lazy_methods_mode,
     string_preprocess);
 
@@ -516,4 +516,164 @@ bool java_bytecode_convert_class(
   }
 
   return true;
+}
+
+/// For a given generic type parameter, check if there is a parameter in the
+/// given vector of replacement parameters with a matching name. If yes,
+/// replace the identifier of the parameter at hand by the identifier of
+/// the matching parameter.
+/// Example: if \p parameter has identifier `java::Outer$Inner::T` and
+/// there is a replacement parameter with identifier `java::Outer::T`, the
+/// identifier of \p parameter gets set to `java::Outer::T`.
+/// \param parameter
+/// \param replacement_parameters vector of generic parameters (only viable
+///   ones, i.e., only those that can actually appear here such as generic
+///   parameters of outer classes of the class specified by the prefix of \p
+///   parameter identifier)
+static void find_and_replace_parameter(
+  java_generic_parametert &parameter,
+  const std::vector<java_generic_parametert> &replacement_parameters)
+{
+  // get the name of the parameter, e.g., `T` from `java::Class::T`
+  const std::string &parameter_full_name =
+    as_string(parameter.type_variable_ref().get_identifier());
+  const std::string &parameter_name =
+    parameter_full_name.substr(parameter_full_name.rfind("::") + 2);
+
+  // check if there is a replacement parameter with the same name
+  const auto replacement_parameter_p = std::find_if(
+    replacement_parameters.begin(),
+    replacement_parameters.end(),
+    [&parameter_name](const java_generic_parametert &replacement_param)
+    {
+      const std::string &replacement_parameter_full_name =
+        as_string(replacement_param.type_variable().get_identifier());
+      return parameter_name.compare(
+               replacement_parameter_full_name.substr(
+                 replacement_parameter_full_name.rfind("::") + 2)) == 0;
+    });
+
+  // if a replacement parameter was found, update the identifier
+  if(replacement_parameter_p != replacement_parameters.end())
+  {
+    const std::string &replacement_parameter_full_name =
+      as_string(replacement_parameter_p->type_variable().get_identifier());
+
+    // the replacement parameter is a viable one, i.e., it comes from an outer
+    // class
+    PRECONDITION(
+      parameter_full_name.substr(0, parameter_full_name.rfind("::"))
+        .compare(
+          replacement_parameter_full_name.substr(
+            0, replacement_parameter_full_name.rfind("::"))) > 0);
+
+    parameter.type_variable_ref().set_identifier(
+      replacement_parameter_full_name);
+  }
+}
+
+/// Recursively find all generic type parameters of a given type and replace
+/// their identifiers if matching replacement parameter exist.
+/// Example: class `Outer<T>` has an inner class `Inner` that has a field
+/// `t` of type `Generic<T>`. This function ensures that the parameter points to
+/// `java::Outer::T` instead of `java::Outer$Inner::T`.
+/// \param type
+/// \param replacement_parameters
+static void find_and_replace_parameters(
+  typet &type,
+  const std::vector<java_generic_parametert> &replacement_parameters)
+{
+  if(is_java_generic_parameter(type))
+  {
+    find_and_replace_parameter(
+      to_java_generic_parameter(type), replacement_parameters);
+  }
+  else if(is_java_generic_type(type))
+  {
+    java_generic_typet &generic_type = to_java_generic_type(type);
+    std::vector<reference_typet> &arguments =
+      generic_type.generic_type_arguments();
+    for(auto &argument : arguments)
+    {
+      find_and_replace_parameters(argument, replacement_parameters);
+    }
+  }
+}
+
+/// Checks if the class is implicitly generic, i.e., it is an inner class of
+/// any generic class. All uses of the implicit generic type parameters within
+/// the inner class are updated to point to the type parameters of the
+/// corresponding outer classes.
+/// \param class_name
+/// \param symbol_table
+void mark_java_implicitly_generic_class_type(
+  const irep_idt &class_name,
+  symbol_tablet &symbol_table)
+{
+  const std::string qualified_class_name = "java::" + id2string(class_name);
+  PRECONDITION(symbol_table.has_symbol(qualified_class_name));
+  symbolt &class_symbol = symbol_table.get_writeable_ref(qualified_class_name);
+  java_class_typet &class_type = to_java_class_type(class_symbol.type);
+
+  // the class must be an inner non-static class, i.e., have a field this$*
+  // TODO this should be simplified once static inner classes are marked
+  // during parsing
+  bool no_this_field = std::none_of(
+    class_type.components().begin(),
+    class_type.components().end(),
+    [](const struct_union_typet::componentt &component)
+    {
+      return id2string(component.get_name()).substr(0, 5) == "this$";
+    });
+  if(no_this_field)
+  {
+    return;
+  }
+
+  // create a vector of all generic type parameters of all outer classes, in
+  // the order from the outer-most inwards
+  std::vector<java_generic_parametert> implicit_generic_type_parameters;
+  std::string::size_type outer_class_delimiter =
+    qualified_class_name.rfind("$");
+  while(outer_class_delimiter != std::string::npos)
+  {
+    std::string outer_class_name =
+      qualified_class_name.substr(0, outer_class_delimiter);
+    if(symbol_table.has_symbol(outer_class_name))
+    {
+      const symbolt &outer_class_symbol =
+        symbol_table.lookup_ref(outer_class_name);
+      const java_class_typet &outer_class_type =
+        to_java_class_type(outer_class_symbol.type);
+      if(is_java_generic_class_type(outer_class_type))
+      {
+        const auto &outer_generic_type_parameters =
+          to_java_generic_class_type(outer_class_type).generic_types();
+        implicit_generic_type_parameters.insert(
+          implicit_generic_type_parameters.begin(),
+          outer_generic_type_parameters.begin(),
+          outer_generic_type_parameters.end());
+      }
+      outer_class_delimiter = outer_class_name.rfind("$");
+    }
+    else
+    {
+      throw missing_outer_class_symbol_exceptiont(
+        outer_class_name, qualified_class_name);
+    }
+  }
+
+  // if there are any implicit generic type parameters, mark the class
+  // implicitly generic and update identifiers of type parameters used in fields
+  if(!implicit_generic_type_parameters.empty())
+  {
+    class_symbol.type = java_implicitly_generic_class_typet(
+      class_type, implicit_generic_type_parameters);
+
+    for(auto &field : class_type.components())
+    {
+      find_and_replace_parameters(
+        field.type(), implicit_generic_type_parameters);
+    }
+  }
 }

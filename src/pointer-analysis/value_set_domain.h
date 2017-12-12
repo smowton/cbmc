@@ -17,92 +17,56 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "value_set.h"
 
-template<class Value_Sett>
-class value_set_domaint:public domain_baset
+template<class VST>
+class value_set_domain_templatet:public domain_baset
 {
 public:
-  Value_Sett value_set;
+  VST value_set;
 
   // overloading
 
-  bool merge(const value_set_domaint &other, locationt to)
+  bool merge(const value_set_domain_templatet<VST> &other, locationt to)
   {
     return value_set.make_union(other.value_set);
   }
 
-  void output(
+  virtual void output(
     const namespacet &ns,
-    std::ostream &out) const override
+    std::ostream &out) const
   {
     value_set.output(ns, out);
   }
 
-  jsont output_json(const namespacet &ns) const override
+  virtual jsont output_json(const namespacet &ns) const
   {
     return value_set.output_json(ns);
   }
 
-  void initialize(
+  virtual void initialize(
     const namespacet &ns,
-    locationt l) override
+    locationt l)
   {
     value_set.clear();
     value_set.location_number=l->location_number;
     value_set.function=l->function;
   }
 
-  void get_reference_set(
+  virtual void transform(
+    const namespacet &ns,
+    locationt from_l,
+    locationt to_l);
+
+  virtual void get_reference_set(
     const namespacet &ns,
     const exprt &expr,
-    value_setst::valuest &dest) override
+    value_setst::valuest &dest)
   {
     value_set.get_reference_set(expr, dest, ns);
   }
-
-  void transform(
-    const namespacet &ns,
-    locationt from_l,
-    locationt to_l) override
-  {
-    switch(from_l->type)
-    {
-    case GOTO:
-      // ignore for now
-      break;
-
-    case END_FUNCTION:
-      value_set.do_end_function(
-        static_analysis_baset::get_return_lhs(to_l),
-        ns);
-      break;
-
-    case RETURN:
-    case OTHER:
-    case ASSIGN:
-    case DECL:
-    case DEAD:
-      value_set.apply_code(from_l->code, ns);
-      break;
-
-    case ASSUME:
-      value_set.guard(from_l->guard, ns);
-      break;
-
-    case FUNCTION_CALL:
-      {
-        const code_function_callt &code=
-          to_code_function_call(from_l->code);
-
-        value_set.do_function_call(to_l->function, code.arguments(), ns);
-      }
-    break;
-
-    default:
-      {
-        // do nothing
-      }
-    }
-  }
 };
+
+typedef value_set_domain_templatet<value_sett> value_set_domaint;
+
+#include "value_set_domain_transform.inc"
 
 #endif // CPROVER_POINTER_ANALYSIS_VALUE_SET_DOMAIN_H

@@ -16,20 +16,23 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/cmdline.h>
 #include <util/make_unique.h>
 
+#include "ci_lazy_methods.h"
+#include "ci_lazy_methods_needed.h"
 #include "java_class_loader.h"
 #include "java_string_library_preprocess.h"
 
 #include <java_bytecode/select_pointer_type.h>
 
-#define JAVA_BYTECODE_LANGUAGE_OPTIONS /*NOLINT*/ \
-  "(java-assume-inputs-non-null)"                 \
-  "(java-throw-runtime-exceptions)"               \
-  "(java-max-input-array-length):"                \
-  "(java-max-input-tree-depth):"                  \
-  "(java-max-vla-length):"                        \
-  "(java-cp-include-files):"                      \
-  "(lazy-methods)"                                \
-  "(lazy-methods-extra-entry-point):"
+#define JAVA_BYTECODE_LANGUAGE_OPTIONS /*NOLINT*/                              \
+  "(java-assume-inputs-non-null)"                                              \
+  "(java-throw-runtime-exceptions)"                                            \
+  "(java-max-input-array-length):"                                             \
+  "(java-max-input-tree-depth):"                                               \
+  "(java-max-vla-length):"                                                     \
+  "(java-cp-include-files):"                                                   \
+  "(lazy-methods)"                                                             \
+  "(lazy-methods-extra-entry-point):"                                          \
+  "(java-load-class):"
 
 #define JAVA_BYTECODE_LANGUAGE_OPTIONS_HELP /*NOLINT*/                                          \
   " --java-assume-inputs-non-null    never initialize reference-typed parameter to the\n"       \
@@ -80,13 +83,6 @@ struct object_factory_parameterst final
   bool string_printable = false;
 };
 
-typedef std::pair<
-          const symbolt *,
-          const java_bytecode_parse_treet::methodt *>
-  lazy_method_valuet;
-typedef std::map<irep_idt, lazy_method_valuet>
-  lazy_methodst;
-
 class java_bytecode_languaget:public languaget
 {
 public:
@@ -107,8 +103,6 @@ public:
   bool typecheck(
     symbol_tablet &context,
     const std::string &module) override;
-
-  void replace_string_methods(symbol_table_baset &context);
 
   virtual bool final(symbol_table_baset &context) override;
 
@@ -158,12 +152,25 @@ public:
   std::set<std::string> extensions() const override;
 
   void modules_provided(std::set<std::string> &modules) override;
-  virtual void lazy_methods_provided(std::set<irep_idt> &) const override;
+  virtual void methods_provided(id_sett &methods) const override;
   virtual void convert_lazy_method(
-    const irep_idt &id, symbol_tablet &) override;
+    const irep_idt &function_id,
+    symbol_tablet &symbol_table) override;
 
 protected:
-  bool do_ci_lazy_method_conversion(symbol_tablet &, lazy_methodst &);
+  void convert_single_method(
+    const irep_idt &function_id,
+    symbol_table_baset &symbol_table)
+  {
+    convert_single_method(
+      function_id, symbol_table, optionalt<ci_lazy_methods_neededt>());
+  }
+  bool convert_single_method(
+    const irep_idt &function_id,
+    symbol_table_baset &symbol_table,
+    optionalt<ci_lazy_methods_neededt> needed_lazy_methods);
+
+  bool do_ci_lazy_method_conversion(symbol_tablet &, method_bytecodet &);
   const select_pointer_typet &get_pointer_type_selector() const;
 
   irep_idt main_class;
@@ -172,13 +179,16 @@ protected:
   bool assume_inputs_non_null;      // assume inputs variables to be non-null
   object_factory_parameterst object_factory_parameters;
   size_t max_user_array_length;     // max size for user code created arrays
-  lazy_methodst lazy_methods;
+  method_bytecodet method_bytecode;
   lazy_methods_modet lazy_methods_mode;
   std::vector<irep_idt> lazy_methods_extra_entry_points;
   bool string_refinement_enabled;
   bool throw_runtime_exceptions;
   java_string_library_preprocesst string_preprocess;
   std::string java_cp_include_files;
+
+  // list of classes to force load even without reference from the entry point
+  std::vector<irep_idt> java_load_classes;
 
 private:
   const std::unique_ptr<const select_pointer_typet> pointer_type_selector;
