@@ -180,7 +180,7 @@ typet string_length_type()
 void java_string_library_preprocesst::add_string_type(
   const irep_idt &class_name, symbol_tablet &symbol_table)
 {
-  class_typet string_type;
+  java_class_typet string_type;
   string_type.set_tag(class_name);
   string_type.components().resize(3);
   string_type.components()[0].set_name("@java.lang.Object");
@@ -192,6 +192,7 @@ void java_string_library_preprocesst::add_string_type(
   string_type.components()[2].set_name("data");
   string_type.components()[2].set_pretty_name("data");
   string_type.components()[2].type() = pointer_type(java_char_type());
+  string_type.set_access(ID_public);
   string_type.add_base(symbol_typet("java::java.lang.Object"));
   if(class_name!="java.lang.CharSequence")
   {
@@ -1878,8 +1879,10 @@ void java_string_library_preprocesst::initialize_conversion_table()
     ["java::java.lang.String.<init>:()V"]=
       ID_cprover_string_empty_string_func;
 
+  // CProverString.charAt differs from the Java String.charAt in that no
+  // exception is raised for the out of bounds case.
   cprover_equivalent_to_java_function
-    ["java::java.lang.String.charAt:(I)C"]=
+    ["java::org.cprover.CProverString.charAt:(Ljava/lang/String;I)C"]=
       ID_cprover_string_char_at_func;
   cprover_equivalent_to_java_function
     ["java::java.lang.String.codePointAt:(I)I"]=
@@ -1987,11 +1990,15 @@ void java_string_library_preprocesst::initialize_conversion_table()
   cprover_equivalent_to_java_string_returning_function
     ["java::java.lang.String.subSequence:(II)Ljava/lang/CharSequence;"]=
       ID_cprover_string_substring_func;
+  // CProverString.substring differs from the Java String.substring in that no
+  // exception is raised for the out of bounds case.
   cprover_equivalent_to_java_string_returning_function
-    ["java::java.lang.String.substring:(II)Ljava/lang/String;"]=
+    ["java::org.cprover.CProverString.substring:(Ljava/lang/String;II)"
+    "Ljava/lang/String;"]=
       ID_cprover_string_substring_func;
   cprover_equivalent_to_java_string_returning_function
-    ["java::java.lang.String.substring:(I)Ljava/lang/String;"]=
+    ["java::org.cprover.CProverString.substring:(Ljava/lang/String;I)"
+    "Ljava/lang/String;"]=
       ID_cprover_string_substring_func;
   cprover_equivalent_to_java_string_returning_function
     ["java::java.lang.String.toLowerCase:()Ljava/lang/String;"]=
