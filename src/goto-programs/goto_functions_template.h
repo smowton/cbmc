@@ -122,6 +122,8 @@ public:
     return *this;
   }
 
+  void unload(const irep_idt &name) { function_map.erase(name); }
+
   void clear()
   {
     function_map.clear();
