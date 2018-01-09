@@ -15,6 +15,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <iostream>
 #include <memory>
 
+#include <boost/filesystem.hpp>
+
 #include <util/config.h>
 #include <util/string2int.h>
 #include <util/unicode.h>
@@ -136,7 +138,7 @@ int goto_instrument_parse_optionst::doit()
     // Here we only early-check for requirements and we handle the option later.
     const std::string out_json_file_pathname=
       cmdline.get_value("save-code-statistics");
-    if(fileutl_is_directory(out_json_file_pathname))
+    if(boost::filesystem::is_directory(out_json_file_pathname))
     {
       error() << "The path-name '" << out_json_file_pathname
               << "'passed to the option '--save-code-statistics' "
@@ -144,7 +146,7 @@ int goto_instrument_parse_optionst::doit()
               << eom;
       return 12;
     }
-    if(fileutl_parse_extension_in_pathname(out_json_file_pathname)!=".json")
+    if(boost::filesystem::path(out_json_file_pathname).extension() != ".json")
     {
       error() << "The file of the path-name '" << out_json_file_pathname
               << "'passed to the option '--save-code-statistics' does "
@@ -790,11 +792,11 @@ int goto_instrument_parse_optionst::doit()
       stats.extend(goto_model);
       const std::string out_json_file_pathname=
         cmdline.get_value("save-code-statistics");
-      INVARIANT(!fileutl_is_directory(out_json_file_pathname),
+      INVARIANT(!boost::filesystem::is_directory(out_json_file_pathname),
                 "The early check passed so the JSON file indeed should not be "
                   " a directory.");
       INVARIANT(
-        fileutl_parse_extension_in_pathname(out_json_file_pathname)==".json",
+        boost::filesystem::path(out_json_file_pathname).extension() == ".json",
         "The early check passed so the JSON file indeed should have "
           "'.json' extension.");
       std::ofstream ofile(out_json_file_pathname);

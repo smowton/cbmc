@@ -61,6 +61,7 @@ macro(generic_includes name)
         ${CBMC_SOURCE_DIR}
         ${CMAKE_CURRENT_BINARY_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}
+        ${boost_include_include_dir}
     )
 endmacro(generic_includes)
 

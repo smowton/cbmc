@@ -10,6 +10,8 @@ add_library(goto-instrument-lib ${sources})
 
 generic_includes(goto-instrument-lib)
 
+
+
 target_link_libraries(goto-instrument-lib
     ansi-c
     cpp
@@ -25,6 +27,9 @@ target_link_libraries(goto-instrument-lib
     util
     json
     solvers
+
+    boost_filesystem
+    boost_system
 )
 
 add_if_library(goto-instrument-lib java_bytecode)

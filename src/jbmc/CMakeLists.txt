@@ -25,6 +25,9 @@ target_link_libraries(jbmc-lib
     solvers
     util
     xml
+
+    boost_filesystem
+    boost_system
 )
 
 add_if_library(jbmc-lib bv_refinement)

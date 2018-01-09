@@ -24,6 +24,9 @@ target_link_libraries(cbmc-lib
     solvers
     util
     xml
+
+    boost_filesystem
+    boost_system
 )
 
 add_if_library(cbmc-lib bv_refinement)

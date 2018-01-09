@@ -19,6 +19,9 @@ target_link_libraries(goto-analyzer-lib
     json
     assembler
     util
+
+    boost_filesystem
+    boost_system
 )
 
 add_if_library(goto-analyzer-lib java_bytecode)
