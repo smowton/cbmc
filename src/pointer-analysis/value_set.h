@@ -180,6 +180,7 @@ public:
   /// `x -> ?`).
   /// \param dest: object map to update.
   /// \param it: iterator pointing to new entry
+  /// \return true if dest was changed
   bool insert(object_mapt &dest, const object_map_dt::value_type &it) const
   {
     return insert(dest, it.first, it.second);
@@ -190,6 +191,7 @@ public:
   /// its offset is marked unknown.
   /// \param dest: object map to update
   /// \param src: expression to add
+  /// \return true if dest was changed
   bool insert(object_mapt &dest, const exprt &src) const
   {
     return insert(dest, object_numbering.number(src), offsett());
@@ -201,6 +203,7 @@ public:
   /// \param dest: object map to update
   /// \param src: expression to add
   /// \param offset_value: offset into `src`
+  /// \return true if dest was changed
   bool insert(
     object_mapt &dest,
     const exprt &src,
@@ -216,6 +219,7 @@ public:
   /// \param n: object number to add; must be mapped to the corresponding
   ///   expression by `object_numbering`.
   /// \param object: offset into object `n` (may be unknown).
+  /// \return true if dest was changed
   bool insert(
     object_mapt &dest,
     object_numberingt::number_type n,
@@ -227,6 +231,7 @@ public:
   /// \param dest: object map to update
   /// \param expr: expression to add
   /// \param object: offset into `expr` (may be unknown).
+  /// \return true if dest was changed
   bool insert(object_mapt &dest, const exprt &expr, const offsett &offset) const
   {
     return insert(dest, object_numbering.number(expr), offset);
