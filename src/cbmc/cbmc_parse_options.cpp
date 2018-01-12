@@ -117,7 +117,7 @@ void cbmc_parse_optionst::get_command_line_options(optionst &options)
     options.set_option("show-vcc", true);
 
   if(cmdline.isset("cover"))
-    options.set_option("cover", cmdline.get_values("cover"));
+    parse_cover_options(cmdline, options);
 
   if(cmdline.isset("mm"))
     options.set_option("mm", cmdline.get_value("mm"));
@@ -408,6 +408,8 @@ void cbmc_parse_optionst::get_command_line_options(optionst &options)
     options.set_option(
       "symex-coverage-report",
       cmdline.get_value("symex-coverage-report"));
+
+  PARSE_OPTIONS_GOTO_TRACE(cmdline, options);
 }
 
 /// invoke main modules
@@ -810,10 +812,7 @@ bool cbmc_parse_optionst::process_goto_program(
     // instrument cover goals
     if(cmdline.isset("cover"))
     {
-      if(instrument_cover_goals(
-           cmdline,
-           goto_model,
-           get_message_handler()))
+      if(instrument_cover_goals(options, goto_model, get_message_handler()))
         return true;
     }
 
@@ -1023,6 +1022,7 @@ void cbmc_parse_optionst::help()
     " --xml-ui                     use XML-formatted output\n"
     " --xml-interface              bi-directional XML interface\n"
     " --json-ui                    use JSON-formatted output\n"
+    HELP_GOTO_TRACE
     " --verbosity #                verbosity level\n"
     "\n";
 }

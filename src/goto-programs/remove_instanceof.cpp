@@ -28,15 +28,16 @@ public:
     class_hierarchy(symbol_table);
   }
 
-  // Lower instanceof for a single functions
+  // Lower instanceof for a single function
   bool lower_instanceof(goto_programt &);
+
+  // Lower instanceof for a single instruction
+  bool lower_instanceof(goto_programt &, goto_programt::targett);
 
 protected:
   symbol_tablet &symbol_table;
   namespacet ns;
   class_hierarchyt class_hierarchy;
-
-  bool lower_instanceof(goto_programt &, goto_programt::targett);
 
   std::size_t lower_instanceof(
     exprt &, goto_programt &, goto_programt::targett);
@@ -112,7 +113,12 @@ std::size_t remove_instanceoft::lower_instanceof(
   newinst->source_location=this_inst->source_location;
   newinst->function=this_inst->function;
 
-  // Replace the instanceof construct with a big-or.
+  // Replace the instanceof construct with a conjunction of non-null and the
+  // disjunction of all possible object types. According to the Java
+  // specification, null instanceof T is false for all possible values of T.
+  // (http://docs.oracle.com/javase/specs/jls/se7/html/jls-15.html#jls-15.20.2)
+  notequal_exprt non_null_expr(
+    check_ptr, null_pointer_exprt(to_pointer_type(check_ptr.type())));
   exprt::operandst or_ops;
   for(const auto &clsname : children)
   {
@@ -120,7 +126,7 @@ std::size_t remove_instanceoft::lower_instanceof(
     equal_exprt test(newsym.symbol_expr(), clsexpr);
     or_ops.push_back(test);
   }
-  expr=disjunction(or_ops);
+  expr = and_exprt(non_null_expr, disjunction(or_ops));
 
   return 1;
 }
@@ -168,9 +174,24 @@ bool remove_instanceoft::lower_instanceof(goto_programt &goto_program)
 }
 
 
+/// Replace an instanceof in the expression or guard of the passed instruction
+/// of the given function body with an explicit class-identifier test.
+/// \remarks Extra auxiliary variables may be introduced into symbol_table.
+/// \param target: The instruction to work on.
+/// \param goto_program: The function body containing the instruction.
+/// \param symbol_table: The symbol table to add symbols to.
+void remove_instanceof(
+  goto_programt::targett target,
+  goto_programt &goto_program,
+  symbol_tablet &symbol_table)
+{
+  remove_instanceoft rem(symbol_table);
+  rem.lower_instanceof(goto_program, target);
+}
+
 /// Replace every instanceof in the passed function with an explicit
 /// class-identifier test.
-/// Extra auxiliary variables may be introduced into symbol_table.
+/// \remarks Extra auxiliary variables may be introduced into symbol_table.
 /// \param function: The function to work on.
 /// \param symbol_table: The symbol table to add symbols to.
 void remove_instanceof(
@@ -183,7 +204,7 @@ void remove_instanceof(
 
 /// Replace every instanceof in every function with an explicit
 /// class-identifier test.
-/// Extra auxiliary variables may be introduced into symbol_table.
+/// \remarks Extra auxiliary variables may be introduced into symbol_table.
 /// \param goto_functions: The functions to work on.
 /// \param symbol_table: The symbol table to add symbols to.
 void remove_instanceof(
@@ -198,6 +219,11 @@ void remove_instanceof(
     goto_functions.compute_location_numbers();
 }
 
+/// Replace every instanceof in every function with an explicit
+/// class-identifier test.
+/// \remarks Extra auxiliary variables may be introduced into symbol_table.
+/// \param goto_model: The functions to work on and the symbol table to add
+/// symbols to.
 void remove_instanceof(goto_modelt &goto_model)
 {
   remove_instanceof(goto_model.goto_functions, goto_model.symbol_table);
