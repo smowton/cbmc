@@ -23,6 +23,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/json.h>
 #include <util/exit_codes.h>
 
+#include <goto-programs/class_hierarchy.h>
 #include <goto-programs/goto_convert_functions.h>
 #include <goto-programs/remove_function_pointers.h>
 #include <goto-programs/remove_virtual_functions.h>
@@ -699,6 +700,18 @@ int goto_instrument_parse_optionst::doit()
         call_graph.output_dot(std::cout);
       else
         call_graph.output(std::cout);
+
+      return 0;
+    }
+
+    if(cmdline.isset("class-hierarchy"))
+    {
+      class_hierarchyt hierarchy;
+      hierarchy(goto_model.symbol_table);
+      if(cmdline.isset("dot"))
+        hierarchy.output_dot(std::cout);
+      else
+        hierarchy.output(std::cout);
 
       return 0;
     }
@@ -1530,6 +1543,7 @@ void goto_instrument_parse_optionst::help()
     " --call-graph                 show graph of function calls\n"
     // NOLINTNEXTLINE(whitespace/line_length)
     " --reachable-call-graph       show graph of function calls potentially reachable from main function\n"
+    " --class-hierarchy            show class hierarchy\n"
     "\n"
     "Safety checks:\n"
     " --no-assertions              ignore user assertions\n"

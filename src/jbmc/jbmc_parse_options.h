@@ -18,6 +18,8 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <analyses/goto_check.h>
 
+#include <goto-programs/goto_trace.h>
+
 #include <java_bytecode/java_bytecode_language.h>
 
 class bmct;
@@ -52,17 +54,18 @@ class optionst;
   "(show-properties)" \
   "(drop-unused-functions)" \
   "(property):(stop-on-fail)(trace)" \
-  "(verbosity):(no-library)" \
+  "(verbosity):" \
   "(version)" \
   "(cover):(symex-coverage-report):" \
   "(i386-linux)(i386-macos)(i386-win32)(win32)(winx64)" \
   "(ppc-macos)" \
   "(arrays-uf-always)(arrays-uf-never)" \
-  "(string-abstraction)(no-arch)(arch):" \
+  "(no-arch)(arch):" \
   "(graphml-witness):" \
   JAVA_BYTECODE_LANGUAGE_OPTIONS \
   "(java-unwind-enum-static)" \
-  "(localize-faults)(localize-faults-method):"
+  "(localize-faults)(localize-faults-method):" \
+  OPT_GOTO_TRACE
 
 class jbmc_parse_optionst:
   public parse_options_baset,
@@ -78,8 +81,7 @@ public:
     const char **argv,
     const std::string &extra_options);
 
-  void process_goto_function(
-    goto_functionst::goto_functiont &function, symbol_tablet &symbol_table);
+  void process_goto_function(goto_model_functiont &function);
   bool process_goto_functions(goto_modelt &goto_model, const optionst &options);
 
 protected:

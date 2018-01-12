@@ -14,7 +14,6 @@
 
 #include <util/symbol_table.h>
 #include <util/simplify_expr.h>
-#include <util/simplify_expr_class.h>
 #include <util/base_type.h>
 #include <util/std_expr.h>
 #include <util/prefix.h>
@@ -379,12 +378,9 @@ void value_sett::get_value_set(
   bool is_simplified) const
 {
   exprt tmp(expr);
+
   if(!is_simplified)
-  {
-    simplify_exprt s(ns);
-    s.keep_identical_structs=true;
-    s.simplify(tmp);
-  }
+    simplify(tmp, ns);
 
   get_value_set_rec(tmp, dest, "", tmp.type(), ns);
 }
