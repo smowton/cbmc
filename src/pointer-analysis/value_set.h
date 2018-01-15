@@ -247,34 +247,46 @@ public:
     idt identifier;
     std::string suffix;
     typet declared_on_type;
+    exprt structured_lhs;
 
     entryt()
     {
     }
 
-    entryt(const idt &_identifier, const std::string &_suffix):
-      identifier(_identifier),
-      suffix(_suffix)
+    entryt(const idt &_identifier, const std::string &_suffix)
+      : identifier(_identifier), suffix(_suffix), structured_lhs(nil_exprt())
     {
     }
 
     entryt(
       const idt &_identifier,
       const std::string &_suffix,
-      const typet &_declared_on_type):
-      identifier(_identifier),
-      suffix(_suffix),
-      declared_on_type(_declared_on_type)
+      const typet &_declared_on_type)
+      : identifier(_identifier),
+        suffix(_suffix),
+        declared_on_type(_declared_on_type),
+        structured_lhs(nil_exprt())
+    {
+    }
+
+    entryt(
+      const idt &_identifier,
+      const std::string &_suffix,
+      const typet &_declared_on_type,
+      const exprt &structured_lhs)
+      : identifier(_identifier),
+        suffix(_suffix),
+        declared_on_type(_declared_on_type),
+        structured_lhs(structured_lhs)
     {
     }
 
     bool operator==(const entryt &other) const
     {
-      return
-        identifier==other.identifier &&
-        suffix==other.suffix &&
-        declared_on_type==other.declared_on_type &&
-        object_map==other.object_map;
+      return identifier == other.identifier && suffix == other.suffix &&
+             declared_on_type == other.declared_on_type &&
+             structured_lhs == other.structured_lhs &&
+             object_map == other.object_map;
     }
     bool operator!=(const entryt &other) const
     {
