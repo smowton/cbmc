@@ -100,17 +100,22 @@ void class_hierarchyt::output(std::ostream &out) const
   }
 }
 
-std::ostream &output_dot(std::ostream &ostr, const class_hierarchyt &hierarchy)
+/// Output class hierarchy in Graphviz DOT format
+/// \param ostr: stream to write DOT to
+void class_hierarchyt::output_dot(std::ostream &ostr) const
 {
-  ostr << "digraph call_graph {\n"
+  ostr << "digraph class_hierarchy {\n"
        << "  rankdir=BT;\n"
        << "  node [fontsize=12 shape=box];\n";
-  for(const auto &c : hierarchy.class_map)
+  for(const auto &c : class_map)
+  {
     for(const auto &ch : c.second.parents)
+    {
       ostr << "  \"" << c.first << "\" -> "
            << "\"" << ch << "\" "
            << " [arrowhead=\"vee\"];"
            << "\n";
+    }
+  }
   ostr << "}\n";
-  return ostr;
 }

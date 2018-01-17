@@ -20,6 +20,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "expr.h"
 #include "mp_arith.h"
 #include "invariant.h"
+#include "expr_cast.h"
 
 class constant_exprt;
 
@@ -818,8 +819,16 @@ public:
 
   bool has_this() const
   {
+    return get_this() != nullptr;
+  }
+
+  const parametert *get_this() const
+  {
     const parameterst &p=parameters();
-    return !p.empty() && p.front().get_this();
+    if(!p.empty() && p.front().get_this())
+      return &p.front();
+    else
+      return nullptr;
   }
 
   /*******************************************************************\
@@ -915,6 +924,26 @@ public:
         it!=p.end(); it++)
       result.push_back(it->get_identifier());
     return result;
+  }
+
+  typedef
+    std::unordered_map<irep_idt, std::size_t, irep_id_hash> parameter_indicest;
+
+  /// Get a map from parameter name to its index
+  parameter_indicest parameter_indices() const
+  {
+    parameter_indicest parameter_indices;
+    const parameterst &p = parameters();
+    parameter_indices.reserve(p.size());
+    std::size_t index = 0;
+    for(const auto &p : parameters())
+    {
+      const irep_idt &id = p.get_identifier();
+      if(!id.empty())
+        parameter_indices.insert({ id, index });
+      ++index;
+    }
+    return parameter_indices;
   }
 };
 
@@ -1132,10 +1161,6 @@ inline bitvector_typet &to_bitvector_type(typet &type)
 class bv_typet:public bitvector_typet
 {
 public:
-  bv_typet():bitvector_typet(ID_bv)
-  {
-  }
-
   explicit bv_typet(std::size_t width):bitvector_typet(ID_bv)
   {
     set_width(width);
@@ -1172,10 +1197,6 @@ inline bv_typet &to_bv_type(typet &type)
 class unsignedbv_typet:public bitvector_typet
 {
 public:
-  unsignedbv_typet():bitvector_typet(ID_unsignedbv)
-  {
-  }
-
   explicit unsignedbv_typet(std::size_t width):
     bitvector_typet(ID_unsignedbv, width)
   {
@@ -1218,10 +1239,6 @@ inline unsignedbv_typet &to_unsignedbv_type(typet &type)
 class signedbv_typet:public bitvector_typet
 {
 public:
-  signedbv_typet():bitvector_typet(ID_signedbv)
-  {
-  }
-
   explicit signedbv_typet(std::size_t width):
     bitvector_typet(ID_signedbv, width)
   {
@@ -1341,10 +1358,6 @@ inline const floatbv_typet &to_floatbv_type(const typet &type)
 class c_bit_field_typet:public bitvector_typet
 {
 public:
-  c_bit_field_typet():bitvector_typet(ID_c_bit_field)
-  {
-  }
-
   explicit c_bit_field_typet(const typet &subtype, std::size_t width):
     bitvector_typet(ID_c_bit_field, subtype, width)
   {
@@ -1414,8 +1427,9 @@ public:
 inline const pointer_typet &to_pointer_type(const typet &type)
 {
   PRECONDITION(type.id()==ID_pointer);
-  PRECONDITION(!type.get(ID_width).empty());
-  return static_cast<const pointer_typet &>(type);
+  const pointer_typet &ret = static_cast<const pointer_typet &>(type);
+  validate_type(ret);
+  return ret;
 }
 
 /*! \copydoc to_pointer_type(const typet &)
@@ -1424,8 +1438,21 @@ inline const pointer_typet &to_pointer_type(const typet &type)
 inline pointer_typet &to_pointer_type(typet &type)
 {
   PRECONDITION(type.id()==ID_pointer);
-  PRECONDITION(!type.get(ID_width).empty());
-  return static_cast<pointer_typet &>(type);
+  pointer_typet &ret = static_cast<pointer_typet &>(type);
+  validate_type(ret);
+  return ret;
+}
+
+template <>
+inline bool can_cast_type<pointer_typet>(const typet &type)
+{
+  return type.id() == ID_pointer;
+}
+
+inline void validate_type(const pointer_typet &type)
+{
+  DATA_INVARIANT(!type.get(ID_width).empty(), "pointer must have width");
+  DATA_INVARIANT(type.get_width() > 0, "pointer must have non-zero width");
 }
 
 /*! \brief The reference type

@@ -8,6 +8,7 @@ Author: Daniel Kroening, kroening@kroening.com
 
 /// \file
 /// Remove Virtual Function (Method) Calls
+#include <algorithm>
 
 #include "remove_virtual_functions.h"
 #include "class_hierarchy.h"
@@ -23,8 +24,7 @@ class remove_virtual_functionst
 {
 public:
   remove_virtual_functionst(
-    const symbol_tablet &_symbol_table,
-    const goto_functionst &goto_functions);
+    const symbol_tablet &_symbol_table);
 
   void operator()(goto_functionst &goto_functions);
 
@@ -47,20 +47,24 @@ protected:
     goto_programt::targett target);
 
   void get_functions(const exprt &, dispatch_table_entriest &);
+  typedef std::function<
+    resolve_concrete_function_callt::concrete_function_callt(
+      const irep_idt &,
+      const irep_idt &)>
+    function_call_resolvert;
   void get_child_functions_rec(
     const irep_idt &,
     const symbol_exprt &,
     const irep_idt &,
     dispatch_table_entriest &,
-    std::set<irep_idt> &visited) const;
-  exprt get_method(
-    const irep_idt &class_id,
-    const irep_idt &component_name) const;
+    std::set<irep_idt> &visited,
+    const function_call_resolvert &) const;
+  exprt
+  get_method(const irep_idt &class_id, const irep_idt &component_name) const;
 };
 
 remove_virtual_functionst::remove_virtual_functionst(
-  const symbol_tablet &_symbol_table,
-  const goto_functionst &goto_functions):
+  const symbol_tablet &_symbol_table):
   ns(_symbol_table),
   symbol_table(_symbol_table)
 {
@@ -181,10 +185,11 @@ void remove_virtual_functionst::remove_virtual_function(
         // Cast the `this` pointer to the correct type for the new callee:
         const auto &callee_type=
           to_code_type(ns.lookup(fun.symbol_expr.get_identifier()).type);
+        const code_typet::parametert *this_param = callee_type.get_this();
         INVARIANT(
-          callee_type.has_this(),
+          this_param != nullptr,
           "Virtual function callees must have a `this` argument");
-        typet need_type=callee_type.parameters()[0].type();
+        typet need_type=this_param->type();
         if(!type_eq(newcall.arguments()[0].type(), need_type, ns))
           newcall.arguments()[0].make_typecast(need_type);
       }
@@ -192,6 +197,10 @@ void remove_virtual_functionst::remove_virtual_function(
       {
         // No definition for this type; shouldn't be possible...
         t1->make_assertion(false_exprt());
+        t1->source_location.set_comment(
+          ("cannot find calls for " +
+           id2string(code.function().get(ID_identifier)) + " dispatching " +
+           id2string(fun.class_id)));
       }
       insertit.first->second=t1;
       // goto final
@@ -247,6 +256,7 @@ void remove_virtual_functionst::remove_virtual_function(
 /// `last_method_defn`: the most-derived parent of `this_id` to define the
 ///   requested function
 /// `component_name`: name of the function searched for
+/// `resolve_function_call`: function to resolve abstract method call
 /// \return `functions` is assigned a list of {class name, function symbol}
 ///   pairs indicating that if `this` is of the given class, then the call will
 ///   target the given function. Thus if A <: B <: C and A and C provide
@@ -257,7 +267,8 @@ void remove_virtual_functionst::get_child_functions_rec(
   const symbol_exprt &last_method_defn,
   const irep_idt &component_name,
   dispatch_table_entriest &functions,
-  std::set<irep_idt> &visited) const
+  std::set<irep_idt> &visited,
+  const function_call_resolvert &resolve_function_call) const
 {
   auto findit=class_hierarchy.class_map.find(this_id);
   if(findit==class_hierarchy.class_map.end())
@@ -278,6 +289,21 @@ void remove_virtual_functionst::get_child_functions_rec(
     {
       function.symbol_expr=last_method_defn;
     }
+    if(function.symbol_expr == symbol_exprt())
+    {
+      const resolve_concrete_function_callt::concrete_function_callt
+        &resolved_call = resolve_function_call(child, component_name);
+      if(resolved_call.is_valid())
+      {
+        function.class_id = resolved_call.get_class_identifier();
+        const symbolt &called_symbol =
+          symbol_table.lookup_ref(resolved_call.get_virtual_method_name());
+
+        function.symbol_expr = called_symbol.symbol_expr();
+        function.symbol_expr.set(
+          ID_C_class, resolved_call.get_class_identifier());
+      }
+    }
     functions.push_back(function);
 
     get_child_functions_rec(
@@ -285,7 +311,8 @@ void remove_virtual_functionst::get_child_functions_rec(
       function.symbol_expr,
       component_name,
       functions,
-      visited);
+      visited,
+      resolve_function_call);
   }
 }
 
@@ -294,21 +321,30 @@ void remove_virtual_functionst::get_functions(
   dispatch_table_entriest &functions)
 {
   const irep_idt class_id=function.get(ID_C_class);
+  const std::string class_id_string(id2string(class_id));
   const irep_idt component_name=function.get(ID_component_name);
+  const std::string component_name_string(id2string(component_name));
   INVARIANT(!class_id.empty(), "All virtual functions must have a class");
 
   resolve_concrete_function_callt get_virtual_call_target(
     symbol_table, class_hierarchy);
-  const resolve_concrete_function_callt::concrete_function_callt &
-    resolved_call=get_virtual_call_target(class_id, component_name);
+  const function_call_resolvert resolve_function_call =
+    [&get_virtual_call_target](
+      const irep_idt &class_id, const irep_idt &component_name) {
+      return get_virtual_call_target(class_id, component_name);
+    };
+
+  const resolve_concrete_function_callt::concrete_function_callt
+    &resolved_call = get_virtual_call_target(class_id, component_name);
+
   dispatch_table_entryt root_function;
 
   if(resolved_call.is_valid())
   {
     root_function.class_id=resolved_call.get_class_identifier();
 
-    const symbolt &called_symbol=
-      *symbol_table.lookup(resolved_call.get_virtual_method_name());
+    const symbolt &called_symbol =
+      symbol_table.lookup_ref(resolved_call.get_virtual_method_name());
 
     root_function.symbol_expr=called_symbol.symbol_expr();
     root_function.symbol_expr.set(
@@ -327,7 +363,8 @@ void remove_virtual_functionst::get_functions(
     root_function.symbol_expr,
     component_name,
     functions,
-    visited);
+    visited,
+    resolve_function_call);
 
   if(root_function.symbol_expr!=symbol_exprt())
     functions.push_back(root_function);
@@ -397,9 +434,7 @@ void remove_virtual_functions(
   const symbol_tablet &symbol_table,
   goto_functionst &goto_functions)
 {
-  remove_virtual_functionst
-    rvf(symbol_table, goto_functions);
-
+  remove_virtual_functionst rvf(symbol_table);
   rvf(goto_functions);
 }
 
@@ -409,6 +444,16 @@ void remove_virtual_functions(goto_modelt &goto_model)
     goto_model.symbol_table, goto_model.goto_functions);
 }
 
+void remove_virtual_functions(goto_model_functiont &function)
+{
+  remove_virtual_functionst rvf(function.get_symbol_table());
+  bool changed = rvf.remove_virtual_functions(
+    function.get_goto_function().body);
+  // Give fresh location numbers to `function`, in case it has grown:
+  if(changed)
+    function.compute_location_numbers();
+}
+
 void remove_virtual_function(
   goto_modelt &goto_model,
   goto_programt &goto_program,
@@ -416,8 +461,7 @@ void remove_virtual_function(
   const dispatch_table_entriest &dispatch_table,
   virtual_dispatch_fallback_actiont fallback_action)
 {
-  remove_virtual_functionst
-    rvf(goto_model.symbol_table, goto_model.goto_functions);
+  remove_virtual_functionst rvf(goto_model.symbol_table);
 
   rvf.remove_virtual_function(
     goto_program, instruction, dispatch_table, fallback_action);

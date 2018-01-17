@@ -17,6 +17,7 @@ SRC += unit_tests.cpp \
        analyses/does_remove_const/does_type_preserve_const_correctness.cpp \
        analyses/does_remove_const/is_type_at_least_as_const_as.cpp \
        goto-programs/goto_trace_output.cpp \
+       goto-programs/class_hierarchy_output.cpp \
        java_bytecode/java_bytecode_convert_class/convert_abstract_class.cpp \
        java_bytecode/java_bytecode_parse_generics/parse_generic_class.cpp \
        java_bytecode/java_object_factory/gen_nondet_string_init.cpp \
@@ -30,11 +31,14 @@ SRC += unit_tests.cpp \
        solvers/refinement/string_constraint_generator_valueof/is_digit_with_radix.cpp \
        solvers/refinement/string_constraint_instantiation/instantiate_not_contains.cpp \
        solvers/refinement/string_refinement/concretize_array.cpp \
+       solvers/refinement/string_refinement/has_subtype.cpp \
        solvers/refinement/string_refinement/substitute_array_list.cpp \
+       solvers/refinement/string_refinement/string_symbol_resolution.cpp \
        solvers/refinement/string_refinement/union_find_replace.cpp \
        util/expr_cast/expr_cast.cpp \
        util/expr_iterator.cpp \
        util/message.cpp \
+       util/parameter_indices.cpp \
        util/simplify_expr.cpp \
        util/symbol_table.cpp \
        catch_example.cpp \

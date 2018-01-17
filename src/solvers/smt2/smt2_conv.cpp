@@ -550,8 +550,7 @@ void smt2_convt::convert_address_of_rec(
       mp_integer offset=member_offset(struct_type, component_name, ns);
       assert(offset>=0);
 
-      unsignedbv_typet index_type;
-      index_type.set_width(boolbv_width(result_type));
+      unsignedbv_typet index_type(boolbv_width(result_type));
 
       // pointer arithmetic
       out << "(bvadd ";
@@ -853,20 +852,19 @@ void smt2_convt::convert_expr(const exprt &expr)
   if(expr.id()==ID_symbol)
   {
     irep_idt id=to_symbol_expr(expr).get_identifier();
-    assert(id!=irep_idt());
-
+    DATA_INVARIANT(!id.empty(), "symbol must have identifier");
     out << '|' << convert_identifier(id) << '|';
   }
   else if(expr.id()==ID_nondet_symbol)
   {
-    irep_idt id=expr.get(ID_identifier);
-    assert(id!="");
+    irep_idt id=to_nondet_symbol_expr(expr).get_identifier();
+    DATA_INVARIANT(!id.empty(), "symbol must have identifier");
     out << '|' << convert_identifier("nondet_"+id2string(id)) << '|';
   }
   else if(expr.id()==ID_smt2_symbol)
   {
     irep_idt id=expr.get(ID_identifier);
-    assert(id!=irep_idt());
+    DATA_INVARIANT(!id.empty(), "smt2_symbol must have identifier");
     out << id;
   }
   else if(expr.id()==ID_typecast)
@@ -4071,7 +4069,8 @@ void smt2_convt::find_symbols(const exprt &expr)
     if(expr.id()==ID_symbol)
       identifier=to_symbol_expr(expr).get_identifier();
     else
-      identifier="nondet_"+id2string(expr.get(ID_identifier));
+      identifier="nondet_"+
+        id2string(to_nondet_symbol_expr(expr).get_identifier());
 
     identifiert &id=identifier_map[identifier];
 

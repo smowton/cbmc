@@ -52,12 +52,11 @@ public:
   }
 
   void output(std::ostream &) const;
+  void output_dot(std::ostream &) const;
 
 protected:
   void get_children_trans_rec(const irep_idt &, idst &) const;
   void get_parents_trans_rec(const irep_idt &, idst &) const;
 };
-
-std::ostream &output_dot(std::ostream &ostr, const class_hierarchyt &hierarchy);
 
 #endif // CPROVER_GOTO_PROGRAMS_CLASS_HIERARCHY_H
