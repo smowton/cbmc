@@ -253,19 +253,11 @@ public:
     {
     }
 
-    entryt(const idt &_identifier, const std::string &_suffix)
-      : identifier(_identifier), suffix(_suffix), structured_lhs(nil_exprt())
-    {
-    }
-
     entryt(
       const idt &_identifier,
       const std::string &_suffix,
-      const typet &_declared_on_type)
-      : identifier(_identifier),
-        suffix(_suffix),
-        declared_on_type(_declared_on_type),
-        structured_lhs(nil_exprt())
+      const exprt &structured_lhs)
+      : identifier(_identifier), suffix(_suffix), structured_lhs(structured_lhs)
     {
     }
 
