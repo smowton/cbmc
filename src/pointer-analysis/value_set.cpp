@@ -1406,7 +1406,7 @@ void value_sett::assign_rec(
   if(lhs.id()==ID_symbol)
   {
     const irep_idt &identifier=to_symbol_expr(lhs).get_identifier();
-    entryt &e=get_entry(entryt(identifier, suffix), lhs.type(), ns);
+    entryt &e = get_entry(entryt(identifier, suffix, lhs), lhs.type(), ns);
 
     if(add_to_sets)
       make_union(e.object_map, values_rhs);
@@ -1419,7 +1419,7 @@ void value_sett::assign_rec(
       to_dynamic_object_expr(lhs);
     std::string name=get_dynamic_object_name(dynamic_object);
 
-    entryt &e=get_entry(entryt(name, suffix), lhs.type(), ns);
+    entryt &e = get_entry(entryt(name, suffix, lhs), lhs.type(), ns);
 
     make_union(e.object_map, values_rhs);
   }
