@@ -2035,9 +2035,8 @@ exprt c_typecheck_baset::do_special_functions(
 
     typecheck_function_call_arguments(expr);
 
-    exprt get_must_expr=
-      binary_predicate_exprt(
-        expr.arguments()[0], "get_must", expr.arguments()[1]);
+    exprt get_must_expr = binary_predicate_exprt(
+      expr.arguments()[0], ID_get_must, expr.arguments()[1]);
     get_must_expr.add_source_location()=source_location;
 
     return get_must_expr;
@@ -2053,9 +2052,8 @@ exprt c_typecheck_baset::do_special_functions(
 
     typecheck_function_call_arguments(expr);
 
-    exprt get_may_expr=
-      binary_predicate_exprt(
-        expr.arguments()[0], "get_may", expr.arguments()[1]);
+    exprt get_may_expr = binary_predicate_exprt(
+      expr.arguments()[0], ID_get_may, expr.arguments()[1]);
     get_may_expr.add_source_location()=source_location;
 
     return get_may_expr;

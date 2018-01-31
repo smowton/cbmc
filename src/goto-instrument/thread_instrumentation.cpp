@@ -43,7 +43,7 @@ void thread_exit_instrumentation(goto_programt &goto_program)
   exprt mutex_locked_string=
     string_constantt("mutex-locked");
 
-  binary_exprt get_may("get_may");
+  binary_exprt get_may(ID_get_may);
 
   // NULL is any
   get_may.op0()=null_pointer_exprt(pointer_type(empty_typet()));
@@ -89,8 +89,8 @@ void mutex_init_instrumentation(
   goto_programt &goto_program,
   typet lock_type)
 {
-  symbol_tablet::symbolst::const_iterator f_it=
-    symbol_table.symbols.find("__CPROVER_set_must");
+  symbol_tablet::symbolst::const_iterator f_it =
+    symbol_table.symbols.find(CPROVER_PREFIX "set_must");
 
   if(f_it==symbol_table.symbols.end())
     return;

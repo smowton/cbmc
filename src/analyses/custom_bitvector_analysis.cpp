@@ -319,10 +319,11 @@ void custom_bitvector_domaint::transform(
       {
         const irep_idt &identifier=to_symbol_expr(function).get_identifier();
 
-        if(identifier=="__CPROVER_set_must" ||
-           identifier=="__CPROVER_clear_must" ||
-           identifier=="__CPROVER_set_may" ||
-           identifier=="__CPROVER_clear_may")
+        if(
+          identifier == CPROVER_PREFIX "set_must" ||
+          identifier == CPROVER_PREFIX "clear_must" ||
+          identifier == CPROVER_PREFIX "set_may" ||
+          identifier == CPROVER_PREFIX "clear_may")
         {
           if(code_function_call.arguments().size()==2)
           {
@@ -331,13 +332,13 @@ void custom_bitvector_domaint::transform(
 
             modet mode;
 
-            if(identifier=="__CPROVER_set_must")
+            if(identifier == CPROVER_PREFIX "set_must")
               mode=modet::SET_MUST;
-            else if(identifier=="__CPROVER_clear_must")
+            else if(identifier == CPROVER_PREFIX "clear_must")
               mode=modet::CLEAR_MUST;
-            else if(identifier=="__CPROVER_set_may")
+            else if(identifier == CPROVER_PREFIX "set_may")
               mode=modet::SET_MAY;
-            else if(identifier=="__CPROVER_clear_may")
+            else if(identifier == CPROVER_PREFIX "clear_may")
               mode=modet::CLEAR_MAY;
             else
               UNREACHABLE;
@@ -459,13 +460,13 @@ void custom_bitvector_domaint::transform(
 
         modet mode;
 
-        if(statement=="set_must")
+        if(statement == ID_set_must)
           mode=modet::SET_MUST;
-        else if(statement=="clear_must")
+        else if(statement == ID_clear_must)
           mode=modet::CLEAR_MUST;
-        else if(statement=="set_may")
+        else if(statement == ID_set_may)
           mode=modet::SET_MAY;
-        else if(statement=="clear_may")
+        else if(statement == ID_clear_may)
           mode=modet::CLEAR_MAY;
         else
           UNREACHABLE;
@@ -664,8 +665,7 @@ void custom_bitvector_domaint::erase_blank_vectors(bitst &bits)
 
 bool custom_bitvector_domaint::has_get_must_or_may(const exprt &src)
 {
-  if(src.id()=="get_must" ||
-     src.id()=="get_may")
+  if(src.id() == ID_get_must || src.id() == ID_get_may)
     return true;
 
   forall_operands(it, src)
@@ -679,7 +679,7 @@ exprt custom_bitvector_domaint::eval(
   const exprt &src,
   custom_bitvector_analysist &custom_bitvector_analysis) const
 {
-  if(src.id()=="get_must" || src.id()=="get_may")
+  if(src.id() == ID_get_must || src.id() == ID_get_may)
   {
     if(src.operands().size()==2)
     {
@@ -694,7 +694,7 @@ exprt custom_bitvector_domaint::eval(
       if(pointer.is_constant() &&
          to_constant_expr(pointer).get_value()==ID_NULL) // NULL means all
       {
-        if(src.id()=="get_may")
+        if(src.id() == ID_get_may)
         {
           for(const auto &bit : may_bits)
             if(get_bit(bit.second, bit_nr))
@@ -702,7 +702,7 @@ exprt custom_bitvector_domaint::eval(
 
           return false_exprt();
         }
-        else if(src.id()=="get_must")
+        else if(src.id() == ID_get_must)
         {
           return false_exprt();
         }
@@ -716,9 +716,9 @@ exprt custom_bitvector_domaint::eval(
 
         bool value=false;
 
-        if(src.id()=="get_must")
+        if(src.id() == ID_get_must)
           value=get_bit(v.must_bits, bit_nr);
-        else if(src.id()=="get_may")
+        else if(src.id() == ID_get_may)
           value=get_bit(v.may_bits, bit_nr);
 
         if(value)

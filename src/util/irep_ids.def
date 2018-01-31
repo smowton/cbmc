@@ -849,6 +849,12 @@ IREP_ID_TWO(overflow_shl, overflow-shl)
 IREP_ID_ONE(lvsa_evs_type)
 IREP_ID_ONE(is_initializer)
 IREP_ID_TWO(C_is_taint_wrapper_type, #is_taint_wrapper_type)
+IREP_ID_ONE(get_may)
+IREP_ID_ONE(set_may)
+IREP_ID_ONE(clear_may)
+IREP_ID_ONE(get_must)
+IREP_ID_ONE(set_must)
+IREP_ID_ONE(clear_must)
 
 #undef IREP_ID_ONE
 #undef IREP_ID_TWO
