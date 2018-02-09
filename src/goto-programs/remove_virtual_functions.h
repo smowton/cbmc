@@ -73,7 +73,7 @@ void remove_virtual_function(
 /// \param class_hierarchy: A class hierarchy.
 /// \param [out] overridden_functions: Output collection into which all
 ///                                    overridden functions will be stored.
-void get_overridden_functions(
+void get_virtual_function_callees(
   const exprt &function,
   const symbol_tablet &symbol_table,
   const class_hierarchyt &class_hierarchy,

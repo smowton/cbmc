@@ -475,7 +475,7 @@ void remove_virtual_function(
     goto_program, instruction, dispatch_table, fallback_action);
 }
 
-void get_overridden_functions(
+void get_virtual_function_callees(
   const exprt &function,
   const symbol_tablet &symbol_table,
   const class_hierarchyt &class_hierarchy,
