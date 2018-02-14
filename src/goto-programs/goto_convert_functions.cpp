@@ -214,8 +214,7 @@ void goto_convert_functionst::convert_function(
   f.body.destructive_append(tmp_end_function);
 
   // do function tags
-  Forall_goto_program_instructions(i_it, f.body)
-    i_it->function=identifier;
+  f.update_instructions_function(identifier);
 
   f.body.update();
 
