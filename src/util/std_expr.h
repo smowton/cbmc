@@ -505,6 +505,68 @@ inline void validate_expr(const unary_minus_exprt &value)
   validate_operands(value, 1, "Unary minus must have one operand");
 }
 
+/*! \brief The byte swap expression
+*/
+class bswap_exprt: public unary_exprt
+{
+public:
+  bswap_exprt(): unary_exprt(ID_bswap)
+  {
+  }
+
+  bswap_exprt(const exprt &_op, const typet &_type)
+    : unary_exprt(ID_bswap, _op, _type)
+  {
+  }
+
+  explicit bswap_exprt(const exprt &_op)
+    : unary_exprt(ID_bswap, _op, _op.type())
+  {
+  }
+};
+
+/*! \brief Cast a generic exprt to a \ref bswap_exprt
+ *
+ * This is an unchecked conversion. \a expr must be known to be \ref
+ * bswap_exprt.
+ *
+ * \param expr Source expression
+ * \return Object of type \ref bswap_exprt
+ *
+ * \ingroup gr_std_expr
+*/
+inline const bswap_exprt &to_bswap_expr(const exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_bswap);
+  DATA_INVARIANT(expr.operands().size() == 1, "bswap must have one operand");
+  DATA_INVARIANT(
+    expr.op0().type() == expr.type(), "bswap type must match operand type");
+  return static_cast<const bswap_exprt &>(expr);
+}
+
+/*! \copydoc to_bswap_expr(const exprt &)
+ * \ingroup gr_std_expr
+*/
+inline bswap_exprt &to_bswap_expr(exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_bswap);
+  DATA_INVARIANT(expr.operands().size() == 1, "bswap must have one operand");
+  DATA_INVARIANT(
+    expr.op0().type() == expr.type(), "bswap type must match operand type");
+  return static_cast<bswap_exprt &>(expr);
+}
+
+template <>
+inline bool can_cast_expr<bswap_exprt>(const exprt &base)
+{
+  return base.id() == ID_bswap;
+}
+inline void validate_expr(const bswap_exprt &value)
+{
+  validate_operands(value, 1, "bswap must have one operand");
+  DATA_INVARIANT(
+    value.op().type() == value.type(), "bswap type must match operand type");
+}
 
 /*! \brief A generic base class for expressions that are predicates,
            i.e., boolean-typed.
@@ -2410,6 +2472,60 @@ template<> inline bool can_cast_expr<or_exprt>(const exprt &base)
 // }
 
 
+/*! \brief Boolean XOR
+*/
+class xor_exprt:public multi_ary_exprt
+{
+public:
+  xor_exprt():multi_ary_exprt(ID_bitxor, bool_typet())
+  {
+  }
+
+  xor_exprt(const exprt &_op0, const exprt &_op1):
+    multi_ary_exprt(_op0, ID_xor, _op1, bool_typet())
+  {
+  }
+};
+
+/*! \brief Cast a generic exprt to a \ref xor_exprt
+ *
+ * This is an unchecked conversion. \a expr must be known to be \ref
+ * xor_exprt.
+ *
+ * \param expr Source expression
+ * \return Object of type \ref xor_exprt
+ *
+ * \ingroup gr_std_expr
+*/
+inline const xor_exprt &to_xor_expr(const exprt &expr)
+{
+  PRECONDITION(expr.id()==ID_xor);
+  return static_cast<const xor_exprt &>(expr);
+}
+
+/*! \copydoc to_bitxor_expr(const exprt &)
+ * \ingroup gr_std_expr
+*/
+inline xor_exprt &to_xor_expr(exprt &expr)
+{
+  PRECONDITION(expr.id()==ID_xor);
+  return static_cast<xor_exprt &>(expr);
+}
+
+template<> inline bool can_cast_expr<xor_exprt>(const exprt &base)
+{
+  return base.id()==ID_xor;
+}
+// inline void validate_expr(const bitxor_exprt &value)
+// {
+//   validate_operands(
+//     value,
+//     2,
+//     "Bit-wise xor must have two or more operands",
+//     true);
+// }
+
+
 /*! \brief Bit-wise negation of bit-vectors
 */
 class bitnot_exprt:public unary_exprt
@@ -3757,11 +3873,6 @@ inline void validate_expr(const array_update_exprt &value)
 class member_exprt:public unary_exprt
 {
 public:
-  // deprecated, and will go away -- use either of the two below
-  explicit member_exprt(const typet &_type):unary_exprt(ID_member, _type)
-  {
-  }
-
   member_exprt(
     const exprt &op,
     const irep_idt &component_name,

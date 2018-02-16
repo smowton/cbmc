@@ -38,7 +38,7 @@ public:
   typedef std::unordered_set<irep_idt, irep_id_hash> changesett;
 
 private:
-  symbol_tablet &base_symbol_table;
+  symbol_table_baset &base_symbol_table;
   // Symbols originally in the table will never be marked inserted
   changesett inserted;
   // get_writeable marks an existing symbol updated
@@ -48,7 +48,7 @@ private:
   changesett removed;
 
 private:
-  explicit journalling_symbol_tablet(symbol_tablet &base_symbol_table)
+  explicit journalling_symbol_tablet(symbol_table_baset &base_symbol_table)
     : symbol_table_baset(
         base_symbol_table.symbols,
         base_symbol_table.symbol_base_map,
@@ -74,10 +74,10 @@ public:
 
   virtual const symbol_tablet &get_symbol_table() const override
   {
-    return base_symbol_table;
+    return base_symbol_table.get_symbol_table();
   }
 
-  static journalling_symbol_tablet wrap(symbol_tablet &base_symbol_table)
+  static journalling_symbol_tablet wrap(symbol_table_baset &base_symbol_table)
   {
     return journalling_symbol_tablet(base_symbol_table);
   }
@@ -122,6 +122,17 @@ public:
     for(const auto &named_symbol : base_symbol_table.symbols)
       on_remove(named_symbol.first);
     base_symbol_table.clear();
+  }
+
+  virtual iteratort begin() override
+  {
+    return iteratort(
+      base_symbol_table.begin(), [this](const irep_idt &id) { on_update(id); });
+  }
+  virtual iteratort end() override
+  {
+    return iteratort(
+      base_symbol_table.end(), [this](const irep_idt &id) { on_update(id); });
   }
 
   const changesett &get_inserted() const

@@ -7,10 +7,10 @@
 
 #include <util/symbol_table.h>
 #include <util/namespace.h>
-#include <util/language.h>
 #include <util/std_expr.h>
 
 #include "pretty_printer.h"
+#include "language.h"
 #include "mode.h"
 
 static std::unique_ptr<languaget> get_language(

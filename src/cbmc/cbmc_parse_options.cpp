@@ -18,11 +18,12 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <util/string2int.h>
 #include <util/config.h>
-#include <util/language.h>
 #include <util/unicode.h>
 #include <util/memory_info.h>
 #include <util/invariant.h>
 #include <util/exit_codes.h>
+
+#include <langapi/language.h>
 
 #include <ansi-c/c_preprocess.h>
 
@@ -44,7 +45,6 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-programs/remove_asm.h>
 #include <goto-programs/remove_unused_functions.h>
 #include <goto-programs/remove_skip.h>
-#include <goto-programs/remove_static_init_loops.h>
 #include <goto-programs/set_properties.h>
 #include <goto-programs/show_goto_functions.h>
 #include <goto-programs/show_symbol_table.h>
@@ -271,7 +271,6 @@ void cbmc_parse_optionst::get_command_line_options(optionst &options)
   if(cmdline.isset("refine-strings"))
   {
     options.set_option("refine-strings", true);
-    options.set_option("string-non-empty", cmdline.isset("string-non-empty"));
     options.set_option("string-printable", cmdline.isset("string-printable"));
     if(cmdline.isset("string-max-length"))
       options.set_option(
@@ -636,9 +635,15 @@ int cbmc_parse_optionst::get_goto_program(
     }
 
     // show it?
-    if(cmdline.isset("show-goto-functions"))
+    if(
+      cmdline.isset("show-goto-functions") ||
+      cmdline.isset("list-goto-functions"))
     {
-      show_goto_functions(goto_model, ui_message_handler.get_ui());
+      show_goto_functions(
+        goto_model,
+        get_message_handler(),
+        ui_message_handler.get_ui(),
+        cmdline.isset("list-goto-functions"));
       return CPROVER_EXIT_SUCCESS;
     }
 
@@ -897,6 +902,7 @@ int cbmc_parse_optionst::do_bmc(bmct &bmc)
 /// display command line help
 void cbmc_parse_optionst::help()
 {
+  // clang-format off
   std::cout <<
     "\n"
     "* *   CBMC " CBMC_VERSION " - Copyright (C) 2001-2017 ";
@@ -1009,7 +1015,6 @@ void cbmc_parse_optionst::help()
     " --z3                         use Z3\n"
     " --refine                     use refinement procedure (experimental)\n"
     " --refine-strings             use string refinement (experimental)\n"
-    " --string-non-empty           add constraint that strings are non empty (experimental)\n" // NOLINT(*)
     " --string-printable           add constraint that strings are printable (experimental)\n" // NOLINT(*)
     " --string-max-length          add constraint on the length of strings\n" // NOLINT(*)
     " --string-max-input-length    add constraint on the length of input strings\n" // NOLINT(*)
@@ -1024,5 +1029,7 @@ void cbmc_parse_optionst::help()
     " --json-ui                    use JSON-formatted output\n"
     HELP_GOTO_TRACE
     " --verbosity #                verbosity level\n"
+    HELP_TIMESTAMP
     "\n";
+  // clang-format on
 }

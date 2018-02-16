@@ -28,7 +28,7 @@ Author: Alberto Griggio, alberto.griggio@gmail.com
 #include <solvers/refinement/string_constraint_generator.h>
 #include <solvers/refinement/string_refinement_invariant.h>
 
-#define MAX_NB_REFINEMENT 100
+#define DEFAULT_MAX_NB_REFINEMENT std::numeric_limits<size_t>::max()
 #define CHARACTER_FOR_UNKNOWN '?'
 
 struct index_set_pairt
@@ -49,8 +49,6 @@ private:
   struct configt
   {
     std::size_t refinement_bound=0;
-    /// Make non-deterministic character arrays have at least one character
-    bool string_non_empty=false;
     /// Concretize strings after solver is finished
     bool trace=false;
     bool use_counter_example=true;
@@ -96,12 +94,8 @@ private:
   union_find_replacet symbol_resolve;
 
   std::vector<equal_exprt> equations;
-  std::list<std::pair<exprt, bool>> non_string_axioms;
 
-  // Map pointers to array symbols
-  std::map<exprt, symbol_exprt> pointer_map;
-
-  void add_lemma(const exprt &lemma, const bool _simplify = true);
+  void add_lemma(const exprt &lemma, bool simplify_lemma = true);
 };
 
 exprt substitute_array_lists(exprt expr, std::size_t string_max_length);

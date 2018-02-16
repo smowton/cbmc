@@ -18,12 +18,14 @@ SRC += unit_tests.cpp \
        analyses/does_remove_const/is_type_at_least_as_const_as.cpp \
        goto-programs/goto_trace_output.cpp \
        goto-programs/class_hierarchy_output.cpp \
+       goto-programs/class_hierarchy_graph.cpp \
        java_bytecode/java_bytecode_convert_class/convert_abstract_class.cpp \
        java_bytecode/java_bytecode_parse_generics/parse_generic_class.cpp \
        java_bytecode/java_object_factory/gen_nondet_string_init.cpp \
        miniBDD_new.cpp \
        java_bytecode/java_string_library_preprocess/convert_exprt_to_string_exprt.cpp \
        java_bytecode/java_utils_test.cpp \
+       java_bytecode/inherited_static_fields/inherited_static_fields.cpp \
        pointer-analysis/custom_value_set_analysis.cpp \
        sharing_node.cpp \
        solvers/refinement/string_constraint_generator_valueof/calculate_max_string_length.cpp \
@@ -42,6 +44,7 @@ SRC += unit_tests.cpp \
        util/simplify_expr.cpp \
        util/symbol_table.cpp \
        catch_example.cpp \
+       java_bytecode/java_virtual_functions/virtual_functions.cpp \
        # Empty last line
 
 INCLUDES= -I ../src/ -I.
