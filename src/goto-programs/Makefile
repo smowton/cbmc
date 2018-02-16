@@ -46,16 +46,14 @@ SRC = basic_blocks.cpp \
       remove_exceptions.cpp \
       remove_function_pointers.cpp \
       remove_instanceof.cpp \
-      remove_java_new.cpp \
       remove_returns.cpp \
       remove_skip.cpp \
-      remove_static_init_loops.cpp \
       remove_unreachable.cpp \
       remove_unused_functions.cpp \
       remove_vector.cpp \
       remove_virtual_functions.cpp \
       replace_java_nondet.cpp \
-      resolve_concrete_function_call.cpp \
+      resolve_inherited_component.cpp \
       safety_checker.cpp \
       set_properties.cpp \
       show_goto_functions.cpp \

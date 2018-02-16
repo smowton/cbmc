@@ -12,7 +12,6 @@ Author: Chris Smowton, chris@smowton.net
 #include <langapi/mode.h>
 #include <goto-programs/initialize_goto_model.h>
 #include <goto-programs/goto_inline.h>
-#include <goto-programs/remove_java_new.h>
 #include <java_bytecode/java_bytecode_language.h>
 #include <java_bytecode/java_types.h>
 #include <pointer-analysis/value_set_analysis.h>
@@ -168,12 +167,14 @@ SCENARIO("test_value_set_analysis",
 {
   GIVEN("Normal and custom value-set analysis of CustomVSATest::test")
   {
+    config.set_arch("none");
+    config.main = "";
     null_message_handlert null_output;
     cmdlinet command_line;
 
     // This classpath is the default, but the config object
     // is global and previous unit tests may have altered it
-    command_line.set("java-cp-include-files", ".");
+    command_line.set("java-cp-include-files", "CustomVSATest.class");
     config.java.classpath={"."};
     command_line.args.push_back("pointer-analysis/CustomVSATest.jar");
 
@@ -183,9 +184,6 @@ SCENARIO("test_value_set_analysis",
       initialize_goto_model(command_line, null_output);
 
     namespacet ns(goto_model.symbol_table);
-
-    // VSA doesn't currently support java_new as an allocator
-    remove_java_new(goto_model, null_output);
 
     // Fully inline the test program, to avoid VSA conflating
     // constructor callsites confusing the results we're trying to check:

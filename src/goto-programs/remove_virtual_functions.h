@@ -23,7 +23,7 @@ void remove_virtual_functions(
   goto_modelt &goto_model);
 
 void remove_virtual_functions(
-  const symbol_tablet &symbol_table,
+  const symbol_table_baset &symbol_table,
   goto_functionst &goto_functions);
 
 /// Remove virtual functions from one function.
@@ -57,6 +57,7 @@ class dispatch_table_entryt
 };
 
 typedef std::vector<dispatch_table_entryt> dispatch_table_entriest;
+typedef std::map<irep_idt, dispatch_table_entryt> dispatch_table_entries_mapt;
 
 void remove_virtual_function(
   goto_modelt &goto_model,

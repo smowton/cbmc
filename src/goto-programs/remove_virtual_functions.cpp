@@ -13,7 +13,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "remove_virtual_functions.h"
 #include "class_identifier.h"
 
-#include <goto-programs/resolve_concrete_function_call.h>
+#include <goto-programs/resolve_inherited_component.h>
 
 #include <util/c_types.h>
 #include <util/prefix.h>
@@ -23,7 +23,7 @@ class remove_virtual_functionst
 {
 public:
   remove_virtual_functionst(
-    const symbol_tablet &_symbol_table,
+    const symbol_table_baset &_symbol_table,
     const class_hierarchyt &_class_hierarchy);
 
   void operator()(goto_functionst &goto_functions);
@@ -38,7 +38,7 @@ public:
 
 protected:
   const namespacet ns;
-  const symbol_tablet &symbol_table;
+  const symbol_table_baset &symbol_table;
 
   const class_hierarchyt &class_hierarchy;
 
@@ -49,7 +49,7 @@ public:
   void get_functions(const exprt &, dispatch_table_entriest &);
 protected:
   typedef std::function<
-    resolve_concrete_function_callt::concrete_function_callt(
+    resolve_inherited_componentt::inherited_componentt(
       const irep_idt &,
       const irep_idt &)>
     function_call_resolvert;
@@ -58,14 +58,14 @@ protected:
     const symbol_exprt &,
     const irep_idt &,
     dispatch_table_entriest &,
-    std::set<irep_idt> &visited,
+    dispatch_table_entries_mapt &,
     const function_call_resolvert &) const;
   exprt
   get_method(const irep_idt &class_id, const irep_idt &component_name) const;
 };
 
 remove_virtual_functionst::remove_virtual_functionst(
-  const symbol_tablet &_symbol_table,
+  const symbol_table_baset &_symbol_table,
   const class_hierarchyt &_class_hierarchy):
   ns(_symbol_table),
   symbol_table(_symbol_table),
@@ -165,11 +165,18 @@ void remove_virtual_functionst::remove_virtual_function(
     newinst->source_location=vcall_source_loc;
   }
 
+  // get initial identifier for grouping
+  INVARIANT(!functions.empty(), "Function dispatch table cannot be empty.");
+  auto last_id = functions.back().symbol_expr.get_identifier();
+  // record class_ids for disjunction
+  std::set<irep_idt> class_ids;
+
   std::map<irep_idt, goto_programt::targett> calls;
   // Note backwards iteration, to get the fallback candidate first.
   for(auto it=functions.crbegin(), itend=functions.crend(); it!=itend; ++it)
   {
     const auto &fun=*it;
+    class_ids.insert(fun.class_id);
     auto insertit=calls.insert(
       {fun.symbol_expr.get_identifier(), goto_programt::targett()});
 
@@ -211,15 +218,50 @@ void remove_virtual_functionst::remove_virtual_function(
       t3->make_goto(t_final, true_exprt());
     }
 
+    // Emit target if end of dispatch table is reached or if the next element is
+    // dispatched to another function call. Assumes entries in the functions
+    // variable to be sorted for the identifier of the function to be called.
+    auto l_it = std::next(it);
+    bool next_emit_target =
+      (l_it == functions.crend()) ||
+      l_it->symbol_expr.get_identifier() != fun.symbol_expr.get_identifier();
+
+    // The root function call is done via fall-through, so nothing to emit
+    // explicitly for this.
+    if(next_emit_target && fun.symbol_expr == last_function_symbol)
+    {
+      class_ids.clear();
+    }
+
     // If this calls the fallback function we just fall through.
     // Otherwise branch to the right call:
     if(fallback_action!=virtual_dispatch_fallback_actiont::CALL_LAST_FUNCTION ||
        fun.symbol_expr!=last_function_symbol)
     {
-      exprt c_id1=constant_exprt(fun.class_id, string_typet());
-      goto_programt::targett t4=new_code_gotos.add_instruction();
-      t4->source_location=vcall_source_loc;
-      t4->make_goto(insertit.first->second, equal_exprt(c_id1, c_id2));
+      // create a disjunction of class_ids to test
+      if(next_emit_target && fun.symbol_expr != last_function_symbol)
+      {
+        exprt::operandst or_ops;
+        for(const auto &id : class_ids)
+        {
+          const constant_exprt c_id1(id, string_typet());
+          const equal_exprt class_id_test(c_id1, c_id2);
+          or_ops.push_back(class_id_test);
+        }
+
+        goto_programt::targett t4 = new_code_gotos.add_instruction();
+        t4->source_location = vcall_source_loc;
+        t4->make_goto(insertit.first->second, disjunction(or_ops));
+
+        last_id = fun.symbol_expr.get_identifier();
+        class_ids.clear();
+      }
+      // record class_id
+      else if(next_emit_target)
+      {
+        last_id = fun.symbol_expr.get_identifier();
+        class_ids.clear();
+      }
     }
   }
 
@@ -254,11 +296,12 @@ void remove_virtual_functionst::remove_virtual_function(
 
 /// Used by get_functions to track the most-derived parent that provides an
 /// override of a given function.
-/// \par parameters: `this_id`: class name
-/// `last_method_defn`: the most-derived parent of `this_id` to define the
-///   requested function
-/// `component_name`: name of the function searched for
-/// `resolve_function_call`: function to resolve abstract method call
+/// \param parameters: `this_id`: class name
+/// \param `last_method_defn`: the most-derived parent of `this_id` to define
+///   the requested function
+/// \param `component_name`: name of the function searched for
+/// \param `entry_map`: map of class identifiers to dispatch table entries
+/// \param `resolve_function_call`: function to resolve abstract method call
 /// \return `functions` is assigned a list of {class name, function symbol}
 ///   pairs indicating that if `this` is of the given class, then the call will
 ///   target the given function. Thus if A <: B <: C and A and C provide
@@ -269,7 +312,7 @@ void remove_virtual_functionst::get_child_functions_rec(
   const symbol_exprt &last_method_defn,
   const irep_idt &component_name,
   dispatch_table_entriest &functions,
-  std::set<irep_idt> &visited,
+  dispatch_table_entries_mapt &entry_map,
   const function_call_resolvert &resolve_function_call) const
 {
   auto findit=class_hierarchy.class_map.find(this_id);
@@ -278,9 +321,18 @@ void remove_virtual_functionst::get_child_functions_rec(
 
   for(const auto &child : findit->second.children)
   {
-    if(!visited.insert(child).second)
+    // Skip if we have already visited this and we found a function call that
+    // did not resolve to non java.lang.Object.
+    auto it = entry_map.find(child);
+    if(
+      it != entry_map.end() &&
+      !has_prefix(
+        id2string(it->second.symbol_expr.get_identifier()),
+        "java::java.lang.Object"))
+    {
       continue;
-    exprt method=get_method(child, component_name);
+    }
+    exprt method = get_method(child, component_name);
     dispatch_table_entryt function(child);
     if(method.is_not_nil())
     {
@@ -293,13 +345,14 @@ void remove_virtual_functionst::get_child_functions_rec(
     }
     if(function.symbol_expr == symbol_exprt())
     {
-      const resolve_concrete_function_callt::concrete_function_callt
+      const resolve_inherited_componentt::inherited_componentt
         &resolved_call = resolve_function_call(child, component_name);
       if(resolved_call.is_valid())
       {
         function.class_id = resolved_call.get_class_identifier();
         const symbolt &called_symbol =
-          symbol_table.lookup_ref(resolved_call.get_virtual_method_name());
+          symbol_table.lookup_ref(
+            resolved_call.get_full_component_identifier());
 
         function.symbol_expr = called_symbol.symbol_expr();
         function.symbol_expr.set(
@@ -307,37 +360,43 @@ void remove_virtual_functionst::get_child_functions_rec(
       }
     }
     functions.push_back(function);
+    entry_map.insert({child, function});
 
     get_child_functions_rec(
       child,
       function.symbol_expr,
       component_name,
       functions,
-      visited,
+      entry_map,
       resolve_function_call);
   }
 }
 
+/// Used to get dispatch entries to call for the given function
+/// \param function: function that should be called
+/// \param[out] functions: is assigned a list of dispatch entries, i.e., pairs
+/// of class names and function symbol to call when encountering the class.
 void remove_virtual_functionst::get_functions(
   const exprt &function,
   dispatch_table_entriest &functions)
 {
+  // class part of function to call
   const irep_idt class_id=function.get(ID_C_class);
   const std::string class_id_string(id2string(class_id));
-  const irep_idt component_name=function.get(ID_component_name);
-  const std::string component_name_string(id2string(component_name));
+  const irep_idt function_name = function.get(ID_component_name);
+  const std::string function_name_string(id2string(function_name));
   INVARIANT(!class_id.empty(), "All virtual functions must have a class");
 
-  resolve_concrete_function_callt get_virtual_call_target(
+  resolve_inherited_componentt get_virtual_call_target(
     symbol_table, class_hierarchy);
   const function_call_resolvert resolve_function_call =
     [&get_virtual_call_target](
-      const irep_idt &class_id, const irep_idt &component_name) {
-      return get_virtual_call_target(class_id, component_name);
+      const irep_idt &class_id, const irep_idt &function_name) {
+    return get_virtual_call_target(class_id, function_name, false);
     };
 
-  const resolve_concrete_function_callt::concrete_function_callt
-    &resolved_call = get_virtual_call_target(class_id, component_name);
+  const resolve_inherited_componentt::inherited_componentt
+    &resolved_call = get_virtual_call_target(class_id, function_name, false);
 
   dispatch_table_entryt root_function;
 
@@ -346,7 +405,7 @@ void remove_virtual_functionst::get_functions(
     root_function.class_id=resolved_call.get_class_identifier();
 
     const symbolt &called_symbol =
-      symbol_table.lookup_ref(resolved_call.get_virtual_method_name());
+      symbol_table.lookup_ref(resolved_call.get_full_component_identifier());
 
     root_function.symbol_expr=called_symbol.symbol_expr();
     root_function.symbol_expr.set(
@@ -359,17 +418,38 @@ void remove_virtual_functionst::get_functions(
   }
 
   // iterate over all children, transitively
-  std::set<irep_idt> visited;
+  dispatch_table_entries_mapt entry_map;
   get_child_functions_rec(
     class_id,
     root_function.symbol_expr,
-    component_name,
+    function_name,
     functions,
-    visited,
+    entry_map,
     resolve_function_call);
 
   if(root_function.symbol_expr!=symbol_exprt())
     functions.push_back(root_function);
+
+  // Sort for the identifier of the function call symbol expression, grouping
+  // together calls to the same function. Keep java.lang.Object entries at the
+  // end for fall through. The reasoning is that this is the case with most
+  // entries in realistic cases.
+  std::sort(
+    functions.begin(),
+    functions.end(),
+    [](const dispatch_table_entryt &a, dispatch_table_entryt &b)
+    {
+      if(
+        has_prefix(
+          id2string(a.symbol_expr.get_identifier()), "java::java.lang.Object"))
+        return false;
+      else if(
+        has_prefix(
+          id2string(b.symbol_expr.get_identifier()), "java::java.lang.Object"))
+        return true;
+      else
+        return a.symbol_expr.get_identifier() < b.symbol_expr.get_identifier();
+    });
 }
 
 exprt remove_virtual_functionst::get_method(
@@ -377,7 +457,7 @@ exprt remove_virtual_functionst::get_method(
   const irep_idt &component_name) const
 {
   const irep_idt &id=
-    resolve_concrete_function_callt::build_virtual_method_name(
+    resolve_inherited_componentt::build_full_component_identifier(
       class_id, component_name);
 
   const symbolt *symbol;
@@ -433,7 +513,7 @@ void remove_virtual_functionst::operator()(goto_functionst &functions)
 }
 
 void remove_virtual_functions(
-  const symbol_tablet &symbol_table,
+  const symbol_table_baset &symbol_table,
   goto_functionst &goto_functions)
 {
   class_hierarchyt class_hierarchy;

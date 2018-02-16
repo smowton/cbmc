@@ -73,20 +73,13 @@ static bool should_init_symbol(const symbolt &sym)
      sym.is_state_var &&
      sym.is_static_lifetime &&
      sym.mode==ID_java)
-    return true;
+  {
+    // Consider some sort of annotation indicating a global variable that
+    // doesn't require initialisation?
+    return !sym.type.get_bool(ID_C_no_initialization_required);
+  }
 
   return is_java_string_literal_id(sym.name);
-}
-
-static bool is_non_null_library_global(const irep_idt &symbolid)
-{
-  static const std::unordered_set<irep_idt, irep_id_hash> non_null_globals=
-  {
-    "java::java.lang.System.out",
-    "java::java.lang.System.err",
-    "java::java.lang.System.in"
-  };
-  return non_null_globals.count(symbolid);
 }
 
 static void java_static_lifetime_init(
@@ -126,7 +119,7 @@ static void java_static_lifetime_init(
           if(allow_null && is_java_string_literal_id(nameid))
             allow_null=false;
           if(allow_null && is_non_null_library_global(nameid))
-            allow_null=false;
+            allow_null = false;
         }
         gen_nondet_init(
           sym.symbol_expr(),
@@ -462,48 +455,6 @@ bool java_entry_point(
     assume_init_pointers_not_null,
     object_factory_parameters,
     pointer_type_selector);
-}
-
-/// Creates the initialize methods again taking account of symbols added to the
-/// symbol table during instantiation of lazy methods since they were first
-/// created,
-/// \param symbol_table: global symbol table containing symbols to initialize
-/// \param main_class: the class containing the "main" entry point
-/// \param message_handler: message_handlert for logging
-/// \param assume_init_pointers_not_null: specifies behaviour for
-/// java_static_lifetime_init
-/// \param object_factory_parameters: specifies behaviour for
-/// java_static_lifetime_init
-/// \param pointer_type_selector: specifies behaviour for
-/// java_static_lifetime_init
-bool recreate_initialize(
-  symbol_table_baset &symbol_table,
-  const irep_idt &main_class,
-  message_handlert &message_handler,
-  bool assume_init_pointers_not_null,
-  const object_factory_parameterst &object_factory_parameters,
-  const select_pointer_typet &pointer_type_selector)
-{
-  messaget message(message_handler);
-  main_function_resultt res=
-    get_main_symbol(symbol_table, main_class, message_handler);
-  if(res.status!=main_function_resultt::Success)
-  {
-    // No initialization was originally created (yikes!) so we can't recreate
-    // it now
-    return res.status==main_function_resultt::Error;
-  }
-
-  create_initialize(symbol_table);
-
-  java_static_lifetime_init(
-    symbol_table,
-    res.main_function.location,
-    assume_init_pointers_not_null,
-    object_factory_parameters,
-    pointer_type_selector);
-
-  return false;
 }
 
 /// Generate a _start function for a specific function. See

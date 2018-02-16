@@ -12,8 +12,9 @@
 #include <util/cmdline.h>
 #include <util/config.h>
 #include <util/journalling_symbol_table.h>
-#include <util/language.h>
 #include <util/unicode.h>
+
+#include <langapi/language.h>
 
 #include <fstream>
 
@@ -28,10 +29,17 @@ lazy_goto_modelt::lazy_goto_modelt(
       goto_model->goto_functions.function_map,
       language_files,
       symbol_table,
-      [this] (goto_functionst::goto_functiont &function) -> void
+      [this] (
+        const irep_idt &function_name,
+        goto_functionst::goto_functiont &function,
+        journalling_symbol_tablet &journalling_symbol_table) -> void
       {
-        goto_model_functiont model_function(*goto_model, function);
-        this->post_process_function(model_function);
+        goto_model_functiont model_function(
+          journalling_symbol_table,
+          goto_model->goto_functions,
+          function_name,
+          function);
+        this->post_process_function(model_function, *this);
       },
       message_handler),
     post_process_function(std::move(post_process_function)),
@@ -48,10 +56,17 @@ lazy_goto_modelt::lazy_goto_modelt(lazy_goto_modelt &&other)
       goto_model->goto_functions.function_map,
       language_files,
       symbol_table,
-      [this] (goto_functionst::goto_functiont &function) -> void
+      [this] (
+        const irep_idt &function_name,
+        goto_functionst::goto_functiont &function,
+        journalling_symbol_tablet &journalling_symbol_table) -> void
       {
-        goto_model_functiont model_function(*goto_model, function);
-        this->post_process_function(model_function);
+        goto_model_functiont model_function(
+          journalling_symbol_table,
+          goto_model->goto_functions,
+          function_name,
+          function);
+        this->post_process_function(model_function, *this);
       },
       other.message_handler),
     language_files(std::move(other.language_files)),
@@ -238,4 +253,9 @@ bool lazy_goto_modelt::finalize()
   language_files.clear();
 
   return post_process_functions(*goto_model);
+}
+
+bool lazy_goto_modelt::can_produce_function(const irep_idt &id) const
+{
+  return goto_functions.can_produce_function(id);
 }

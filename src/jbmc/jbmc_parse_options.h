@@ -14,11 +14,14 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <util/ui_message.h>
 #include <util/parse_options.h>
-#include <util/language.h>
+#include <util/timestamper.h>
+
+#include <langapi/language.h>
 
 #include <analyses/goto_check.h>
 
 #include <goto-programs/goto_trace.h>
+#include <goto-programs/lazy_goto_model.h>
 
 #include <java_bytecode/java_bytecode_language.h>
 
@@ -26,6 +29,7 @@ class bmct;
 class goto_functionst;
 class optionst;
 
+// clang-format off
 #define JBMC_OPTIONS \
   "(program-only)(preprocess)(slice-by-trace):" \
   OPT_FUNCTIONS \
@@ -44,12 +48,12 @@ class optionst;
   "(no-pretty-names)(beautify)" \
   "(dimacs)(refine)(max-node-refinement):(refine-arrays)(refine-arithmetic)"\
   "(refine-strings)" \
-  "(string-non-empty)" \
   "(string-printable)" \
   "(string-max-length):" \
   "(string-max-input-length):" \
   "(16)(32)(64)(LP64)(ILP64)(LLP64)(ILP32)(LP32)" \
-  "(show-goto-functions)(show-loops)" \
+  OPT_SHOW_GOTO_FUNCTIONS \
+  "(show-loops)" \
   "(show-symbol-table)(show-parse-tree)(show-vcc)" \
   "(show-properties)" \
   "(drop-unused-functions)" \
@@ -57,6 +61,7 @@ class optionst;
   "(verbosity):" \
   "(version)" \
   "(cover):(symex-coverage-report):" \
+  OPT_TIMESTAMP \
   "(i386-linux)(i386-macos)(i386-win32)(win32)(winx64)" \
   "(ppc-macos)" \
   "(arrays-uf-always)(arrays-uf-never)" \
@@ -66,6 +71,7 @@ class optionst;
   "(java-unwind-enum-static)" \
   "(localize-faults)(localize-faults-method):" \
   OPT_GOTO_TRACE
+// clang-format on
 
 class jbmc_parse_optionst:
   public parse_options_baset,
@@ -81,7 +87,10 @@ public:
     const char **argv,
     const std::string &extra_options);
 
-  void process_goto_function(goto_model_functiont &function);
+  void process_goto_function(
+    goto_model_functiont &function,
+    const can_produce_functiont &,
+    const optionst &);
   bool process_goto_functions(goto_modelt &goto_model, const optionst &options);
 
 protected:

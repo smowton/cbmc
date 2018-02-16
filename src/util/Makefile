@@ -35,11 +35,10 @@ SRC = arith_tools.cpp \
       json.cpp \
       json_expr.cpp \
       json_irep.cpp \
-      language.cpp \
-      language_file.cpp \
       lispexpr.cpp \
       lispirep.cpp \
       memory_info.cpp \
+      memory_limit.cpp \
       merge_irep.cpp \
       message.cpp \
       mp_arith.cpp \
@@ -87,8 +86,7 @@ SRC = arith_tools.cpp \
       tempdir.cpp \
       tempfile.cpp \
       threeval.cpp \
-      time_stopping.cpp \
-      timer.cpp \
+      timestamper.cpp \
       type.cpp \
       type_eq.cpp \
       typecheck.cpp \

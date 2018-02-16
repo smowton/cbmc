@@ -344,23 +344,33 @@ void goto_convertt::convert_label(
 
   goto_programt tmp;
 
-  // magic thread creation label?
+  // magic thread creation label.
+  // The "__CPROVER_ASYNC_" signals the start of a sequence of instructions
+  // that can be executed in parallel, i.e, a new thread.
   if(has_prefix(id2string(label), "__CPROVER_ASYNC_"))
   {
-    // this is like a START_THREAD
-    codet tmp_code(ID_start_thread);
-    tmp_code.copy_to_operands(code.op0());
-    tmp_code.add_source_location()=code.source_location();
-    convert(tmp_code, tmp);
+    // the body of the thread is expected to be
+    // in the operand.
+    INVARIANT(code.op0().is_not_nil(),
+      "op0 in magic thread creation label is null");
+
+    // replace the magic thread creation label with a
+    // thread block (START_THREAD...END_THREAD).
+    code_blockt thread_body;
+    thread_body.add(to_code(code.op0()));
+    thread_body.add_source_location()=code.source_location();
+    generate_thread_block(thread_body, dest);
   }
   else
+  {
     convert(to_code(code.op0()), tmp);
 
-  goto_programt::targett target=tmp.instructions.begin();
-  dest.destructive_append(tmp);
+    goto_programt::targett target=tmp.instructions.begin();
+    dest.destructive_append(tmp);
 
-  targets.labels.insert({label, {target, targets.destructor_stack}});
-  target->labels.push_front(label);
+    targets.labels.insert({label, {target, targets.destructor_stack}});
+    target->labels.push_front(label);
+  }
 }
 
 void goto_convertt::convert_gcc_local_label(
@@ -505,10 +515,6 @@ void goto_convertt::convert(
     convert_atomic_begin(code, dest);
   else if(statement==ID_atomic_end)
     convert_atomic_end(code, dest);
-  else if(statement==ID_bp_enforce)
-    convert_bp_enforce(code, dest);
-  else if(statement==ID_bp_abortif)
-    convert_bp_abortif(code, dest);
   else if(statement==ID_cpp_delete ||
           statement=="cpp_delete[]")
     convert_cpp_delete(code, dest);
@@ -756,7 +762,10 @@ void goto_convertt::convert_assign(
   else if(rhs.id()==ID_side_effect &&
           rhs.get(ID_statement)==ID_java_new)
   {
-    copy(code, ASSIGN, dest);
+    Forall_operands(it, rhs)
+      clean_expr(*it, dest);
+
+    do_java_new(lhs, to_side_effect_expr(rhs), dest);
   }
   else if(rhs.id()==ID_side_effect &&
           rhs.get(ID_statement)==ID_java_new_array)
@@ -1539,39 +1548,14 @@ void goto_convertt::convert_start_thread(
   const codet &code,
   goto_programt &dest)
 {
-  if(code.operands().size()!=1)
-  {
-    error().source_location=code.find_source_location();
-    error() << "start_thread expects one operand" << eom;
-    throw 0;
-  }
-
   goto_programt::targett start_thread=
     dest.add_instruction(START_THREAD);
-
   start_thread->source_location=code.source_location();
+  start_thread->code=code;
 
-  {
-    // start_thread label;
-    // goto tmp;
-    // label: op0-code
-    // end_thread
-    // tmp: skip
-
-    goto_programt::targett goto_instruction=dest.add_instruction(GOTO);
-    goto_instruction->guard=true_exprt();
-    goto_instruction->source_location=code.source_location();
-
-    goto_programt tmp;
-    convert(to_code(code.op0()), tmp);
-    goto_programt::targett end_thread=tmp.add_instruction(END_THREAD);
-    end_thread->source_location=code.source_location();
-
-    start_thread->targets.push_back(tmp.instructions.begin());
-    dest.destructive_append(tmp);
-    goto_instruction->targets.push_back(dest.add_instruction(SKIP));
-    dest.instructions.back().source_location=code.source_location();
-  }
+  // remember it to do target later
+  targets.gotos.push_back(
+    std::make_pair(start_thread, targets.destructor_stack));
 }
 
 void goto_convertt::convert_end_thread(
@@ -1614,88 +1598,6 @@ void goto_convertt::convert_atomic_end(
   }
 
   copy(code, ATOMIC_END, dest);
-}
-
-void goto_convertt::convert_bp_enforce(
-  const codet &code,
-  goto_programt &dest)
-{
-  if(code.operands().size()!=2)
-  {
-    error().source_location=code.find_source_location();
-    error() << "bp_enfroce expects two arguments" << eom;
-    throw 0;
-  }
-
-  // do an assume
-  exprt op=code.op0();
-
-  clean_expr(op, dest);
-
-  goto_programt::targett t=dest.add_instruction(ASSUME);
-  t->guard=op;
-  t->source_location=code.source_location();
-
-  // change the assignments
-
-  goto_programt tmp;
-  convert(to_code(code.op1()), tmp);
-
-  if(!op.is_true())
-  {
-    exprt constraint(op);
-    make_next_state(constraint);
-
-    Forall_goto_program_instructions(it, tmp)
-    {
-      if(it->is_assign())
-      {
-        assert(it->code.get(ID_statement)==ID_assign);
-
-        // add constrain
-        codet constrain(ID_bp_constrain);
-        constrain.reserve_operands(2);
-        constrain.move_to_operands(it->code);
-        constrain.copy_to_operands(constraint);
-        it->code.swap(constrain);
-
-        it->type=OTHER;
-      }
-      else if(it->is_other() &&
-              it->code.get(ID_statement)==ID_bp_constrain)
-      {
-        // add to constraint
-        assert(it->code.operands().size()==2);
-        it->code.op1()=
-          and_exprt(it->code.op1(), constraint);
-      }
-    }
-  }
-
-  dest.destructive_append(tmp);
-}
-
-void goto_convertt::convert_bp_abortif(
-  const codet &code,
-  goto_programt &dest)
-{
-  if(code.operands().size()!=1)
-  {
-    error().source_location=code.find_source_location();
-    error() << "bp_abortif expects one argument" << eom;
-    throw 0;
-  }
-
-  // do an assert
-  exprt op=code.op0();
-
-  clean_expr(op, dest);
-
-  op.make_not();
-
-  goto_programt::targett t=dest.add_instruction(ASSERT);
-  t->guard.swap(op);
-  t->source_location=code.source_location();
 }
 
 void goto_convertt::convert_ifthenelse(
@@ -2193,7 +2095,7 @@ const symbolt &goto_convertt::lookup(const irep_idt &identifier)
 
 void goto_convert(
   const codet &code,
-  symbol_tablet &symbol_table,
+  symbol_table_baset &symbol_table,
   goto_programt &dest,
   message_handlert &message_handler)
 {
@@ -2227,7 +2129,7 @@ void goto_convert(
 }
 
 void goto_convert(
-  symbol_tablet &symbol_table,
+  symbol_table_baset &symbol_table,
   goto_programt &dest,
   message_handlert &message_handler)
 {
@@ -2241,4 +2143,44 @@ void goto_convert(
   const symbolt &symbol=s_it->second;
 
   ::goto_convert(to_code(symbol.value), symbol_table, dest, message_handler);
+}
+
+/// Generates the necessary goto-instructions to represent a thread-block.
+/// Specifically, the following instructions are generated:
+///
+/// A: START_THREAD : C
+/// B: GOTO Z
+/// C: SKIP
+/// D: {THREAD BODY}
+/// E: END_THREAD
+/// Z: SKIP
+///
+/// \param thread_body: sequence of codet's that can be executed
+///   in parallel.
+/// \param [out] dest: resulting goto-instructions.
+void goto_convertt::generate_thread_block(
+  const code_blockt &thread_body,
+  goto_programt &dest)
+{
+  goto_programt preamble, body, postamble;
+
+  goto_programt::targett c=body.add_instruction();
+  c->make_skip();
+  convert(thread_body, body);
+
+  goto_programt::targett e=postamble.add_instruction(END_THREAD);
+  e->source_location=thread_body.source_location();
+  goto_programt::targett z=postamble.add_instruction();
+  z->make_skip();
+
+  goto_programt::targett a=preamble.add_instruction(START_THREAD);
+  a->source_location=thread_body.source_location();
+  a->targets.push_back(c);
+  goto_programt::targett b=preamble.add_instruction();
+  b->source_location=thread_body.source_location();
+  b->make_goto(z);
+
+  dest.destructive_append(preamble);
+  dest.destructive_append(body);
+  dest.destructive_append(postamble);
 }

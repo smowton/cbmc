@@ -17,7 +17,6 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <util/string2int.h>
 #include <util/config.h>
-#include <util/language.h>
 #include <util/options.h>
 #include <util/memory_info.h>
 
@@ -32,7 +31,6 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-programs/link_to_library.h>
 #include <goto-programs/goto_inline.h>
 #include <goto-programs/xml_goto_trace.h>
-#include <goto-programs/remove_java_new.h>
 
 #include <goto-instrument/dump_c.h>
 
@@ -136,9 +134,15 @@ int clobber_parse_optionst::doit()
     }
 
     // show it?
-    if(cmdline.isset("show-goto-functions"))
+    if(
+      cmdline.isset("show-goto-functions") ||
+      cmdline.isset("list-goto-functions"))
     {
-      show_goto_functions(goto_model, get_ui());
+      show_goto_functions(
+        goto_model,
+        get_message_handler(),
+        ui_message_handler.get_ui(),
+        cmdline.isset("list-goto-functions"));
       return 6;
     }
 
@@ -208,8 +212,6 @@ bool clobber_parse_optionst::process_goto_program(
   goto_modelt &goto_model)
 {
   {
-    remove_java_new(goto_model, get_message_handler());
-
     // do partial inlining
     status() << "Partial Inlining" << eom;
     goto_partial_inline(goto_model, get_message_handler());

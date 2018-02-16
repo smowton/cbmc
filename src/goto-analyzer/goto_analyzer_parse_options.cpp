@@ -37,7 +37,6 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-programs/read_goto_binary.h>
 #include <goto-programs/goto_inline.h>
 #include <goto-programs/link_to_library.h>
-#include <goto-programs/remove_java_new.h>
 
 #include <analyses/is_threaded.h>
 #include <analyses/goto_check.h>
@@ -47,8 +46,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <analyses/interval_domain.h>
 
 #include <langapi/mode.h>
+#include <langapi/language.h>
 
-#include <util/language.h>
 #include <util/options.h>
 #include <util/config.h>
 #include <util/string2int.h>
@@ -431,9 +430,15 @@ int goto_analyzer_parse_optionst::doit()
   }
 
   // show it?
-  if(cmdline.isset("show-goto-functions"))
+  if(
+    cmdline.isset("show-goto-functions") ||
+    cmdline.isset("list-goto-functions"))
   {
-    show_goto_functions(goto_model, get_ui());
+    show_goto_functions(
+      goto_model,
+      get_message_handler(),
+      get_ui(),
+      cmdline.isset("list-goto-functions"));
     return CPROVER_EXIT_SUCCESS;
   }
 
@@ -739,8 +744,6 @@ bool goto_analyzer_parse_optionst::process_goto_program(
     link_to_library(goto_model, ui_message_handler);
     #endif
 
-    remove_java_new(goto_model, get_message_handler());
-
     // remove function pointers
     status() << "Removing function pointers and virtual functions" << eom;
     remove_function_pointers(
@@ -903,5 +906,6 @@ void goto_analyzer_parse_optionst::help()
     "\n"
     "Other options:\n"
     " --version                    show version and exit\n"
+    HELP_TIMESTAMP
     "\n";
 }

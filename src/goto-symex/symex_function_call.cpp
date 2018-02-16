@@ -130,7 +130,7 @@ void goto_symext::parameter_assignments(
         }
       }
 
-      symex_assign_rec(state, code_assignt(lhs, rhs));
+      symex_assign(state, code_assignt(lhs, rhs));
     }
 
     if(it1!=arguments.end())
@@ -162,7 +162,7 @@ void goto_symext::parameter_assignments(
 
       symbol_exprt lhs=symbol_exprt(id, it1->type());
 
-      symex_assign_rec(state, code_assignt(lhs, *it1));
+      symex_assign(state, code_assignt(lhs, *it1));
     }
   }
   else if(it1!=arguments.end())
@@ -172,14 +172,14 @@ void goto_symext::parameter_assignments(
 }
 
 void goto_symext::symex_function_call(
-  const goto_functionst &goto_functions,
+  const get_goto_functiont &get_goto_function,
   statet &state,
   const code_function_callt &code)
 {
   const exprt &function=code.function();
 
   if(function.id()==ID_symbol)
-    symex_function_call_symbol(goto_functions, state, code);
+    symex_function_call_symbol(get_goto_function, state, code);
   else if(function.id()==ID_if)
     throw "symex_function_call can't do if";
   else if(function.id()==ID_dereference)
@@ -189,7 +189,7 @@ void goto_symext::symex_function_call(
 }
 
 void goto_symext::symex_function_call_symbol(
-  const goto_functionst &goto_functions,
+  const get_goto_functiont &get_goto_function,
   statet &state,
   const code_function_callt &code)
 {
@@ -213,27 +213,23 @@ void goto_symext::symex_function_call_symbol(
     symex_macro(state, code);
   }
   else
-    symex_function_call_code(goto_functions, state, code);
+    symex_function_call_code(get_goto_function, state, code);
 }
 
 /// do function call by inlining
 void goto_symext::symex_function_call_code(
-  const goto_functionst &goto_functions,
+  const get_goto_functiont &get_goto_function,
   statet &state,
   const code_function_callt &call)
 {
   const irep_idt &identifier=
     to_symbol_expr(call.function()).get_identifier();
 
-  // find code in function map
+  const goto_functionst::goto_functiont &goto_function =
+    get_goto_function(identifier);
 
-  goto_functionst::function_mapt::const_iterator it=
-    goto_functions.function_map.find(identifier);
-
-  if(it==goto_functions.function_map.end())
-    throw "failed to find `"+id2string(identifier)+"' in function_map";
-
-  const goto_functionst::goto_functiont &goto_function=it->second;
+  if(state.dirty)
+    state.dirty->populate_dirty_for_function(identifier, goto_function);
 
   const bool stop_recursing=get_unwind_recursion(
     identifier,
@@ -275,7 +271,7 @@ void goto_symext::symex_function_call_code(
       side_effect_expr_nondett rhs(call.lhs().type());
       rhs.add_source_location()=call.source_location();
       code_assignt code(call.lhs(), rhs);
-      symex_assign_rec(state, code);
+      symex_assign(state, code);
     }
 
     symex_transition(state);
@@ -455,7 +451,7 @@ void goto_symext::return_assignment(statet &state)
           "assignment.lhs().type():\n"+assignment.lhs().type().pretty()+"\n"+
           "assignment.rhs().type():\n"+assignment.rhs().type().pretty();
 
-      symex_assign_rec(state, assignment);
+      symex_assign(state, assignment);
     }
   }
   else

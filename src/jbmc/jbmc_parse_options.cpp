@@ -18,10 +18,11 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <util/string2int.h>
 #include <util/config.h>
-#include <util/language.h>
 #include <util/unicode.h>
 #include <util/memory_info.h>
 #include <util/invariant.h>
+
+#include <langapi/language.h>
 
 #include <ansi-c/ansi_c_language.h>
 
@@ -38,13 +39,11 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-programs/remove_asm.h>
 #include <goto-programs/remove_unused_functions.h>
 #include <goto-programs/remove_skip.h>
-#include <goto-programs/remove_static_init_loops.h>
 #include <goto-programs/replace_java_nondet.h>
 #include <goto-programs/set_properties.h>
 #include <goto-programs/show_goto_functions.h>
 #include <goto-programs/show_symbol_table.h>
 #include <goto-programs/show_properties.h>
-#include <goto-programs/remove_java_new.h>
 
 #include <goto-symex/adjust_float_expressions.h>
 
@@ -57,6 +56,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <langapi/mode.h>
 
 #include <java_bytecode/java_bytecode_language.h>
+#include <java_bytecode/java_enum_static_init_unwind_handler.h>
 
 #include <cbmc/cbmc_solvers.h>
 #include <cbmc/bmc.h>
@@ -246,7 +246,6 @@ void jbmc_parse_optionst::get_command_line_options(optionst &options)
   if(cmdline.isset("refine-strings"))
   {
     options.set_option("refine-strings", true);
-    options.set_option("string-non-empty", cmdline.isset("string-non-empty"));
     options.set_option("string-printable", cmdline.isset("string-printable"));
     if(cmdline.isset("string-max-length"))
       options.set_option(
@@ -492,11 +491,6 @@ int jbmc_parse_optionst::doit()
   if(set_properties(goto_model))
     return 7; // should contemplate EX_USAGE from sysexits.h
 
-  // unwinds <clinit> loops to number of enum elements
-  // side effect: add this as explicit unwind to unwind set
-  if(options.get_bool_option("java-unwind-enum-static"))
-    remove_static_init_loops(goto_model, options, get_message_handler());
-
   // get solver
   cbmc_solverst jbmc_solvers(
     options,
@@ -525,6 +519,24 @@ int jbmc_parse_optionst::doit()
     goto_model.symbol_table,
     get_message_handler(),
     prop_conv);
+
+  // unwinds <clinit> loops to number of enum elements
+  if(options.get_bool_option("java-unwind-enum-static"))
+  {
+    bmc.add_loop_unwind_handler(
+      [&goto_model]
+      (const irep_idt &function_id,
+       unsigned loop_number,
+       unsigned unwind,
+       unsigned &max_unwind) { // NOLINT (*)
+        return java_enum_static_init_unwind_handler(
+          function_id,
+          loop_number,
+          unwind,
+          max_unwind,
+          goto_model.symbol_table);
+      });
+  }
 
   // do actual BMC
   return do_bmc(bmc, goto_model);
@@ -574,6 +586,10 @@ int jbmc_parse_optionst::get_goto_program(
       *this, options, get_message_handler());
     lazy_goto_model.initialize(cmdline);
 
+    // Add failed symbols for any symbol created prior to loading any
+    // particular function:
+    add_failed_symbols(lazy_goto_model.symbol_table);
+
     status() << "Generating GOTO Program" << messaget::eom;
     lazy_goto_model.load_all_functions();
 
@@ -601,9 +617,15 @@ int jbmc_parse_optionst::get_goto_program(
     }
 
     // show it?
-    if(cmdline.isset("show-goto-functions"))
+    if(
+      cmdline.isset("show-goto-functions") ||
+      cmdline.isset("list-goto-functions"))
     {
-      show_goto_functions(*goto_model, ui_message_handler.get_ui());
+      show_goto_functions(
+        *goto_model,
+        get_message_handler(),
+        ui_message_handler.get_ui(),
+        cmdline.isset("list-goto-functions"));
       return 0;
     }
 
@@ -637,19 +659,71 @@ int jbmc_parse_optionst::get_goto_program(
 }
 
 void jbmc_parse_optionst::process_goto_function(
-  goto_model_functiont &function)
+  goto_model_functiont &function,
+  const can_produce_functiont &available_functions,
+  const optionst &options)
 {
-  symbol_tablet &symbol_table = function.get_symbol_table();
+  journalling_symbol_tablet &symbol_table = function.get_symbol_table();
+  namespacet ns(symbol_table);
   goto_functionst::goto_functiont &goto_function = function.get_goto_function();
   try
   {
-    // Remove inline assembler; this needs to happen before
-    // adding the library.
-    remove_asm(goto_function, symbol_table);
     // Removal of RTTI inspection:
     remove_instanceof(goto_function, symbol_table);
     // Java virtual functions -> explicit dispatch tables:
     remove_virtual_functions(function);
+
+    auto function_is_stub =
+      [&symbol_table, &available_functions](const irep_idt &id) { // NOLINT(*)
+        return symbol_table.lookup_ref(id).value.is_nil() &&
+               !available_functions.can_produce_function(id);
+      };
+
+    remove_returns(function, function_is_stub);
+
+    replace_java_nondet(function);
+
+    // Similar removal of java nondet statements:
+    // TODO Should really get this from java_bytecode_language somehow, but we
+    // don't have an instance of that here.
+    object_factory_parameterst factory_params;
+    factory_params.max_nondet_array_length=
+      cmdline.isset("java-max-input-array-length")
+        ? std::stoul(cmdline.get_value("java-max-input-array-length"))
+        : MAX_NONDET_ARRAY_LENGTH_DEFAULT;
+    factory_params.max_nondet_string_length=
+      cmdline.isset("string-max-input-length")
+        ? std::stoul(cmdline.get_value("string-max-input-length"))
+        : MAX_NONDET_STRING_LENGTH;
+    factory_params.max_nondet_tree_depth=
+      cmdline.isset("java-max-input-tree-depth")
+        ? std::stoul(cmdline.get_value("java-max-input-tree-depth"))
+        : MAX_NONDET_TREE_DEPTH;
+
+    convert_nondet(
+      function,
+      get_message_handler(),
+      factory_params);
+
+    // add generic checks
+    goto_check(ns, options, ID_java, function.get_goto_function());
+
+    // checks don't know about adjusted float expressions
+    adjust_float_expressions(goto_function, ns);
+
+    // add failed symbols for anything created relating to this particular
+    // function (note this means subseqent passes mustn't create more!):
+    journalling_symbol_tablet::changesett new_symbols =
+      symbol_table.get_inserted();
+    for(const irep_idt &new_symbol_name : new_symbols)
+    {
+      add_failed_symbol_if_needed(
+        symbol_table.lookup_ref(new_symbol_name),
+        symbol_table);
+    }
+
+    // update the function member in each instruction
+    function.update_instructions_function();
   }
 
   catch(const char *e)
@@ -677,49 +751,13 @@ bool jbmc_parse_optionst::process_goto_functions(
 {
   try
   {
-    remove_java_new(goto_model, get_message_handler());
-
-    status() << "Removal of virtual functions" << eom;
+    status() << "Running GOTO functions transformation passes" << eom;
     // remove catch and throw (introduces instanceof but request it is removed)
     remove_exceptions(
       goto_model, remove_exceptions_typest::REMOVE_ADDED_INSTANCEOF);
 
     // instrument library preconditions
     instrument_preconditions(goto_model);
-
-    // remove returns, gcc vectors, complex
-    remove_returns(goto_model);
-
-    // Similar removal of java nondet statements:
-    // TODO Should really get this from java_bytecode_language somehow, but we
-    // don't have an instance of that here.
-    object_factory_parameterst factory_params;
-    factory_params.max_nondet_array_length=
-      cmdline.isset("java-max-input-array-length")
-        ? std::stoul(cmdline.get_value("java-max-input-array-length"))
-        : MAX_NONDET_ARRAY_LENGTH_DEFAULT;
-    factory_params.max_nondet_string_length=
-      cmdline.isset("string-max-input-length")
-        ? std::stoul(cmdline.get_value("string-max-input-length"))
-        : MAX_NONDET_STRING_LENGTH;
-    factory_params.max_nondet_tree_depth=
-      cmdline.isset("java-max-input-tree-depth")
-        ? std::stoul(cmdline.get_value("java-max-input-tree-depth"))
-        : MAX_NONDET_TREE_DEPTH;
-
-    replace_java_nondet(goto_model);
-
-    convert_nondet(
-      goto_model,
-      get_message_handler(),
-      factory_params);
-
-    // add generic checks
-    status() << "Generic Property Instrumentation" << eom;
-    goto_check(options, goto_model);
-
-    // checks don't know about adjusted float expressions
-    adjust_float_expressions(goto_model);
 
     // ignore default/user-specified initialization
     // of variables with static lifetime
@@ -729,10 +767,6 @@ bool jbmc_parse_optionst::process_goto_functions(
                   "of static/global variables" << eom;
       nondet_static(goto_model);
     }
-
-    // add failed symbols
-    // needs to be done before pointer analysis
-    add_failed_symbols(goto_model.symbol_table);
 
     // recalculate numbers, etc.
     goto_model.goto_functions.update();
@@ -912,7 +946,6 @@ void jbmc_parse_optionst::help()
     " --z3                         use Z3\n"
     " --refine                     use refinement procedure (experimental)\n"
     " --refine-strings             use string refinement (experimental)\n"
-    " --string-non-empty           add constraint that strings are non empty (experimental)\n" // NOLINT(*)
     " --string-printable           add constraint that strings are printable (experimental)\n" // NOLINT(*)
     " --string-max-length          add constraint on the length of strings\n" // NOLINT(*)
     " --string-max-input-length    add constraint on the length of input strings\n" // NOLINT(*)
@@ -926,5 +959,6 @@ void jbmc_parse_optionst::help()
     " --json-ui                    use JSON-formatted output\n"
     HELP_GOTO_TRACE
     " --verbosity #                verbosity level\n"
+    HELP_TIMESTAMP
     "\n";
 }
