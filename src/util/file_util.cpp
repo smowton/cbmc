@@ -161,11 +161,11 @@ std::string concat_dir_file(
 /// This is not designed to operate on path names and will replace folder
 /// seperator characters.
 /// \param file_name: The file name to sanitize.
-/// \param max_size: The maximum size for the file name. If the name is longer,
-///                  then its size will be cut to the max_size.
+/// \param max_length: The maximum length for the file name. If the name is
+///                    longer, then its length will be cut to the max_length.
 std::string make_valid_filename(
   std::string file_name,
-  const std::size_t max_size)
+  const std::size_t max_length)
 {
   std::replace(file_name.begin(), file_name.end(), '#', '_');
   std::replace(file_name.begin(), file_name.end(), '$', '_');
@@ -174,7 +174,7 @@ std::string make_valid_filename(
   std::replace(file_name.begin(), file_name.end(), '\\', '.');
   std::replace(file_name.begin(), file_name.end(), '<', '[');
   std::replace(file_name.begin(), file_name.end(), '>', ']');
-  if(file_name.size() > max_size)
-    file_name.resize(max_size);
+  if(file_name.size() > max_length)
+    file_name.resize(max_length);
   return file_name;
 }
