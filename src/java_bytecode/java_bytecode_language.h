@@ -12,18 +12,23 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <memory>
 
-#include <util/language.h>
 #include <util/cmdline.h>
 #include <util/make_unique.h>
+
+#include <langapi/language.h>
 
 #include "ci_lazy_methods.h"
 #include "ci_lazy_methods_needed.h"
 #include "java_class_loader.h"
+#include "java_static_initializers.h"
 #include "java_string_library_preprocess.h"
+#include "object_factory_parameters.h"
+#include "synthetic_methods_map.h"
 
 #include <java_bytecode/select_pointer_type.h>
 
 #define JAVA_BYTECODE_LANGUAGE_OPTIONS /*NOLINT*/                              \
+  "(no-core-models)"                                                           \
   "(java-assume-inputs-non-null)"                                              \
   "(java-throw-runtime-exceptions)"                                            \
   "(java-max-input-array-length):"                                             \
@@ -35,24 +40,22 @@ Author: Daniel Kroening, kroening@kroening.com
   "(java-load-class):"
 
 #define JAVA_BYTECODE_LANGUAGE_OPTIONS_HELP /*NOLINT*/                                          \
-  " --java-assume-inputs-non-null    never initialize reference-typed parameter to the\n"       \
-  "                                  entry point with null\n"                                   \
-  " --java-throw-runtime-exceptions  make implicit runtime exceptions explicit\n"               \
-  " --java-max-input-array-length N  limit input array size to <= N\n"                          \
-  " --java-max-input-tree-depth N    object references are (deterministically) set to null in\n"\
-  "                                  the object\n"                                              \
-  " --java-max-vla-length            limit the length of user-code-created arrays\n"            \
-  " --java-cp-include-files          regexp or JSON list of files to load (with '@' prefix)\n"  \
-  " --lazy-methods                   only translate methods that appear to be reachable from\n" \
-  "                                  the --function entry point or main class\n"                \
-  " --lazy-methods-extra-entry-point METHODNAME\n"                                              \
-  "                                  treat METHODNAME as a possible program entry point for\n"  \
-  "                                  the purpose of lazy method loading\n"                      \
+  " --no-core-models                 don't load internally provided models for core classes in\n"/* NOLINT(*) */ \
+  "                                  the Java Class Library\n"                                   /* NOLINT(*) */ \
+  " --java-assume-inputs-non-null    never initialize reference-typed parameter to the\n"        /* NOLINT(*) */ \
+  "                                  entry point with null\n"                                    /* NOLINT(*) */ \
+  " --java-throw-runtime-exceptions  make implicit runtime exceptions explicit\n"                /* NOLINT(*) */ \
+  " --java-max-input-array-length N  limit input array size to <= N\n"                           /* NOLINT(*) */ \
+  " --java-max-input-tree-depth N    object references are (deterministically) set to null in\n" /* NOLINT(*) */ \
+  "                                  the object\n"                                               /* NOLINT(*) */ \
+  " --java-max-vla-length            limit the length of user-code-created arrays\n"             /* NOLINT(*) */ \
+  " --java-cp-include-files          regexp or JSON list of files to load (with '@' prefix)\n"   /* NOLINT(*) */ \
+  " --lazy-methods                   only translate methods that appear to be reachable from\n"  /* NOLINT(*) */ \
+  "                                  the --function entry point or main class\n"                 /* NOLINT(*) */ \
+  " --lazy-methods-extra-entry-point METHODNAME\n"                                               /* NOLINT(*) */ \
+  "                                  treat METHODNAME as a possible program entry point for\n"   /* NOLINT(*) */ \
+  "                                  the purpose of lazy method loading\n"                       /* NOLINT(*) */ \
   "                                  A '.*' wildcard is allowed to specify all class members\n"
-
-#define MAX_NONDET_ARRAY_LENGTH_DEFAULT 5
-#define MAX_NONDET_STRING_LENGTH std::numeric_limits<std::int32_t>::max()
-#define MAX_NONDET_TREE_DEPTH 5
 
 class symbolt;
 
@@ -61,26 +64,6 @@ enum lazy_methods_modet
   LAZY_METHODS_MODE_EAGER,
   LAZY_METHODS_MODE_CONTEXT_INSENSITIVE,
   LAZY_METHODS_MODE_CONTEXT_SENSITIVE
-};
-
-struct object_factory_parameterst final
-{
-  /// Maximum value for the non-deterministically-chosen length of an array.
-  size_t max_nondet_array_length=MAX_NONDET_ARRAY_LENGTH_DEFAULT;
-
-  /// Maximum value for the non-deterministically-chosen length of a string.
-  size_t max_nondet_string_length=MAX_NONDET_STRING_LENGTH;
-
-  /// Maximum depth for object hierarchy on input.
-  /// Used to prevent object factory to loop infinitely during the
-  /// generation of code that allocates/initializes data structures of recursive
-  /// data types or unbounded depth. We bound the maximum number of times we
-  /// dereference a pointer using a 'depth counter'. We set a pointer to null if
-  /// such depth becomes >= than this maximum value.
-  size_t max_nondet_tree_depth=MAX_NONDET_TREE_DEPTH;
-
-  /// Force string content to be ASCII printable characters when set to true.
-  bool string_printable = false;
 };
 
 class java_bytecode_languaget:public languaget
@@ -155,7 +138,7 @@ public:
   virtual void methods_provided(id_sett &methods) const override;
   virtual void convert_lazy_method(
     const irep_idt &function_id,
-    symbol_tablet &symbol_table) override;
+    symbol_table_baset &symbol_table) override;
 
 protected:
   void convert_single_method(
@@ -192,6 +175,9 @@ protected:
 
 private:
   const std::unique_ptr<const select_pointer_typet> pointer_type_selector;
+  synthetic_methods_mapt synthetic_methods;
+  stub_global_initializer_factoryt stub_global_initializer_factory;
+  class_hierarchyt class_hierarchy;
 };
 
 std::unique_ptr<languaget> new_java_bytecode_language();

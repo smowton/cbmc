@@ -16,6 +16,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "java_bytecode_convert_method.h"
 #include "java_bytecode_convert_method_class.h"
 #include "bytecode_info.h"
+#include "java_static_initializers.h"
 #include "java_string_library_preprocess.h"
 #include "java_types.h"
 #include "java_utils.h"
@@ -35,7 +36,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-programs/cfg.h>
 #include <goto-programs/remove_exceptions.h>
 #include <goto-programs/class_hierarchy.h>
-#include <goto-programs/resolve_concrete_function_call.h>
+#include <goto-programs/resolve_inherited_component.h>
 #include <analyses/cfg_dominators.h>
 
 #include <limits>
@@ -44,6 +45,9 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <unordered_set>
 #include <regex>
 
+/// Given a string of the format '?blah?', will return true when compared
+/// against a string that matches appart from any characters that are '?'
+/// in the original string. Equivalent to doing a regex match on '.blah.'
 class patternt
 {
 public:
@@ -387,6 +391,7 @@ void java_bytecode_convert_methodt::convert(
   // Obtain a std::vector of code_typet::parametert objects from the
   // (function) type of the symbol
   typet member_type=method_symbol.type;
+  member_type.set(ID_C_class, class_symbol.name);
   code_typet &code_type=to_code_type(member_type);
   method_return_type=code_type.return_type();
   code_typet::parameterst &parameters=code_type.parameters();
@@ -901,158 +906,6 @@ static void gather_symbol_live_ranges(
   }
 }
 
-/// See above
-/// \par parameters: `se`: Symbol expression referring to a static field
-/// `basename`: The static field's basename
-/// \return Creates a symbol table entry for the static field if one doesn't
-///   exist already.
-void java_bytecode_convert_methodt::check_static_field_stub(
-  const symbol_exprt &symbol_expr,
-  const irep_idt &basename)
-{
-  const auto &id=symbol_expr.get_identifier();
-  if(symbol_table.symbols.find(id)==symbol_table.symbols.end())
-  {
-    // Create a stub, to be overwritten if/when the real class is loaded.
-    symbolt new_symbol;
-    new_symbol.is_static_lifetime=true;
-    new_symbol.is_lvalue=true;
-    new_symbol.is_state_var=true;
-    new_symbol.name=id;
-    new_symbol.base_name=basename;
-    new_symbol.type=symbol_expr.type();
-    new_symbol.pretty_name=new_symbol.name;
-    new_symbol.mode=ID_java;
-    new_symbol.is_type=false;
-    new_symbol.value.make_nil();
-    symbol_table.add(new_symbol);
-  }
-}
-
-/// Determine whether a `new` or static access against `classname` should be
-/// prefixed with a static initialization check.
-/// \param classname: Class name
-/// \return Returns true if the given class or one of its parents has a static
-///   initializer
-bool java_bytecode_convert_methodt::class_needs_clinit(
-  const irep_idt &classname)
-{
-  auto findit_any=any_superclass_has_clinit_method.insert({classname, false});
-  if(!findit_any.second)
-    return findit_any.first->second;
-
-  auto findit_here=class_has_clinit_method.insert({classname, false});
-  if(findit_here.second)
-  {
-    const irep_idt &clinit_name=id2string(classname)+".<clinit>:()V";
-    findit_here.first->second=symbol_table.symbols.count(clinit_name);
-  }
-  if(findit_here.first->second)
-  {
-    findit_any.first->second=true;
-    return true;
-  }
-  const auto maybe_symbol=symbol_table.lookup(classname);
-  // Stub class?
-  if(!maybe_symbol)
-  {
-    warning() << "SKIPPED: " << classname << eom;
-    return false;
-  }
-  const symbolt &class_symbol=*maybe_symbol;
-  for(const auto &base : to_class_type(class_symbol.type).bases())
-  {
-    if(class_needs_clinit(to_symbol_type(base.type()).get_identifier()))
-    {
-      findit_any.first->second=true;
-      return true;
-    }
-  }
-  return false;
-}
-
-/// Create a ::clinit_wrapper the first time a static initializer might be
-/// called. The wrapper method checks whether static init has already taken
-/// place, calls the actual <clinit> method if not, and initializes super-
-/// classes and interfaces.
-/// \param classname: Class name
-/// \return Returns a symbol_exprt pointing to the given class' clinit wrapper
-///   if one is required, or nil otherwise.
-exprt java_bytecode_convert_methodt::get_or_create_clinit_wrapper(
-  const irep_idt &classname)
-{
-  if(!class_needs_clinit(classname))
-    return static_cast<const exprt &>(get_nil_irep());
-
-  const irep_idt &clinit_wrapper_name=
-    id2string(classname)+"::clinit_wrapper";
-  auto findit=symbol_table.symbols.find(clinit_wrapper_name);
-  if(findit!=symbol_table.symbols.end())
-    return findit->second.symbol_expr();
-
-  // Create the wrapper now:
-  const irep_idt &already_run_name=
-    id2string(classname)+"::clinit_already_run";
-  symbolt already_run_symbol;
-  already_run_symbol.name=already_run_name;
-  already_run_symbol.pretty_name=already_run_name;
-  already_run_symbol.base_name="clinit_already_run";
-  already_run_symbol.type=bool_typet();
-  already_run_symbol.value=false_exprt();
-  already_run_symbol.is_lvalue=true;
-  already_run_symbol.is_state_var=true;
-  already_run_symbol.is_static_lifetime=true;
-  already_run_symbol.mode=ID_java;
-  symbol_table.add(already_run_symbol);
-
-  equal_exprt check_already_run(
-    already_run_symbol.symbol_expr(),
-    false_exprt());
-
-  code_ifthenelset wrapper_body;
-  wrapper_body.cond()=check_already_run;
-  code_blockt init_body;
-  // Note already-run is set *before* calling clinit, in order to prevent
-  // recursion in clinit methods.
-  code_assignt set_already_run(already_run_symbol.symbol_expr(), true_exprt());
-  init_body.move_to_operands(set_already_run);
-  const irep_idt &real_clinit_name=id2string(classname)+".<clinit>:()V";
-  const symbolt &class_symbol=*symbol_table.lookup(classname);
-
-  auto findsymit=symbol_table.symbols.find(real_clinit_name);
-  if(findsymit!=symbol_table.symbols.end())
-  {
-    code_function_callt call_real_init;
-    call_real_init.function()=findsymit->second.symbol_expr();
-    init_body.move_to_operands(call_real_init);
-  }
-
-  for(const auto &base : to_class_type(class_symbol.type).bases())
-  {
-    const auto base_name=to_symbol_type(base.type()).get_identifier();
-    exprt base_init_routine=get_or_create_clinit_wrapper(base_name);
-    if(base_init_routine.is_nil())
-      continue;
-    code_function_callt call_base;
-    call_base.function()=base_init_routine;
-    init_body.move_to_operands(call_base);
-  }
-
-  wrapper_body.then_case()=init_body;
-
-  symbolt wrapper_method_symbol;
-  code_typet wrapper_method_type;
-  wrapper_method_type.return_type()=void_typet();
-  wrapper_method_symbol.name=clinit_wrapper_name;
-  wrapper_method_symbol.pretty_name=clinit_wrapper_name;
-  wrapper_method_symbol.base_name="clinit_wrapper";
-  wrapper_method_symbol.type=wrapper_method_type;
-  wrapper_method_symbol.value=wrapper_body;
-  wrapper_method_symbol.mode=ID_java;
-  symbol_table.add(wrapper_method_symbol);
-  return wrapper_method_symbol.symbol_expr();
-}
-
 /// Each static access to classname should be prefixed with a check for
 /// necessary static init; this returns a call implementing that check.
 /// \param classname: Class name
@@ -1061,12 +914,17 @@ exprt java_bytecode_convert_methodt::get_or_create_clinit_wrapper(
 codet java_bytecode_convert_methodt::get_clinit_call(
   const irep_idt &classname)
 {
-  exprt callee=get_or_create_clinit_wrapper(classname);
-  if(callee.is_nil())
+  auto findit = symbol_table.symbols.find(clinit_wrapper_name(classname));
+  if(findit == symbol_table.symbols.end())
     return code_skipt();
-  code_function_callt ret;
-  ret.function()=callee;
-  return ret;
+  else
+  {
+    code_function_callt ret;
+    ret.function() = findit->second.symbol_expr();
+    if(needed_lazy_methods)
+      needed_lazy_methods->add_needed_method(findit->second.name);
+    return ret;
+  }
 }
 
 static unsigned get_bytecode_type_width(const typet &ty)
@@ -1685,41 +1543,12 @@ codet java_bytecode_convert_methodt::convert_instructions(
     {
       assert(op.empty() && results.size()==1);
 
-      // 1) Pushing a String causes a reference to a java.lang.String object
-      // to be constructed and pushed onto the operand stack.
+      INVARIANT(
+        arg0.id() != ID_java_string_literal && arg0.id() != ID_type,
+        "String and Class literals should have been lowered in "
+        "generate_constant_global_variables");
 
-      // 2) Pushing an int or a float causes a primitive value to be pushed
-      // onto the stack.
-
-      // 3) Pushing a Class constant causes a reference to a java.lang.Class
-      // to be pushed onto the operand stack
-
-      if(arg0.id()==ID_java_string_literal)
-      {
-        // these need to be references to java.lang.String
-        results[0]=arg0;
-        symbol_typet string_type("java::java.lang.String");
-        results[0].type()=java_reference_type(string_type);
-      }
-      else if(arg0.id()==ID_type)
-      {
-        irep_idt class_id=arg0.type().get(ID_identifier);
-        symbol_typet java_lang_Class("java::java.lang.Class");
-        symbol_exprt symbol_expr(
-          id2string(class_id)+"@class_model",
-          java_lang_Class);
-        address_of_exprt address_of_expr(symbol_expr);
-        results[0]=address_of_expr;
-      }
-      else if(arg0.id()==ID_constant)
-      {
-        results[0]=arg0;
-      }
-      else
-      {
-        error() << "unexpected ldc argument" << eom;
-        throw 0;
-      }
+      results[0] = arg0;
     }
     else if(statement=="goto" || statement=="goto_w")
     {
@@ -2050,11 +1879,6 @@ codet java_bytecode_convert_methodt::convert_instructions(
     else if(statement==patternt("?cmp?"))
     {
       assert(op.size()==2 && results.size()==1);
-      const floatbv_typet type(
-        to_floatbv_type(java_type_from_char(statement[0])));
-      const ieee_float_spect spec(type);
-      const ieee_floatt nan(ieee_floatt::NaN(spec));
-      const constant_exprt nan_expr(nan.to_expr());
       const int nan_value(statement[4]=='l' ? -1 : 1);
       const typet result_type(java_int_type());
       const exprt nan_result(from_integer(nan_value, result_type));
@@ -2064,8 +1888,8 @@ codet java_bytecode_convert_methodt::convert_instructions(
       // (value1 == NaN || value2 == NaN) ?
       //   nan_value : value1 == value2 ? 0  : value1 < value2 -1 ? 1 : 0;
 
-      exprt nan_op0=ieee_float_equal_exprt(nan_expr, op[0]);
-      exprt nan_op1=ieee_float_equal_exprt(nan_expr, op[1]);
+      isnan_exprt nan_op0(op[0]);
+      isnan_exprt nan_op1(op[1]);
       exprt one=from_integer(1, result_type);
       exprt minus_one=from_integer(-1, result_type);
       results[0]=
@@ -2172,10 +1996,13 @@ codet java_bytecode_convert_methodt::convert_instructions(
       const auto &field_name=arg0.get_string(ID_component_name);
       const bool is_assertions_disabled_field=
         field_name.find("$assertionsDisabled")!=std::string::npos;
-      symbol_expr.set_identifier(arg0.get_string(ID_class)+"."+field_name);
 
-      // If external, create a symbol table entry for this static field:
-      check_static_field_stub(symbol_expr, field_name);
+      symbol_expr.set_identifier(
+        get_static_field(arg0.get_string(ID_class), field_name));
+
+      INVARIANT(
+        symbol_table.has_symbol(symbol_expr.get_identifier()),
+        "getstatic symbol should have been created before method conversion");
 
       if(needed_lazy_methods)
       {
@@ -2200,6 +2027,9 @@ codet java_bytecode_convert_methodt::convert_instructions(
       }
       results[0]=java_bytecode_promotion(symbol_expr);
 
+      // Note this initializer call deliberately inits the class used to make
+      // the reference, which may be a child of the class that actually defines
+      // the field.
       codet clinit_call=get_clinit_call(arg0.get_string(ID_class));
       if(clinit_call.get_statement()!=ID_skip)
         c=clinit_call;
@@ -2227,10 +2057,12 @@ codet java_bytecode_convert_methodt::convert_instructions(
       assert(op.size()==1 && results.empty());
       symbol_exprt symbol_expr(arg0.type());
       const auto &field_name=arg0.get_string(ID_component_name);
-      symbol_expr.set_identifier(arg0.get_string(ID_class)+"."+field_name);
+      symbol_expr.set_identifier(
+        get_static_field(arg0.get_string(ID_class), field_name));
 
-      // If external, create a symbol table entry for this static field:
-      check_static_field_stub(symbol_expr, field_name);
+      INVARIANT(
+        symbol_table.has_symbol(symbol_expr.get_identifier()),
+        "putstatic symbol should have been created before method conversion");
 
       if(needed_lazy_methods && arg0.type().id() == ID_symbol)
       {
@@ -2241,6 +2073,9 @@ codet java_bytecode_convert_methodt::convert_instructions(
       code_blockt block;
       block.add_source_location()=i_it->source_location;
 
+      // Note this initializer call deliberately inits the class used to make
+      // the reference, which may be a child of the class that actually defines
+      // the field.
       codet clinit_call=get_clinit_call(arg0.get_string(ID_class));
       if(clinit_call.get_statement()!=ID_skip)
         block.move_to_operands(clinit_call);
@@ -2938,7 +2773,8 @@ void java_bytecode_convert_method(
   message_handlert &message_handler,
   size_t max_array_length,
   optionalt<ci_lazy_methods_neededt> needed_lazy_methods,
-  java_string_library_preprocesst &string_preprocess)
+  java_string_library_preprocesst &string_preprocess,
+  const class_hierarchyt &class_hierarchy)
 {
   static const std::unordered_set<std::string> methods_to_ignore
   {
@@ -2969,7 +2805,8 @@ void java_bytecode_convert_method(
     message_handler,
     max_array_length,
     needed_lazy_methods,
-    string_preprocess);
+    string_preprocess,
+    class_hierarchy);
 
   java_bytecode_convert_method(class_symbol, method);
 }
@@ -2977,58 +2814,45 @@ void java_bytecode_convert_method(
 /// Returns true iff method \p methodid from class \p classname is
 /// a method inherited from a class (and not an interface!) from which
 /// \p classname inherits, either directly or indirectly.
+/// \param classname: class whose method is referenced
+/// \param methodid: method basename
 bool java_bytecode_convert_methodt::is_method_inherited(
-  const irep_idt &classname, const irep_idt &methodid) const
+  const irep_idt &classname,
+  const irep_idt &methodid) const
 {
-  resolve_concrete_function_callt call_resolver(symbol_table);
-  const resolve_concrete_function_callt ::concrete_function_callt &
-    resolved_call=call_resolver(classname, methodid);
+  resolve_inherited_componentt::inherited_componentt inherited_method =
+    get_inherited_component(
+      classname,
+      methodid,
+      classname,
+      symbol_table,
+      class_hierarchy,
+      false);
+  return inherited_method.is_valid();
+}
 
-  // resolved_call is a pair (class-name, method-name) found by walking the
-  // chain of class inheritance (not interfaces!) and stopping on the first
-  // class that contains a method of equal name and type to `methodid`
+/// Get static field identifier referred to by `class_identifier.component_name`
+/// Note this may be inherited from either a parent or an interface.
+/// \param class_identifier: class used to refer to the field
+/// \param component_name: component (static field) name
+/// \return identifier of the actual concrete field referred to
+irep_idt java_bytecode_convert_methodt::get_static_field(
+  const irep_idt &class_identifier,
+  const irep_idt &component_name) const
+{
+  resolve_inherited_componentt::inherited_componentt inherited_method =
+    get_inherited_component(
+      class_identifier,
+      component_name,
+      symbol_table.lookup_ref(current_method).type.get(ID_C_class),
+      symbol_table,
+      class_hierarchy,
+      true);
 
-  if(resolved_call.is_valid())
-  {
-    const symbolt &function_symbol=
-      *symbol_table.lookup(resolved_call.get_virtual_method_name());
+  INVARIANT(
+    inherited_method.is_valid(), "static field should be in symbol table");
 
-    INVARIANT(function_symbol.type.id()==ID_code, "Function must be code");
-
-    const auto &access=function_symbol.type.get(ID_access);
-    if(access==ID_public || access==ID_protected)
-    {
-      // since the method is public, it is a public method of `classname`, it is
-      // inherited
-      return true;
-    }
-
-    // methods with the default access modifier are only
-    // accessible within the same package.
-    if(access==ID_default)
-    {
-      const std::string &class_package=
-        java_class_to_package(id2string(classname));
-      const std::string &method_package=
-        java_class_to_package(id2string(resolved_call.get_class_identifier()));
-      return method_package==class_package;
-    }
-
-    if(access==ID_private)
-    {
-      // We return false because the method found by the call_resolver above
-      // proves that `methodid` cannot be inherited (assuming that the original
-      // Java code compiles). This is because, as we walk the inheritance chain
-      // for `classname` from Object to `classname`, a method can only become
-      // "more accessible". So, if the last occurrence is private, all others
-      // before must be private as well, and none is inherited in `classname`.
-      return false;
-    }
-
-    INVARIANT(false, "Unexpected access modifier.");
-  }
-
-  return false;
+  return inherited_method.get_full_component_identifier();
 }
 
 /// create temporary variables if a write instruction can have undesired side-

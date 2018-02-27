@@ -29,7 +29,7 @@ public:
   void goto_convert(const codet &code, goto_programt &dest);
 
   goto_convertt(
-    symbol_tablet &_symbol_table,
+    symbol_table_baset &_symbol_table,
     message_handlert &_message_handler):
     messaget(_message_handler),
     symbol_table(_symbol_table),
@@ -44,7 +44,7 @@ public:
   }
 
 protected:
-  symbol_tablet &symbol_table;
+  symbol_table_baset &symbol_table;
   namespacet ns;
   unsigned temporary_counter;
   std::string tmp_symbol_prefix;
@@ -142,6 +142,11 @@ protected:
     const side_effect_exprt &rhs,
     goto_programt &dest);
 
+  void do_java_new(
+    const exprt &lhs,
+    const side_effect_exprt &rhs,
+    goto_programt &dest);
+
   void do_java_new_array(
     const exprt &lhs,
     const side_effect_exprt &rhs,
@@ -229,8 +234,6 @@ protected:
   void convert_end_thread(const codet &code, goto_programt &dest);
   void convert_atomic_begin(const codet &code, goto_programt &dest);
   void convert_atomic_end(const codet &code, goto_programt &dest);
-  void convert_bp_enforce(const codet &code, goto_programt &dest);
-  void convert_bp_abortif(const codet &code, goto_programt &dest);
   void convert_msc_try_finally(const codet &code, goto_programt &dest);
   void convert_msc_try_except(const codet &code, goto_programt &dest);
   void convert_msc_leave(const codet &code, goto_programt &dest);
@@ -501,6 +504,11 @@ protected:
     const exprt &expr,
     const irep_idt &id,
     std::list<exprt> &dest);
+
+  // START_THREAD; ... END_THREAD;
+  void generate_thread_block(
+    const code_blockt &thread_body,
+    goto_programt &dest);
 
   //
   // misc

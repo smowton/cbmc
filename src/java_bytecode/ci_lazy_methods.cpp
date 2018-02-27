@@ -13,7 +13,8 @@
 #include <util/suffix.h>
 #include <java_bytecode/java_string_library_preprocess.h>
 
-#include <goto-programs/resolve_concrete_function_call.h>
+#include <goto-programs/resolve_inherited_component.h>
+#include <goto-programs/remove_exceptions.h>
 
 /// Constructor for lazy-method loading
 /// \param symbol_table: the symbol table to use
@@ -35,14 +36,16 @@ ci_lazy_methodst::ci_lazy_methodst(
   java_class_loadert &java_class_loader,
   const std::vector<irep_idt> &extra_needed_classes,
   const select_pointer_typet &pointer_type_selector,
-  message_handlert &message_handler)
+  message_handlert &message_handler,
+  const synthetic_methods_mapt &synthetic_methods)
   : messaget(message_handler),
     main_class(main_class),
     main_jar_classes(main_jar_classes),
     lazy_methods_extra_entry_points(lazy_methods_extra_entry_points),
     java_class_loader(java_class_loader),
     extra_needed_classes(extra_needed_classes),
-    pointer_type_selector(pointer_type_selector)
+    pointer_type_selector(pointer_type_selector),
+    synthetic_methods(synthetic_methods)
 {
   // build the class hierarchy
   class_hierarchy(symbol_table);
@@ -110,9 +113,9 @@ bool ci_lazy_methodst::operator()(
   std::set<irep_idt> needed_classes;
 
   {
-    std::vector<irep_idt> needed_clinits;
+    std::vector<irep_idt> initial_needed_methods;
     ci_lazy_methods_neededt initial_lazy_methods(
-      needed_clinits,
+      initial_needed_methods,
       needed_classes,
       symbol_table);
     initialize_needed_classes(
@@ -121,8 +124,8 @@ bool ci_lazy_methodst::operator()(
       initial_lazy_methods);
     method_worklist2.insert(
       method_worklist2.end(),
-      needed_clinits.begin(),
-      needed_clinits.end());
+      initial_needed_methods.begin(),
+      initial_needed_methods.end());
   }
 
   std::set<irep_idt> methods_already_populated;
@@ -180,6 +183,9 @@ bool ci_lazy_methodst::operator()(
 
   // Remove symbols for methods that were declared but never used:
   symbol_tablet keep_symbols;
+  // Manually keep @inflight_exception, as it is unused at this stage
+  // but will become used when the `remove_exceptions` pass is run:
+  keep_symbols.add(symbol_table.lookup_ref(INFLIGHT_EXCEPTION_VARIABLE_NAME));
 
   for(const auto &sym : symbol_table.symbols)
   {
@@ -192,7 +198,8 @@ bool ci_lazy_methodst::operator()(
       // Don't keep functions that belong to this language that we haven't
       // converted above
       if(
-        method_bytecode.contains_method(sym.first) &&
+        (method_bytecode.contains_method(sym.first) ||
+         synthetic_methods.count(sym.first)) &&
         !methods_already_populated.count(sym.first))
       {
         continue;
@@ -340,7 +347,10 @@ void ci_lazy_methodst::initialize_needed_classes_from_pointer(
   const symbol_typet &class_type=to_symbol_type(pointer_type.subtype());
   const auto &param_classid=class_type.get_identifier();
 
-  if(needed_lazy_methods.add_needed_class(param_classid))
+  // Note here: different arrays may have different element types, so we should
+  // explore again even if we've seen this classid before in the array case.
+  if(needed_lazy_methods.add_needed_class(param_classid) ||
+     is_java_array_tag(param_classid))
   {
     gather_field_types(pointer_type.subtype(), ns, needed_lazy_methods);
   }
@@ -472,6 +482,8 @@ void ci_lazy_methodst::gather_needed_globals(
        findit->second.is_static_lifetime)
     {
       needed.add(findit->second);
+      // Gather any globals referenced in the initialiser:
+      gather_needed_globals(findit->second.value, symbol_table, needed);
     }
   }
   else
@@ -559,12 +571,12 @@ irep_idt ci_lazy_methodst::get_virtual_method_target(
   if(!needed_classes.count(classname))
     return irep_idt();
 
-  resolve_concrete_function_callt call_resolver(symbol_table, class_hierarchy);
-  const resolve_concrete_function_callt ::concrete_function_callt &
-    resolved_call=call_resolver(classname, call_basename);
+  resolve_inherited_componentt call_resolver(symbol_table, class_hierarchy);
+  const resolve_inherited_componentt::inherited_componentt resolved_call =
+    call_resolver(classname, call_basename, false);
 
   if(resolved_call.is_valid())
-    return resolved_call.get_virtual_method_name();
+    return resolved_call.get_full_component_identifier();
   else
     return irep_idt();
 }

@@ -19,6 +19,15 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "java_bytecode_parser.h"
 #include "jar_file.h"
 
+#include "library/java_core_models.inc"
+
+/// This variable stores the data of the file core-models.jar. The macro
+/// JAVA_CORE_MODELS_SIZE is defined in the header java_core_models.inc, which
+/// gets generated at compile time by running a small utility (converter.cpp) on
+/// actual .jar file. The number of bytes in the variable is
+/// JAVA_CORE_MODELS_SIZE, another macro defined in java_core_models.inc.
+unsigned char java_core_models[] = { JAVA_CORE_MODELS_DATA };
+
 java_bytecode_parse_treet &java_class_loadert::operator()(
   const irep_idt &class_name)
 {
@@ -63,6 +72,16 @@ java_bytecode_parse_treet &java_class_loadert::operator()(
         it!=parse_tree.class_refs.end();
         it++)
       queue.push(*it);
+
+    // Add any extra dependencies provided by our caller:
+    if(get_extra_class_refs)
+    {
+      std::vector<irep_idt> extra_class_refs =
+        get_extra_class_refs(c);
+
+      for(const irep_idt &id : extra_class_refs)
+        queue.push(id);
+    }
   }
 
   return class_map[class_name];
@@ -72,6 +91,68 @@ void java_class_loadert::set_java_cp_include_files(
   std::string &_java_cp_include_files)
 {
   java_cp_include_files=_java_cp_include_files;
+}
+
+/// Sets a function that provides extra dependencies for a particular class.
+/// Currently used by the string preprocessor to note that even if we don't
+/// have a definition of core string types, it will nontheless give them
+/// certain known superclasses and interfaces, such as Serializable.
+void java_class_loadert::set_extra_class_refs_function(
+  java_class_loadert::get_extra_class_refs_functiont func)
+{
+  get_extra_class_refs = func;
+}
+
+/// Retrieves a class file from a jar and loads it into the tree
+bool java_class_loadert::get_class_file(
+  java_class_loader_limitt &class_loader_limit,
+  const irep_idt &class_name,
+  const std::string &jar_file,
+  java_bytecode_parse_treet &parse_tree)
+{
+  const auto &jm=jar_map[jar_file];
+
+  auto jm_it=jm.entries.find(class_name);
+
+  if(jm_it!=jm.entries.end())
+  {
+    debug() << "Getting class `" << class_name << "' from JAR "
+            << jar_file << eom;
+
+    std::string data=jar_pool(class_loader_limit, jar_file)
+      .get_entry(jm_it->second.class_file_name);
+
+    std::istringstream istream(data);
+
+    java_bytecode_parse(
+      istream,
+      parse_tree,
+      get_message_handler());
+
+    return true;
+  }
+  return false;
+}
+
+/// Retrieves a class file from the internal jar and loads it into the tree
+bool java_class_loadert::get_internal_class_file(
+  java_class_loader_limitt &class_loader_limit,
+  const irep_idt &class_name,
+  java_bytecode_parse_treet &parse_tree)
+{
+  // Add internal jar file. The name is used to load it once only and
+  // reference it later.
+  std::string core_models="core-models.jar";
+  jar_pool(class_loader_limit,
+           core_models,
+           java_core_models,
+           JAVA_CORE_MODELS_SIZE);
+
+  // This does not read from the jar file but from the jar_filet object
+  // as we've just created it
+  read_jar_file(class_loader_limit, core_models);
+  return
+    get_class_file(class_loader_limit, class_name, core_models, parse_tree);
 }
 
 java_bytecode_parse_treet &java_class_loadert::get_parse_tree(
@@ -84,28 +165,14 @@ java_bytecode_parse_treet &java_class_loadert::get_parse_tree(
   for(const auto &jf : jar_files)
   {
     read_jar_file(class_loader_limit, jf);
-
-    const auto &jm=jar_map[jf];
-
-    auto jm_it=jm.entries.find(class_name);
-
-    if(jm_it!=jm.entries.end())
-    {
-      debug() << "Getting class `" << class_name << "' from JAR "
-              << jf << eom;
-
-      std::string data=jar_pool(class_loader_limit, jf)
-        .get_entry(jm_it->second.class_file_name);
-
-      std::istringstream istream(data);
-
-      java_bytecode_parse(
-        istream,
-        parse_tree,
-        get_message_handler());
-
+    if(get_class_file(class_loader_limit, class_name, jf, parse_tree))
       return parse_tree;
-    }
+  }
+
+  if(use_core_models)
+  {
+    if(get_internal_class_file(class_loader_limit, class_name, parse_tree))
+      return parse_tree;
   }
 
   // See if we can find it in the class path
@@ -115,28 +182,8 @@ java_bytecode_parse_treet &java_class_loadert::get_parse_tree(
     if(has_suffix(cp, ".jar"))
     {
       read_jar_file(class_loader_limit, cp);
-
-      const auto &jm=jar_map[cp];
-
-      auto jm_it=jm.entries.find(class_name);
-
-      if(jm_it!=jm.entries.end())
-      {
-        debug() << "Getting class `" << class_name << "' from JAR "
-                << cp << eom;
-
-        std::string data=jar_pool(class_loader_limit, cp)
-          .get_entry(jm_it->second.class_file_name);
-
-        std::istringstream istream(data);
-
-        java_bytecode_parse(
-          istream,
-          parse_tree,
-          get_message_handler());
-
+      if(get_class_file(class_loader_limit, class_name, cp, parse_tree))
         return parse_tree;
-      }
     }
     else
     {
@@ -290,4 +337,21 @@ void java_class_loadert::add_load_classes(const std::vector<irep_idt> &classes)
 {
   for(const auto &id : classes)
     java_load_classes.push_back(id);
+}
+
+jar_filet &java_class_loadert::jar_pool(
+  java_class_loader_limitt &class_loader_limit,
+  const std::string &buffer_name,
+  const void *pmem,
+  size_t size)
+{
+  const auto it=m_archives.find(buffer_name);
+  if(it==m_archives.end())
+  {
+    // VS: Can't construct in place
+    auto file=jar_filet(class_loader_limit, pmem, size);
+    return m_archives.emplace(buffer_name, std::move(file)).first->second;
+  }
+  else
+    return it->second;
 }
