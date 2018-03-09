@@ -169,11 +169,14 @@ bool ci_lazy_methodst::operator()(
             << " callsites)"
             << eom;
 
-    for(const auto &callsite : virtual_callsites)
+    std::unordered_set<exprt, irep_hash> unique_functions;
+    for(const code_function_callt *virtual_callsite : virtual_callsites)
+      unique_functions.insert(virtual_callsite->function());
+
+    for(const exprt &function : unique_functions)
     {
-      // This will also create a stub if a virtual callsite has no targets.
       get_virtual_method_targets(
-        *callsite,
+        function,
         needed_classes,
         method_worklist2,
         symbol_table);
@@ -397,8 +400,8 @@ void ci_lazy_methodst::gather_virtual_callsites(
 
 /// Find possible callees, excluding types that are not known to be
 /// instantiated.
-/// \param c: function call whose potential target functions should
-///   be determined.
+/// \param called_function: virtual function call whose concrete function calls
+///   should be determined.
 /// \param needed_classes: set of classes that can be instantiated. Any
 ///   potential callee not in this set will be ignored.
 /// \param symbol_table: global symbol table
@@ -406,12 +409,11 @@ void ci_lazy_methodst::gather_virtual_callsites(
 ///   `needed_classes` into account (virtual function overrides defined on
 ///   classes that are not 'needed' are ignored)
 void ci_lazy_methodst::get_virtual_method_targets(
-  const code_function_callt &c,
+  const exprt &called_function,
   const std::set<irep_idt> &needed_classes,
   std::vector<irep_idt> &needed_methods,
   symbol_tablet &symbol_table)
 {
-  const auto &called_function=c.function();
   PRECONDITION(called_function.id()==ID_virtual_function);
 
   const auto &call_class=called_function.get(ID_C_class);
@@ -453,7 +455,7 @@ void ci_lazy_methodst::get_virtual_method_targets(
     symbolt symbol;
     symbol.name=stubname;
     symbol.base_name=call_basename;
-    symbol.type=c.function().type();
+    symbol.type=called_function.type();
     symbol.value.make_nil();
     symbol.mode=ID_java;
     symbol_table.add(symbol);
