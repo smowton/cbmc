@@ -1,6 +1,6 @@
 CORE OS-LINUX OS-MACOS
 Test.class
---classpath annotations:correct-overlay:. --verbosity 10
+`./format_classpath.sh annotations correct-overlay .` --verbosity 10
 ^Getting class `Test' from file correct-overlay/Test\.class$
 ^Getting class `Test' from file \./Test\.class$
 ^Skipping class Test marked with OverlayClassImplementation but found before original definition$
