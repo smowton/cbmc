@@ -96,7 +96,7 @@ void remove_returnst::replace_returns(
 {
   typet return_type = function.type.return_type();
 
-  // Nothing to do if this function returns void
+  // returns something but void?
   if(return_type == empty_typet())
     return;
 
