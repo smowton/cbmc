@@ -18,7 +18,7 @@ Author: Diffblue Ltd
 /// A very simple, cheap analysis to determine when dereference operations are
 /// trivially guarded by a check against a null pointer access.
 /// In the interests of a very cheap analysis we only search for very local
-/// guards -- at the moment only `if(x != null) { *x  }`
+/// guards -- at the moment only `if(x != null) { *x }`
 /// and `assume(x != null); *x` are handled. Control-flow convergence and
 /// possibly-alising operations are handled pessimistically.
 class local_safe_pointerst
@@ -34,7 +34,10 @@ class local_safe_pointerst
     auto findit = non_null_expressions.find(program_point->location_number);
     if(findit == non_null_expressions.end())
       return false;
-    return findit->second.count(expr);
+    exprt tocheck = expr;
+    while(tocheck.id() == ID_typecast)
+      tocheck = tocheck.op0();
+    return findit->second.count(tocheck);
   }
 
   bool is_safe_dereference(
@@ -43,6 +46,12 @@ class local_safe_pointerst
   {
     return is_non_null_at_program_point(deref.op0(), program_point);
   }
+
+  void output(
+    std::ostream &stream, const goto_programt &program, const namespacet &ns);
+
+  void output_safe_dereferences(
+    std::ostream &stream, const goto_programt &program, const namespacet &ns);
 };
 
 #endif // CPROVER_ANALYSES_LOCAL_SAFE_POINTERS_H

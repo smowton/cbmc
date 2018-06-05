@@ -91,7 +91,8 @@ Author: Daniel Kroening, kroening@kroening.com
   OPT_FLUSH \
   "(splice-call):" \
   OPT_REMOVE_CALLS_NO_BODY \
-  OPT_REPLACE_FUNCTION_BODY
+  OPT_REPLACE_FUNCTION_BODY \
+  "(show-local-safe-pointers)(show-safe-dereferences)"
 
 // clang-format on
 
