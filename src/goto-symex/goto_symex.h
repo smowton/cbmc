@@ -229,8 +229,12 @@ protected:
 
   void trigger_auto_object(const exprt &, statet &);
   void initialize_auto_object(const exprt &, statet &);
-  void process_array_expr(exprt &);
   exprt make_auto_object(const typet &, statet &);
+
+  void array_cell_to_underlying_array(exprt &expr);
+  void array_pointer_to_underlying_array(
+    exprt &expr, goto_symex_statet &state, bool write);
+
   virtual void dereference(exprt &, statet &, bool write);
 
   void dereference_rec(exprt &, statet &, guardt &, bool write);

@@ -18,18 +18,23 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/pointer_offset_size.h>
 
 /// Given an expression, find the root object and the offset into it.
+/// The expression refers to a cell of the array, so for example if the
+/// underlying array is an int32_t[10] then `expr` will have type `int32_t`.
+///
+/// Input `expr` should already have been `clean_expr`'d, and so should be
+/// dereference-free.
 ///
 /// The extra complication to be considered here is that the expression may
 /// have any number of ternary expressions mixed with type casts.
-void goto_symext::process_array_expr(exprt &expr)
+void goto_symext::array_cell_to_underlying_array(exprt &expr)
 {
   // This may change the type of the expression!
 
   if(expr.id()==ID_if)
   {
     if_exprt &if_expr=to_if_expr(expr);
-    process_array_expr(if_expr.true_case());
-    process_array_expr(if_expr.false_case());
+    array_cell_to_underlying_array(if_expr.true_case());
+    array_cell_to_underlying_array(if_expr.false_case());
 
     if(!base_type_eq(if_expr.true_case(), if_expr.false_case(), ns))
     {
@@ -49,7 +54,7 @@ void goto_symext::process_array_expr(exprt &expr)
     // strip
     exprt tmp = to_address_of_expr(expr).object();
     expr.swap(tmp);
-    process_array_expr(expr);
+    array_cell_to_underlying_array(expr);
   }
   else if(expr.id()==ID_symbol &&
           expr.get_bool(ID_C_SSA_symbol) &&
@@ -60,7 +65,7 @@ void goto_symext::process_array_expr(exprt &expr)
     exprt tmp=index_expr.array();
     expr.swap(tmp);
 
-    process_array_expr(expr);
+    array_cell_to_underlying_array(expr);
   }
   else if(expr.id() != ID_symbol)
   {
@@ -111,6 +116,29 @@ void goto_symext::process_array_expr(exprt &expr)
           new_array_type);
     }
   }
+}
+
+/// Given a pointer-typed expression, find the root object and the offset into
+/// it. The expression is a pointer to the array, so for example if the
+/// underlying array is an int32_t[10] then `expr` will have type `int32_t *`.
+///
+/// `expr` will be cleaned in the process, so it may contain pointers on calling
+/// this function, and on exit it will be dereference-free.
+void goto_symext::array_pointer_to_underlying_array(
+  exprt &expr, goto_symex_statet &state, bool write)
+{
+  // Strip any pointer-type casts first, to save
+  // `array_cell_to_underlying_array` or the `object_descriptor_exprt` that does
+  // much of its work from having to deal with that case.
+  while(expr.id() == ID_typecast)
+    expr = expr.op0();
+
+  dereference_exprt array_cell(expr);
+  clean_expr(array_cell, state, write);
+
+  array_cell_to_underlying_array(array_cell);
+
+  expr = array_cell;
 }
 
 /// Rewrite index/member expressions in byte_extract to offset

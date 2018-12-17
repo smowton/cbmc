@@ -128,25 +128,20 @@ void goto_symext::symex_other(
           statement==ID_array_replace)
   {
     // array_copy and array_replace take two pointers (to arrays); we need to:
-    // 1. dereference the pointers (via clean_expr)
-    // 2. find the actual array objects/candidates for objects (via
-    // process_array_expr)
-    // 3. build an assignment where the type on lhs and rhs is:
+    // 1. find the actual array objects/candidates for objects (via
+    // array_pointer_to_underlying_array)
+    // 2. build an assignment where the type on lhs and rhs is:
     // - array_copy: the type of the first array (even if the second is smaller)
     // - array_replace: the type of the second array (even if it is smaller)
     DATA_INVARIANT(
       code.operands().size() == 2,
       "expected array_copy/array_replace statement to have two operands");
 
-    // we need to add dereferencing for both operands
-    dereference_exprt dest_array(code.op0());
-    clean_expr(dest_array, state, true);
-    dereference_exprt src_array(code.op1());
-    clean_expr(src_array, state, false);
+    exprt dest_array = code.op0(), src_array = code.op1();
 
     // obtain the actual arrays
-    process_array_expr(dest_array);
-    process_array_expr(src_array);
+    array_pointer_to_underlying_array(dest_array, state, true);
+    array_pointer_to_underlying_array(src_array, state, false);
 
     // check for size (or type) mismatch and adjust
     if(!base_type_eq(dest_array.type(), src_array.type(), ns))
@@ -179,21 +174,18 @@ void goto_symext::symex_other(
   {
     // array_set takes a pointer (to an array) and a value that each element
     // should be set to; we need to:
-    // 1. dereference the pointer (via clean_expr)
-    // 2. find the actual array object/candidates for objects (via
-    // process_array_expr)
-    // 3. use the type of the resulting array to construct an array_of
+    // 1. find the actual array object/candidates for objects (via
+    // array_pointer_to_underlying_array)
+    // 2. use the type of the resulting array to construct an array_of
     // expression
     DATA_INVARIANT(
       code.operands().size() == 2,
       "expected array_set statement to have two operands");
 
-    // we need to add dereferencing for the first operand
-    exprt array_expr = dereference_exprt(code.op0());
-    clean_expr(array_expr, state, true);
+    exprt array_expr = code.op0();
 
     // obtain the actual array(s)
-    process_array_expr(array_expr);
+    array_pointer_to_underlying_array(array_expr, state, true);
 
     // prepare to build the array_of
     exprt value = code.op1();
@@ -225,25 +217,20 @@ void goto_symext::symex_other(
   {
     // array_equal takes two pointers (to arrays) and the symbol that the result
     // should get assigned to; we need to:
-    // 1. dereference the pointers (via clean_expr)
-    // 2. find the actual array objects/candidates for objects (via
-    // process_array_expr)
-    // 3. build an assignment where the lhs is the previous third argument, and
+    // 1. find the actual array objects/candidates for objects (via
+    // array_pointer_to_underlying_array)
+    // 2. build an assignment where the lhs is the previous third argument, and
     // the right-hand side is an equality over the arrays, if their types match;
     // if the types don't match the result trivially is false
     DATA_INVARIANT(
       code.operands().size() == 3,
       "expected array_equal statement to have three operands");
 
-    // we need to add dereferencing for the first two
-    dereference_exprt array1(code.op0());
-    clean_expr(array1, state, false);
-    dereference_exprt array2(code.op1());
-    clean_expr(array2, state, false);
+    exprt array1 = code.op0(), array2 = code.op1();
 
     // obtain the actual arrays
-    process_array_expr(array1);
-    process_array_expr(array2);
+    array_pointer_to_underlying_array(array1, state, false);
+    array_pointer_to_underlying_array(array2, state, false);
 
     code_assignt assignment(code.op2(), equal_exprt(array1, array2));
 
