@@ -46,7 +46,7 @@ void field_sensitivityt::apply(const namespacet &ns, exprt &expr, bool write)
   {
     simplify(expr, ns);
   }
-  else if(write && expr.id() == ID_member)
+  else if(expr.id() == ID_member)
   {
     member_exprt &member = to_member_expr(expr);
 
@@ -64,7 +64,7 @@ void field_sensitivityt::apply(const namespacet &ns, exprt &expr, bool write)
       expr.swap(tmp);
     }
   }
-  else if(write && expr.id() == ID_index)
+  else if(expr.id() == ID_index)
   {
     index_exprt &index = to_index_expr(expr);
     simplify(index.index(), ns);
