@@ -306,7 +306,7 @@ void goto_symext::symex_assign_symbol(
         to_member_designator(d).get_component_name(),
         u.new_value().type());
 
-    field_sensitivityt::apply(ns, fs_lhs, true);
+    field_sensitivityt::apply(ns, fs_lhs, true, assign);
 
     if(fs_lhs.id() != ID_symbol)
       break;
@@ -327,7 +327,7 @@ void goto_symext::symex_assign_symbol(
       fs_lhs = member_exprt(
         lhs_mod, w.where().get(ID_component_name), w.new_value().type());
 
-    field_sensitivityt::apply(ns, fs_lhs, true);
+    field_sensitivityt::apply(ns, fs_lhs, true, state);
 
     if(fs_lhs.id() != ID_symbol)
       break;

@@ -31,14 +31,16 @@ public:
   /// \param expr: an expression to be (recursively) transformed - this
   /// parameter is both input and output.
   /// \param write: set to true if the expression is to be used as an lvalue.
-  static void apply(const namespacet &ns, exprt &expr, bool write);
+  static void apply(
+    const namespacet &ns, exprt &expr, bool write, goto_symex_statet &state);
 
   /// Compute an expression representing the individual components of a
   /// field-sensitive SSA representation of \p ssa_expr.
   /// \param ns: a namespace to resolve type symbols/tag types
   /// \param expr: the expression to evaluate
   /// \return Expanded expression
-  static exprt get_fields(const namespacet &ns, const ssa_exprt &ssa_expr);
+  static exprt get_fields(
+    const namespacet &ns, const ssa_exprt &ssa_expr, goto_symex_statet &state);
 
   /// Assign to the individual fields of a non-expanded symbol \p lhs. This is
   /// required whenever prior steps have updated the full object rather than
@@ -60,7 +62,8 @@ public:
   /// \param expr: the expression to evaluate
   /// \return True, if and only if, \p expr would be a single field-sensitive
   /// SSA expression.
-  static bool is_indivisible(const namespacet &ns, const ssa_exprt &expr);
+  static bool is_indivisible(
+    const namespacet &ns, const ssa_exprt &expr, goto_symex_statet &state);
 
 private:
   /// Assign to the individual fields \p lhs_fs of a non-expanded symbol \p lhs.

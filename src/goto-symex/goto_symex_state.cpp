@@ -372,7 +372,7 @@ void goto_symex_statet::rename(
 
     if(level == L2)
     {
-      field_sensitivityt::apply(ns, expr, false);
+      field_sensitivityt::apply(ns, expr, false, *this);
 
       // This might have introduced a new SSA expression we should look up in
       // the constant propagator:
@@ -404,7 +404,7 @@ bool goto_symex_statet::l2_thread_read_encoding(
     return false;
 
   // is it an indivisible object being accessed?
-  if(!field_sensitivityt::is_indivisible(ns, expr))
+  if(!field_sensitivityt::is_indivisible(ns, expr, *this))
     return false;
 
   ssa_exprt ssa_l1=expr;
@@ -551,7 +551,7 @@ bool goto_symex_statet::l2_thread_write_encoding(
     return false; // not shared
 
   // is it an indivisible object being accessed?
-  if(!field_sensitivityt::is_indivisible(ns, expr))
+  if(!field_sensitivityt::is_indivisible(ns, expr, *this))
     return false;
 
   // see whether we are within an atomic section

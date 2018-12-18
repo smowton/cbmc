@@ -387,7 +387,7 @@ void goto_symext::dereference(
   // symbols whose address is taken.
   PRECONDITION(!state.call_stack().empty());
   state.rename(expr, ns, goto_symex_statet::L1);
-  field_sensitivityt::apply(ns, expr, write);
+  field_sensitivityt::apply(ns, expr, write, state);
 #if 0
   rename_l1_reads_l2(expr, state, ns, write);
   // really, we need to use another dereferencing implementation,
@@ -400,5 +400,5 @@ void goto_symext::dereference(
   // dereferencing may introduce new symbol_exprt
   // (like __CPROVER_memory)
   state.rename(expr, ns, goto_symex_statet::L1);
-  field_sensitivityt::apply(ns, expr, write);
+  field_sensitivityt::apply(ns, expr, write, state);
 }
