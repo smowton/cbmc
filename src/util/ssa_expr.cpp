@@ -31,8 +31,8 @@ static void build_ssa_identifier_rec(
 
     build_ssa_identifier_rec(member.struct_op(), l0, l1, l2, os, l1_object_os);
 
-    os << '.' << member.get_component_name();
-    l1_object_os << '.' << member.get_component_name();
+    os << ".." << member.get_component_name();
+    l1_object_os << ".." << member.get_component_name();
   }
   else if(expr.id()==ID_index)
   {
