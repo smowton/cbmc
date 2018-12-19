@@ -54,7 +54,8 @@ public:
     const namespacet &ns,
     goto_symex_statet &state,
     symex_targett &target,
-    const exprt &lhs);
+    const exprt &lhs,
+    bool allow_pointer_unsoundness);
 
   /// Determine whether \p expr would translate to a single field-sensitive SSA
   /// expression.
@@ -80,7 +81,8 @@ private:
     goto_symex_statet &state,
     symex_targett &target,
     const exprt &lhs_fs,
-    const exprt &lhs);
+    const exprt &lhs,
+    bool allow_pointer_unsoundness);
 };
 
 #endif // CPROVER_GOTO_SYMEX_FIELD_SENSITIVITY_H

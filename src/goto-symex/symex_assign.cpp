@@ -385,7 +385,8 @@ void goto_symext::symex_assign_symbol(
     state.source,
     assignment_type);
 
-  field_sensitivityt::field_assignments(ns, state, target, lhs_mod);
+  field_sensitivityt::field_assignments(
+    ns, state, target, lhs_mod, symex_config.allow_pointer_unsoundness);
 
   // If we just assigned a symbol representing a component of a composite object
   // (for example, symbol "some_struct.field#1", which represents part of the
