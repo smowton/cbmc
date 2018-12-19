@@ -386,6 +386,24 @@ void goto_symext::symex_assign_symbol(
     assignment_type);
 
   field_sensitivityt::field_assignments(ns, state, target, lhs_mod);
+
+  // If we just assigned a symbol representing a component of a composite object
+  // (for example, symbol "some_struct.field#1", which represents part of the
+  // symbol "some_struct"), then invalidate "some_struct" in the constant
+  // propagator, as it's now out of date. On future reference we should
+  // reconstruct it from fields using field_sensitivityt::apply.
+  if(ssa_lhs.get_original_expr().id() == ID_member)
+  {
+    ssa_exprt underlying_composite = ssa_lhs;
+    exprt underlying_object = underlying_composite.get_original_expr();
+    while(underlying_object.id() == ID_member)
+      underlying_object = underlying_object.op0();
+    underlying_composite.set_expression(underlying_object);
+
+    // The constant propagator is indexed by L1 names:
+    state.rename(underlying_composite, ns, goto_symex_statet::L1);
+    state.propagation.erase(underlying_composite.get_l1_object_identifier());
+  }
 }
 
 void goto_symext::symex_assign_typecast(
