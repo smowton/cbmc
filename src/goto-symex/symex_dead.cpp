@@ -63,17 +63,5 @@ void goto_symext::symex_dead(statet &state)
     auto level2_it = state.level2.current_names.find(l1_identifier);
     if(level2_it != state.level2.current_names.end())
       symex_renaming_levelt::increase_counter(level2_it);
-
-    const bool record_events = state.record_events;
-    state.record_events = false;
-    state.rename(ssa_lhs, ns);
-    state.record_events = record_events;
-
-    if(
-      state.dirty(ssa_lhs.get_object_name()) && state.atomic_section_id == 0)
-    {
-      target.shared_write(
-        state.guard.as_expr(), ssa_lhs, state.atomic_section_id, state.source);
-    }
   }
 }
