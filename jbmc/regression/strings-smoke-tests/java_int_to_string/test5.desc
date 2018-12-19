@@ -6,4 +6,3 @@ Test5.class
 assertion.* line 7 .* SUCCESS$
 assertion.* line 10 .* FAILURE$
 --
-non equal types
