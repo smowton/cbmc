@@ -404,5 +404,14 @@ void goto_symext::dereference(
   // dereferencing may introduce new symbol_exprt
   // (like __CPROVER_memory)
   state.rename(expr, ns, goto_symex_statet::L1);
+
+  // dereferencing is likely to introduce new member-of-if constructs --
+  // for example, "x->field" may have become "(x == &o1 ? o1 : o2).field"
+  // Simplify (which converts that to (x == &o1 ? o1.field : o2.field)) before
+  // applying field sensitivity, which can turn such field-of-symbol expressions
+  // into atomic SSA expressions, but would have to rewrite all of 'o1'
+  // otherwise.
+  do_simplify(expr);
+
   field_sensitivityt::apply(ns, expr, write, state);
 }
