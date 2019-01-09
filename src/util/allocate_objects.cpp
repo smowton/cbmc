@@ -213,11 +213,9 @@ exprt allocate_objectst::allocate_non_dynamic_object(
   symbols_created.push_back(&aux_symbol);
 
   exprt aoe =
-    ns.follow(aux_symbol.symbol_expr().type()) !=
-        ns.follow(target_expr.type().subtype())
-      ? (exprt)typecast_exprt(
-          address_of_exprt(aux_symbol.symbol_expr()), target_expr.type())
-      : address_of_exprt(aux_symbol.symbol_expr());
+    typecast_exprt::conditional_cast(
+      address_of_exprt(aux_symbol.symbol_expr()),
+      target_expr.type());
 
   code_assignt code(target_expr, aoe);
   code.add_source_location() = source_location;
