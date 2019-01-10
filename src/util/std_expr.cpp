@@ -15,6 +15,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "c_types.h"
 #include "expr_util.h"
 #include "mathematical_types.h"
+#include "namespace.h"
 #include "pointer_offset_size.h"
 
 bool constant_exprt::value_is_zero_string() const
@@ -222,4 +223,35 @@ const exprt &object_descriptor_exprt::root_object() const
   }
 
   return *p;
+}
+
+void member_exprt::validate(
+  const exprt &expr,
+  const namespacet &ns,
+  const validation_modet vm)
+{
+  check(expr, vm);
+
+  const auto &member_expr = to_member_expr(expr);
+
+  const typet &compound_type = ns.follow(member_expr.compound().type());
+  DATA_CHECK(
+    vm,
+    can_cast_type<struct_union_typet>(compound_type),
+    "member must address a struct, union or compatible type");
+
+  const auto &component = to_struct_union_type(compound_type)
+                            .get_component(member_expr.get_component_name());
+
+  DATA_CHECK(
+    vm,
+    component.is_not_nil(),
+    "member component '" + id2string(member_expr.get_component_name()) +
+      "' must exist on addressed type");
+
+  DATA_CHECK(
+    vm,
+    component.type() == member_expr.type(),
+    "member expression's type must match the addressed struct or union "
+    "component");
 }
