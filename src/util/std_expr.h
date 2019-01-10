@@ -4003,6 +4003,21 @@ public:
   {
     return op0();
   }
+
+  static void check(
+    const exprt &expr,
+    const validation_modet vm = validation_modet::INVARIANT)
+  {
+    DATA_CHECK(
+      vm,
+      expr.operands().size() == 1,
+      "member expression must have one operand");
+  }
+
+  static void validate(
+    const exprt &expr,
+    const namespacet &ns,
+    const validation_modet vm = validation_modet::INVARIANT);
 };
 
 /// \brief Cast an exprt to a \ref member_exprt
@@ -4038,7 +4053,6 @@ inline void validate_expr(const member_exprt &value)
 {
   validate_operands(value, 1, "Extract member must have one operand");
 }
-
 
 /// \brief Evaluates to true if the operand is NaN
 class isnan_exprt:public unary_predicate_exprt
