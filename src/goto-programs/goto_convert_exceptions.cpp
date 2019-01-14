@@ -268,40 +268,75 @@ symbol_exprt goto_convertt::exception_flag(const irep_idt &mode)
 /// If destructor_end_point isn't passed, it will unwind the whole stack.
 /// If destructor_start_point isn't passed, it will unwind from the current
 /// node.
+///
+/// In the existance of destructors, unwinding becomes more complicated because
+/// it will add dead statements during a convert call and then immediately
+/// unwind them.
+///
+/// Say we have a tree of [3, 2, 1, 0] and we start unwinding from top to
+/// bottom. If node 1 has a destructor during the convert it will add
+/// nodes to the tree so it ends up looking like this: [[3, 2, 1], [5, 4], 0].
+///
+/// After it adds them it will then attempt to unwind them starting from node
+/// number 5. The get_current_node call when asked what the current node is
+/// will no longer say '0' as its next node to unwind from, but 5, as that
+/// was the last node that was added. This implicitly switches branches so
+/// our tree now looks like this: [5, 4, 0].
+///
+/// Note that we don't have 1 here even if that was the instruction that
+/// triggered the recursive unwind because it's already been popped off.
+///
+/// After our unwind has finished, we return to our [3, 2, 1, 0] branch, but
+/// as we unwound to 0 during our nested unwind the loop immediately ends.
 bool goto_convertt::unwind_destructor_stack(
   const source_locationt &source_location,
   goto_programt &dest,
   const irep_idt &mode,
-  optionalt<node_indext> destructor_end_point,
-  optionalt<node_indext> destructor_start_point)
+  optionalt<node_indext> end_index,
+  optionalt<node_indext> starting_index)
 {
-  return unwind_destructor_stack(
-    source_location,
-    dest,
-    targets.destructor_stack,
-    mode,
-    destructor_end_point,
-    destructor_start_point);
-}
-
-bool goto_convertt::unwind_destructor_stack(
-  const source_locationt &source_location,
-  goto_programt &dest,
-  destructor_treet &destructor_stack,
-  const irep_idt &mode,
-  optionalt<node_indext> destructor_end_point,
-  optionalt<node_indext> destructor_start_point)
-{
-  std::vector<codet> stack = destructor_stack.get_destructors(
-    destructor_end_point, destructor_start_point);
-
-  for(const codet &destructor : stack)
+  // If we're recursive we shouldn't set the current node because it'll have
+  // changed due to being added too (and triggering another unwind call anyway).
+  bool root = false;
+  if(!targets.stored_stack_index)
   {
-    // Copy, assign source location then convert.
-    codet d_code = destructor;
-    d_code.add_source_location() = source_location;
-    convert(d_code, dest, mode);
+    root = true;
+    targets.stored_stack_index = targets.destructor_stack.get_current_node();
+    node_indext start_id =
+      starting_index.value_or(targets.destructor_stack.get_current_node());
+    targets.destructor_stack.set_current_node(start_id);
   }
 
-  return !stack.empty();
+  node_indext end_id = end_index.value_or(0);
+  bool performed_unwind = targets.destructor_stack.get_current_node() > end_id;
+
+  // We access get_current_node() here because that may be modified further
+  // into a recursive call.
+  while(targets.destructor_stack.get_current_node() > end_id)
+  {
+    node_indext current_node = targets.destructor_stack.get_current_node();
+
+    optionalt<codet> &destructor =
+      targets.destructor_stack.get_destructor(current_node);
+
+    // Descend the tree before unwinding so we don't re-do the current node.
+    targets.destructor_stack.descend_tree();
+    if(destructor)
+    {
+      // Copy, assign source location then convert.
+      codet copied_instruction = *destructor;
+      copied_instruction.add_source_location() = source_location;
+      convert(copied_instruction, dest, mode);
+    }
+  }
+
+  // When we're done, if we're a root reset the tree to its existing node
+  // and clear the stored value.
+  if(root)
+  {
+    targets.destructor_stack.set_current_node(targets.stored_stack_index);
+    targets.stored_stack_index.reset();
+  }
+
+  return performed_unwind;
 }
