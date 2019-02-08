@@ -371,7 +371,6 @@ protected:
     gotost gotos;
     computed_gotost computed_gotos;
     destructor_treet destructor_stack;
-    optionalt<node_indext> stored_stack_index;
 
     casest cases;
     cases_mapt cases_map;

@@ -293,23 +293,24 @@ bool goto_convertt::unwind_destructor_stack(
   optionalt<node_indext> end_index,
   optionalt<node_indext> starting_index)
 {
-  // If we're recursive we shouldn't set the current node because it'll have
-  // changed due to being added too (and triggering another unwind call anyway).
-  bool root = false;
-  if(!targets.stored_stack_index)
-  {
-    root = true;
-    targets.stored_stack_index = targets.destructor_stack.get_current_node();
-    node_indext start_id =
-      starting_index.value_or(targets.destructor_stack.get_current_node());
-    targets.destructor_stack.set_current_node(start_id);
-  }
+  // As we go we'll keep targets.destructor_stack.current_node pointing at the
+  // next node we intend to destroy, so that if our convert(...) call for each
+  // destructor returns, throws or otherwise unwinds then it will carry on from
+  // the correct point in the stack of variables we intend to destroy, and if it
+  // contains any DECL statements they will be added as a new child branch,
+  // again at the right point.
+
+  // We back up the current node as of entering this function so this
+  // side-effect is only noticed by that convert(...) call.
+
+  node_indext start_id =
+    starting_index.value_or(targets.destructor_stack.get_current_node());
+
+  targets.destructor_stack.set_current_node(start_id);
 
   node_indext end_id = end_index.value_or(0);
-  bool performed_unwind = targets.destructor_stack.get_current_node() > end_id;
+  bool unwound_anything = targets.destructor_stack.get_current_node() > end_id;
 
-  // We access get_current_node() here because that may be modified further
-  // into a recursive call.
   while(targets.destructor_stack.get_current_node() > end_id)
   {
     node_indext current_node = targets.destructor_stack.get_current_node();
@@ -317,7 +318,8 @@ bool goto_convertt::unwind_destructor_stack(
     optionalt<codet> &destructor =
       targets.destructor_stack.get_destructor(current_node);
 
-    // Descend the tree before unwinding so we don't re-do the current node.
+    // Descend the tree before unwinding so we don't re-do the current node
+    // in event that convert(...) recurses into this function:
     targets.destructor_stack.descend_tree();
     if(destructor)
     {
@@ -328,13 +330,8 @@ bool goto_convertt::unwind_destructor_stack(
     }
   }
 
-  // When we're done, if we're a root reset the tree to its existing node
-  // and clear the stored value.
-  if(root)
-  {
-    targets.destructor_stack.set_current_node(targets.stored_stack_index);
-    targets.stored_stack_index.reset();
-  }
+  // Restore the working destructor stack to how it was before we began:
+  targets.destructor_stack.set_current_node(start_id);
 
-  return performed_unwind;
+  return unwound_anything;
 }
