@@ -265,29 +265,27 @@ symbol_exprt goto_convertt::exception_flag(const irep_idt &mode)
 /// destructor_start_point and destructor_end_point (including the start,
 /// excluding the end).
 ///
-/// If destructor_end_point isn't passed, it will unwind the whole stack.
-/// If destructor_start_point isn't passed, it will unwind from the current
-/// node.
+/// If \p end_index isn't passed, it will unwind the whole stack.
+/// If \p start_index isn't passed, it will unwind from the current node.
 ///
-/// In the existance of destructors, unwinding becomes more complicated because
-/// it will add dead statements during a convert call and then immediately
-/// unwind them.
+/// When destructors are non-trivial (i.e. if they contain DECL or GOTO
+/// statements) then unwinding becomes more complicated because when we call
+/// convert on the destructor code it may recursively invoke this function.
 ///
 /// Say we have a tree of [3, 2, 1, 0] and we start unwinding from top to
-/// bottom. If node 1 has a destructor during the convert it will add
-/// nodes to the tree so it ends up looking like this: [[3, 2, 1], [5, 4], 0].
+/// bottom. If node 1 has such a non-trivial destructor during the convert it
+/// will add nodes to the tree so it ends up looking like this:
 ///
-/// After it adds them it will then attempt to unwind them starting from node
-/// number 5. The get_current_node call when asked what the current node is
-/// will no longer say '0' as its next node to unwind from, but 5, as that
-/// was the last node that was added. This implicitly switches branches so
-/// our tree now looks like this: [5, 4, 0].
+///     3, 2, 1, 0
+///        5, 4,/
 ///
-/// Note that we don't have 1 here even if that was the instruction that
-/// triggered the recursive unwind because it's already been popped off.
+/// If for example the destructor contained a THROW statement then it would
+/// unwind destroying variables 5, 4 and finally 0. Note that we don't have 1
+/// here even if that was the instruction that triggered the recursive unwind
+/// because it's already been popped off before convert is called.
 ///
-/// After our unwind has finished, we return to our [3, 2, 1, 0] branch, but
-/// as we unwound to 0 during our nested unwind the loop immediately ends.
+/// After our unwind has finished, we return to our [3, 2, 1, 0] branch and
+/// continue processing the branch for destructor 0.
 bool goto_convertt::unwind_destructor_stack(
   const source_locationt &source_location,
   goto_programt &dest,
