@@ -286,7 +286,7 @@ symbol_exprt goto_convertt::exception_flag(const irep_idt &mode)
 ///
 /// After our unwind has finished, we return to our [3, 2, 1, 0] branch and
 /// continue processing the branch for destructor 0.
-bool goto_convertt::unwind_destructor_stack(
+void goto_convertt::unwind_destructor_stack(
   const source_locationt &source_location,
   goto_programt &dest,
   const irep_idt &mode,
@@ -309,7 +309,6 @@ bool goto_convertt::unwind_destructor_stack(
   targets.destructor_stack.set_current_node(start_id);
 
   node_indext end_id = end_index.value_or(0);
-  bool unwound_anything = targets.destructor_stack.get_current_node() > end_id;
 
   while(targets.destructor_stack.get_current_node() > end_id)
   {
@@ -332,6 +331,4 @@ bool goto_convertt::unwind_destructor_stack(
 
   // Restore the working destructor stack to how it was before we began:
   targets.destructor_stack.set_current_node(start_id);
-
-  return unwound_anything;
 }

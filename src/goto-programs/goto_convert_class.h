@@ -337,7 +337,7 @@ protected:
 
   symbol_exprt exception_flag(const irep_idt &mode);
 
-  bool unwind_destructor_stack(
+  void unwind_destructor_stack(
     const source_locationt &source_location,
     goto_programt &dest,
     const irep_idt &mode,
