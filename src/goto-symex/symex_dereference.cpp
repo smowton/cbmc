@@ -363,4 +363,8 @@ void goto_symext::dereference(exprt &expr, statet &state)
   // dereferencing may introduce new symbol_exprt
   // (like __CPROVER_memory)
   state.rename(expr, ns, goto_symex_statet::L1);
+
+  // Dereferencing might introduce simplifiable expressions, such as member-of-
+  // byte-extract, which we should now remove:
+  do_simplify(expr);
 }
