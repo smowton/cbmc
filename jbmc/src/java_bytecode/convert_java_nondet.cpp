@@ -237,7 +237,7 @@ void convert_nondet(
         f_it.second.body,
         symbol_table,
         message_handler,
-        object_factory_parameters,
+        parameters,
         symbol.mode);
     }
   }
