@@ -86,7 +86,7 @@ void symex_bmct::symex_step(
   }
 }
 
-void symex_bmct::merge_goto(const goto_statet &goto_state, statet &state)
+void symex_bmct::merge_goto(goto_statet &goto_state, statet &state)
 {
   const goto_programt::const_targett prev_pc = goto_state.source.pc;
   const guardt prev_guard = goto_state.guard;

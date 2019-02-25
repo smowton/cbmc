@@ -221,7 +221,16 @@ void goto_symext::symex_goto(statet &state)
   framet::goto_state_listt &goto_state_list =
     state.top().goto_state_map[new_state_pc];
 
-  goto_state_list.emplace_back(state);
+  // If the guard is true (and the alternative branch unreachable) we can move
+  // the state in this case as it'll never be accessed on the alternate branch.
+  if(new_guard.is_true())
+  {
+    goto_state_list.emplace_back(std::move(state));
+  }
+  else
+  {
+    goto_state_list.emplace_back(statet::goto_statet(state));
+  }
 
   symex_transition(state, state_pc, backward);
 
@@ -318,7 +327,7 @@ void goto_symext::merge_gotos(statet &state)
   frame.goto_state_map.erase(state_map_it);
 }
 
-void goto_symext::merge_goto(const goto_statet &goto_state, statet &state)
+void goto_symext::merge_goto(goto_statet &goto_state, statet &state)
 {
   // check atomic section
   if(state.atomic_section_id != goto_state.atomic_section_id)
@@ -338,7 +347,7 @@ void goto_symext::merge_goto(const goto_statet &goto_state, statet &state)
   state.depth=std::min(state.depth, goto_state.depth);
 }
 
-void goto_symext::merge_value_sets(const goto_statet &src, statet &dest)
+void goto_symext::merge_value_sets(goto_statet &src, statet &dest)
 {
   if(dest.guard.is_false())
   {
@@ -514,10 +523,16 @@ static void merge_names(
     symex_targett::assignment_typet::PHI);
 }
 
-void goto_symext::phi_function(
-  const goto_statet &goto_state,
-  statet &dest_state)
+void goto_symext::phi_function(goto_statet &goto_state, statet &dest_state)
 {
+  // If our destination is unreachable just replace with the incoming state.
+  if(dest_state.guard.is_false())
+  {
+    dest_state.level2 = std::move(goto_state.level2);
+    dest_state.propagation = std::move(goto_state.propagation);
+    return;
+  }
+
   if(
     goto_state.level2.current_names.empty() &&
     dest_state.level2.current_names.empty())
