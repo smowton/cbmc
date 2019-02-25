@@ -61,12 +61,47 @@ public:
   unsigned remaining_vccs = 0;
 
   /// Constructors
+  goto_statet() = default;
+  goto_statet &operator=(const goto_statet &other) = default;
+  goto_statet &operator=(goto_statet &&other) = default;
+  goto_statet(const goto_statet &other) = default;
+
   explicit goto_statet(const class goto_symex_statet &s);
 
   goto_statet(
     const symex_targett::sourcet &_source,
     guard_managert &guard_manager)
     : guard(true_exprt(), guard_manager), source(_source)
+  {
+  }
+
+  /// Partial-move constructor.
+  /// This will only move level2, value_set, guard and propagation fields. This
+  /// will mean that you shouldn't use it as an active state in symex, but you
+  /// can still look at its statistics and source values.
+  goto_statet(goto_statet &other, bool partial_move)
+    : depth(other.depth),
+      level2(std::move(other.level2)),
+      value_set(std::move(other.value_set)),
+      guard(std::move(other.guard)),
+      source(other.source),
+      propagation(std::move(other.propagation)),
+      atomic_section_id(other.atomic_section_id),
+      total_vccs(other.total_vccs),
+      remaining_vccs(other.remaining_vccs)
+  {
+  }
+
+  goto_statet(goto_statet &&other)
+    : depth(other.depth),
+      level2(std::move(other.level2)),
+      value_set(std::move(other.value_set)),
+      guard(std::move(other.guard)),
+      source(std::move(other.source)),
+      propagation(std::move(other.propagation)),
+      atomic_section_id(other.atomic_section_id),
+      total_vccs(other.total_vccs),
+      remaining_vccs(other.remaining_vccs)
   {
   }
 };
