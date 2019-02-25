@@ -45,6 +45,16 @@ public:
   {
   }
 
+  value_sett(value_sett &&other)
+    : location_number(other.location_number), values(std::move(other.values))
+  {
+  }
+
+  value_sett(const value_sett &other) = default;
+
+  value_sett &operator=(const value_sett &other) = default;
+  value_sett &operator=(value_sett &&other) = default;
+
   virtual ~value_sett() = default;
 
   static bool field_sensitive(const irep_idt &id, const typet &type);

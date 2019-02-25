@@ -73,8 +73,27 @@ public:
   unsigned remaining_vccs = 0;
 
   /// Constructors
+  goto_statet() = default;
+  goto_statet &operator=(const goto_statet &other) = default;
+  goto_statet &operator=(goto_statet &&other) = default;
+  goto_statet(const goto_statet &other) = default;
+
   explicit goto_statet(const class goto_symex_statet &s);
   explicit goto_statet(const symex_targett::sourcet &_source) : source(_source)
+  {
+  }
+
+  goto_statet(goto_statet &&other)
+    : depth(other.depth),
+      level2(std::move(other.level2)),
+      value_set(std::move(other.value_set)),
+      guard(std::move(other.guard)),
+      source(std::move(other.source)),
+      propagation(std::move(other.propagation)),
+      atomic_section_id(other.atomic_section_id),
+      safe_pointers(other.safe_pointers),
+      total_vccs(other.total_vccs),
+      remaining_vccs(other.remaining_vccs)
   {
   }
 };
