@@ -90,6 +90,13 @@ public:
   /// Counter for nondet objects, which require unique names
   symex_nondet_generatort build_symex_nondet;
 
+  using global_name_mapt = std::map<irep_idt, std::pair<ssa_exprt, unsigned>>;
+
+  /// Tracks fresh L2 names across an entire symex run. This will be shared
+  /// across all states to allocate unique generations.
+  std::shared_ptr<global_name_mapt> level2_names =
+    std::make_shared<global_name_mapt>(global_name_mapt());
+
 private:
   // Derived classes should override these methods, allowing the base class to
   // enforce preconditions.

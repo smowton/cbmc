@@ -315,6 +315,7 @@ std::unique_ptr<goto_symext::statet> goto_symext::initialize_entry_point_state(
     emplace_safe_pointers_result.first->second(start_function->body);
 
   state->dirty.populate_dirty_for_function(entry_point_id, *start_function);
+  state->level2.global_names = this->path_storage.level2_names;
 
   // make the first step onto the instruction pointed to by the initial program
   // counter

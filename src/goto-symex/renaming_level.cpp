@@ -77,6 +77,45 @@ void symex_level1t::restore_from(
   }
 }
 
+/// Allocates a fresh L2 name for the given L1 identifier, and makes it the
+/// latest generation on this path.
+void symex_level2t::increase_generation(
+  const irep_idt l1_identifier,
+  const ssa_exprt &lhs)
+{
+  INVARIANT(
+    global_names != nullptr, "Global level 2 naming map can't be null.");
+
+  current_names.emplace(l1_identifier, std::make_pair(lhs, 0));
+  global_names->emplace(l1_identifier, std::make_pair(lhs, 0));
+
+  increase_generation_if_exists(l1_identifier);
+}
+
+/// Allocates a fresh L2 name for the given L1 identifier, and makes it the
+/// latest generation on this path. Does nothing if there isn't an expression
+/// keyed by the l1 identifier.
+void symex_level2t::increase_generation_if_exists(const irep_idt identifier)
+{
+  // If we can't find the name in the local scope, don't increase the global
+  // even if it exists there.
+  auto current_names_iter = current_names.find(identifier);
+  if(current_names_iter == current_names.end())
+    return;
+
+  INVARIANT(
+    global_names != nullptr, "Global level 2 naming map can't be null.");
+
+  // If we have a global store, increment its generation count, then assign
+  // that new value to our local scope.
+  auto global_names_iter = global_names->find(identifier);
+  if(global_names_iter != global_names->end())
+  {
+    global_names_iter->second.second++;
+    current_names_iter->second.second = global_names_iter->second.second;
+  }
+}
+
 void get_original_name(exprt &expr)
 {
   get_original_name(expr.type());

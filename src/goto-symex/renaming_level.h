@@ -13,6 +13,7 @@ Author: Romain Brenguier, romain.brenguier@diffblue.com
 #define CPROVER_GOTO_SYMEX_RENAMING_LEVEL_H
 
 #include <map>
+#include <memory>
 #include <unordered_set>
 
 #include <util/irep.h>
@@ -84,6 +85,50 @@ struct symex_level2t : public symex_renaming_levelt
 {
   symex_level2t() = default;
   ~symex_level2t() override = default;
+
+  std::shared_ptr<current_namest> global_names;
+
+  /// Allocates a fresh L2 name for the given L1 identifier, and makes it the
+  //  latest generation on this path.
+  void increase_generation(const irep_idt l1_identifier, const ssa_exprt &lhs);
+
+  /// Increases the generation of the L1 identifier. Does nothing if there
+  /// isn't an expression keyed by it.
+  void increase_generation_if_exists(const irep_idt identifier);
+
+#if 0
+#include <iostream>
+
+  /// Prints the differences between the global and local naming maps (if they
+  /// exist)
+  void print_differences(const std::string &addition)
+  {
+    if(global_names == nullptr)
+      return;
+
+    std::string output;
+    for(const auto &local : current_names)
+    {
+      auto global_iter = global_names->find(local.first);
+      if(global_iter == global_names->end())
+        continue;
+
+      auto global_count = global_iter->second.second;
+      auto local_count = local.second.second;
+      if(global_count != local_count)
+        output += "ID: " + id2string(local.first) +
+                  ", local: " + std::to_string(local_count) +
+                  " global: " + std::to_string(global_count) + '\n';
+    }
+
+    if(!output.empty())
+    {
+      std::cout << "Printing differences between local and global generations"
+                << (addition.empty() ? "" : "[" + addition + "]") << '\n';
+      std::cout << output;
+    }
+  }
+#endif
 };
 
 /// Undo all levels of renaming
