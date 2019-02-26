@@ -146,7 +146,9 @@ struct framet
 class goto_symex_statet final : public goto_statet
 {
 public:
-  explicit goto_symex_statet(const symex_targett::sourcet &);
+  goto_symex_statet(
+    const symex_targett::sourcet &,
+    path_storaget &path_storage);
   ~goto_symex_statet();
 
   /// \brief Fake "copy constructor" that initializes the `symex_target` member
@@ -318,6 +320,8 @@ public:
   bool run_validation_checks;
 
 private:
+  path_storaget &path_storage;
+
   /// \brief Dangerous, do not use
   ///
   /// Copying a state S1 to S2 risks S2 pointing to a deallocated

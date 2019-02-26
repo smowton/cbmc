@@ -16,6 +16,7 @@ Author: Romain Brenguier, romain.brenguier@diffblue.com
 #include <util/symbol.h>
 
 #include "goto_symex_state.h"
+#include "path_storage.h"
 
 void symex_level0t::
 operator()(ssa_exprt &ssa_expr, const namespacet &ns, unsigned thread_nr) const
@@ -81,21 +82,21 @@ void symex_level1t::restore_from(
 /// latest generation on this path.
 void symex_level2t::increase_generation(
   const irep_idt l1_identifier,
-  const ssa_exprt &lhs)
+  const ssa_exprt &lhs,
+  path_storaget &path_storage)
 {
-  INVARIANT(
-    global_names != nullptr, "Global level 2 naming map can't be null.");
-
   current_names.emplace(l1_identifier, std::make_pair(lhs, 0));
-  global_names->emplace(l1_identifier, std::make_pair(lhs, 0));
+  path_storage.level2_names.emplace(l1_identifier, std::make_pair(lhs, 0));
 
-  increase_generation_if_exists(l1_identifier);
+  increase_generation_if_exists(l1_identifier, path_storage);
 }
 
 /// Allocates a fresh L2 name for the given L1 identifier, and makes it the
 /// latest generation on this path. Does nothing if there isn't an expression
 /// keyed by the l1 identifier.
-void symex_level2t::increase_generation_if_exists(const irep_idt identifier)
+void symex_level2t::increase_generation_if_exists(
+  const irep_idt identifier,
+  path_storaget &path_storage)
 {
   // If we can't find the name in the local scope, don't increase the global
   // even if it exists there.
@@ -103,13 +104,10 @@ void symex_level2t::increase_generation_if_exists(const irep_idt identifier)
   if(current_names_iter == current_names.end())
     return;
 
-  INVARIANT(
-    global_names != nullptr, "Global level 2 naming map can't be null.");
-
   // If we have a global store, increment its generation count, then assign
   // that new value to our local scope.
-  auto global_names_iter = global_names->find(identifier);
-  if(global_names_iter != global_names->end())
+  auto global_names_iter = path_storage.level2_names.find(identifier);
+  if(global_names_iter != path_storage.level2_names.end())
   {
     global_names_iter->second.second++;
     current_names_iter->second.second = global_names_iter->second.second;

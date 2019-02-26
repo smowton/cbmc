@@ -19,6 +19,8 @@ Author: Romain Brenguier, romain.brenguier@diffblue.com
 #include <util/irep.h>
 #include <util/ssa_expr.h>
 
+class path_storaget;
+
 /// Wrapper for a \c current_names map, which maps each identifier to an SSA
 /// expression and a counter.
 /// This is extended by the different symex_level structures which are used
@@ -86,15 +88,18 @@ struct symex_level2t : public symex_renaming_levelt
   symex_level2t() = default;
   ~symex_level2t() override = default;
 
-  std::shared_ptr<current_namest> global_names;
-
   /// Allocates a fresh L2 name for the given L1 identifier, and makes it the
   //  latest generation on this path.
-  void increase_generation(const irep_idt l1_identifier, const ssa_exprt &lhs);
+  void increase_generation(
+    const irep_idt l1_identifier,
+    const ssa_exprt &lhs,
+    path_storaget &path_storage);
 
   /// Increases the generation of the L1 identifier. Does nothing if there
   /// isn't an expression keyed by it.
-  void increase_generation_if_exists(const irep_idt identifier);
+  void increase_generation_if_exists(
+    const irep_idt identifier,
+    path_storaget &path_storage);
 
 #if 0
 #include <iostream>

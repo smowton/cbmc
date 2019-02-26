@@ -64,7 +64,7 @@ void goto_symext::symex_decl(statet &state, const symbol_exprt &expr)
   // L2 renaming
   // inlining may yield multiple declarations of the same identifier
   // within the same L1 context
-  state.level2.increase_generation(l1_identifier, ssa);
+  state.level2.increase_generation(l1_identifier, ssa, path_storage);
 
   const bool record_events=state.record_events;
   state.record_events=false;

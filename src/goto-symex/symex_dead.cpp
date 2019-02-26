@@ -49,5 +49,5 @@ void goto_symext::symex_dead(statet &state)
   state.propagation.erase(l1_identifier);
 
   // L2 renaming
-  state.level2.increase_generation_if_exists(l1_identifier);
+  state.level2.increase_generation_if_exists(l1_identifier, path_storage);
 }

@@ -35,8 +35,10 @@ bool scratch_programt::check_sat(bool do_slice)
   output(ns, "scratch", std::cout);
 #endif
 
+  path_fifot symex_path_storage;
   symex_state = util_make_unique<goto_symex_statet>(
-    symex_targett::sourcet(goto_functionst::entry_point(), *this));
+    symex_targett::sourcet(goto_functionst::entry_point(), *this),
+    symex_path_storage);
   symex.symex_with_state(
     *symex_state,
     [this](const irep_idt &key) -> const goto_functionst::goto_functiont & {

@@ -27,8 +27,14 @@ Author: Daniel Kroening, kroening@kroening.com
 
 static void get_l1_name(exprt &expr);
 
-goto_symex_statet::goto_symex_statet(const symex_targett::sourcet &_source)
-  : goto_statet(_source), symex_target(nullptr), record_events(true), dirty()
+goto_symex_statet::goto_symex_statet(
+  const symex_targett::sourcet &_source,
+  path_storaget &path_storage)
+  : goto_statet(_source),
+    symex_target(nullptr),
+    record_events(true),
+    dirty(),
+    path_storage(path_storage)
 {
   threads.resize(1);
   new_frame();
@@ -181,7 +187,7 @@ void goto_symex_statet::assignment(
 #endif
 
   // do the l2 renaming
-  level2.increase_generation(l1_identifier, lhs);
+  level2.increase_generation(l1_identifier, lhs, path_storage);
   set_l2_indices(lhs, ns);
 
   // in case we happen to be multi-threaded, record the memory access
@@ -427,7 +433,7 @@ bool goto_symex_statet::l2_thread_read_encoding(
 
     if(a_s_read.second.empty())
     {
-      level2.increase_generation(l1_identifier, ssa_l1);
+      level2.increase_generation(l1_identifier, ssa_l1, path_storage);
       a_s_read.first=level2.current_count(l1_identifier);
     }
 
@@ -472,7 +478,7 @@ bool goto_symex_statet::l2_thread_read_encoding(
   }
 
   // produce a fresh L2 name
-  level2.increase_generation(l1_identifier, ssa_l1);
+  level2.increase_generation(l1_identifier, ssa_l1, path_storage);
 
   set_l2_indices(ssa_l1, ns);
   expr=ssa_l1;

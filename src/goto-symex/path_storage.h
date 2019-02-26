@@ -25,6 +25,8 @@ private:
   std::size_t nondet_count = 0;
 };
 
+
+
 /// \brief Storage for symbolic execution paths to be resumed later
 ///
 /// This data structure supports saving partially-executed symbolic
@@ -94,8 +96,7 @@ public:
 
   /// Tracks fresh L2 names across an entire symex run. This will be shared
   /// across all states to allocate unique generations.
-  std::shared_ptr<global_name_mapt> level2_names =
-    std::make_shared<global_name_mapt>(global_name_mapt());
+  global_name_mapt level2_names;
 
 private:
   // Derived classes should override these methods, allowing the base class to
