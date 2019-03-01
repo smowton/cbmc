@@ -211,26 +211,23 @@ void goto_symext::symex_goto(statet &state)
   framet::goto_state_listt &goto_state_list =
     state.call_stack().top().goto_state_map[new_state_pc];
 
-  // If the guard is true (and the alternative branch unreachable) we can move
-  // the state in this case as it'll never be accessed on the alternate branch.
+  // If the guard is unconditionally true it means the alternative branch is
+  // unreachable. In that case, move the state onto the state list, transition,
+  // and set the current guard to false.
   if(new_guard.is_true())
   {
     goto_state_list.emplace_back(state, true);
-  }
-  else
-  {
-    goto_state_list.emplace_back(state);
-  }
 
-  symex_transition(state, state_pc, backward);
+    symex_transition(state, state_pc, backward);
 
-  // adjust guards
-  if(new_guard.is_true())
-  {
     state.guard = guardt(false_exprt(), guard_manager);
   }
   else
   {
+    goto_state_list.emplace_back(state);
+
+    symex_transition(state, state_pc, backward);
+
     // produce new guard symbol
     exprt guard_expr;
 
