@@ -29,7 +29,13 @@ public:
   /// Distance from entry
   unsigned depth = 0;
 
+protected:
   symex_level2t level2;
+public:
+  const symex_level2t &get_level2() const
+  {
+    return level2;
+  }
 
   /// Uses level 1 names, and is used to do dereferencing
   value_sett value_set;
@@ -103,6 +109,13 @@ public:
       total_vccs(other.total_vccs),
       remaining_vccs(other.remaining_vccs)
   {
+  }
+
+  void move_from(goto_statet &&other_state)
+  {
+    level2 = std::move(other_state.level2);
+    propagation = std::move(other_state.propagation);
+    value_set = std::move(other_state.value_set);
   }
 };
 
