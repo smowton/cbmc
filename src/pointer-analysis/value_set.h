@@ -13,6 +13,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #define CPROVER_POINTER_ANALYSIS_VALUE_SET_H
 
 #include <set>
+#include <type_traits>
 
 #include <util/mp_arith.h>
 #include <util/reference_counting.h>
@@ -463,6 +464,19 @@ public:
     exprt &expr,
     const namespacet &ns) const;
 
+private:
+  /// Helper method for \ref get_entry_for_symbol
+  template<class maybe_const_value_sett>
+  static auto get_entry_for_symbol(
+    maybe_const_value_sett &value_set,
+    irep_idt identifier,
+    const typet &type,
+    const std::string &suffix,
+    const namespacet &ns) ->
+    typename std::conditional<std::is_const<maybe_const_value_sett>::value,
+    const value_sett::entryt *, value_sett::entryt *>::type;
+
+public:
   /// Get the entry for the symbol and suffix
   /// \param identifier: The identifier for the symbol
   /// \param type: The type of the symbol
@@ -474,14 +488,20 @@ public:
     irep_idt identifier,
     const typet &type,
     const std::string &suffix,
-    const namespacet &ns);
+    const namespacet &ns)
+  {
+    return get_entry_for_symbol(*this, identifier, type, suffix, ns);
+  }
 
   /// const version of /ref get_entry_for_symbol
   const value_sett::entryt *get_entry_for_symbol(
     irep_idt identifier,
     const typet &type,
     const std::string &suffix,
-    const namespacet &ns) const;
+    const namespacet &ns) const
+  {
+    return get_entry_for_symbol(*this, identifier, type, suffix, ns);
+  }
 
   void erase_value_from_entry(entryt &entry, const exprt &value_to_erase);
 
