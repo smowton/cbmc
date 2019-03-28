@@ -171,4 +171,14 @@ inline bool is_ssa_expr(const exprt &expr)
          expr.get_bool(ID_C_SSA_symbol);
 }
 
+template <>
+inline bool can_cast_expr<ssa_exprt>(const exprt &base)
+{
+  return base.id() == ID_symbol && base.get_bool(ID_C_SSA_symbol);
+}
+
+inline void validate_expr(const ssa_exprt &value)
+{
+  validate_operands(value, 0, "SSA expressions must not have operands");
+}
 #endif // CPROVER_UTIL_SSA_EXPR_H
