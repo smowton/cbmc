@@ -15,6 +15,7 @@ Author: Romain Brenguier, romain.brenguier@diffblue.com
 #include <map>
 #include <unordered_set>
 
+#include <util/expr_iterator.h>
 #include <util/irep.h>
 #include <util/range.h>
 #include <util/simplify_expr.h>
@@ -67,31 +68,6 @@ struct symex_renaming_levelt
   }
 };
 
-template <typename underlyingt, levelt level>
-class renamedt;
-
-template <typename underlyingt, levelt level>
-class renamed_vectort
-{
-public:
-  void for_each(std::function<void(renamedt<underlyingt, level>&)> f)
-  {
-    for(auto &op : values)
-    {
-      auto op_as_renamed = renamedt<underlyingt, level>{op};
-      f(op_as_renamed);
-      op = op_as_renamed.value;
-    }
-  }
-
-private:
-  std::vector<underlyingt> &values;
-
-  explicit renamed_vectort(std::vector<underlyingt> &values) : values(values){};
-
-  friend renamedt<underlyingt, level>;
-};
-
 /// Wrapper for expressions or types which have been renamed up to a given
 /// \p level
 template <typename underlyingt, levelt level>
@@ -108,19 +84,32 @@ public:
     return value;
   }
 
-  renamed_vectort<underlyingt, level> operands()
-  {
-    return renamed_vectort<underlyingt, level>{value.operands()};
-  };
-
-  const renamed_vectort<underlyingt, level> operands() const
-  {
-    return renamed_vectort<underlyingt, level>{value.operands()};
-  }
-
   void simplify(const namespacet &ns)
   {
     (void)::simplify(value, ns);
+  }
+
+  typedef std::function<optionalt<renamedt<exprt, level>>(const exprt &)>
+    expr_mutator_functiont;
+
+  /// This permits replacing subexpressions of the renamed value, so long as
+  /// each replacement is consistent with our current renaming level (for
+  /// example, replacing subexpressions of L2 expressions with ones which are
+  /// themselves L2 renamed).
+  /// The passed function will be called with each expression node in preorder
+  /// (i.e. parent expressions before children), and should return an empty
+  /// optional to make no change or a renamed expression to make a change.
+  void selectively_mutate(expr_mutator_functiont get_mutated_expr)
+  {
+    for(
+      auto it = value.depth_begin(), itend = value.depth_end();
+      it != itend;
+      ++it)
+    {
+      auto replacement = get_mutated_expr(*it);
+      if(replacement)
+        it.mutate() = replacement->get();
+    }
   }
 
 private:
@@ -130,7 +119,6 @@ private:
   friend struct symex_level1t;
   friend struct symex_level2t;
   friend class goto_symex_statet;
-  friend renamed_vectort<underlyingt, level>;
   template <levelt make_renamed_level>
   friend renamedt<exprt, make_renamed_level> make_renamed(constant_exprt constant);
 

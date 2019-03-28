@@ -79,8 +79,9 @@ void goto_symext::apply_goto_condition(
 /// \param value_set: The value-set for looking up what the symbol can point to
 /// \param language_mode: The language mode
 /// \param ns: A namespace
-static void try_evaluate_pointer_comparisons_base_case(
-  renamedt<exprt, L2> &condition,
+static optionalt<renamedt<exprt, L2>>
+try_evaluate_pointer_comparison(
+  irep_idt operation,
   const symbol_exprt &symbol_expr,
   const exprt &other_operand,
   const value_sett &value_set,
@@ -116,7 +117,7 @@ static void try_evaluate_pointer_comparisons_base_case(
     {
       // If ID_unknown or ID_invalid are in the value-set then we can't
       // conclude anything about it
-      return;
+      return {};
     }
 
     if(!constant_found)
@@ -142,19 +143,21 @@ static void try_evaluate_pointer_comparisons_base_case(
   {
     // The symbol cannot possibly have the value \p other_operand because it
     // isn't in the symbol's value-set
-    condition = condition.get().id() == ID_equal ? make_renamed<L2>(false_exprt{})
-                                           : make_renamed<L2>(true_exprt{});
+    return operation == ID_equal ? make_renamed<L2>(false_exprt{})
+                                            : make_renamed<L2>(true_exprt{});
   }
   else if(value_set_elements.size() == 1)
   {
     // The symbol must have the value \p other_operand because it is the only
     // thing in the symbol's value-set
-    condition = condition.get().id() == ID_equal ? make_renamed<L2>(true_exprt{})
-                                           : make_renamed<L2>(false_exprt{});
+    return operation == ID_equal ? make_renamed<L2>(true_exprt{})
+                                            : make_renamed<L2>(false_exprt{});
+  }
+  else
+  {
+    return {};
   }
 }
-
-
 
 /// Check if we have a simple pointer comparison, and if so try to evaluate it.
 /// \param [in,out] condition: An L2- renamed expression of the form
@@ -168,30 +171,34 @@ static void try_evaluate_pointer_comparisons_base_case(
 /// \param value_set: The value-set for looking up what the symbol can point to
 /// \param language_mode: The language mode
 /// \param ns: A namespace
-static bool try_evaluate_pointer_comparisons_base_case_with_check(
-  renamedt<exprt, L2> &condition,
-  const exprt &symbol_expr,
-  const exprt &other_operand,
+static optionalt<renamedt<exprt, L2>>
+try_evaluate_pointer_comparison(
+  const exprt &expr,
   const value_sett &value_set,
   const irep_idt language_mode,
   const namespacet &ns)
 {
+  if(expr.id() != ID_equal && expr.id() != ID_notequal)
+    return {};
+
+  if(!can_cast_type<pointer_typet>(expr.op0().type()))
+    return {};
+
+  exprt lhs = expr.op0(), rhs = expr.op1();
+  if(can_cast_expr<symbol_exprt>(rhs))
+    std::swap(lhs, rhs);
+
   const symbol_exprt *symbol_expr_lhs =
-    expr_try_dynamic_cast<symbol_exprt>(symbol_expr);
+    expr_try_dynamic_cast<symbol_exprt>(lhs);
 
   if(!symbol_expr_lhs)
-  {
-    return false;
-  }
+    return {};
 
-  if(!goto_symex_is_constantt()(other_operand))
-  {
-    return false;
-  }
+  if(!goto_symex_is_constantt()(rhs))
+    return {};
 
-  try_evaluate_pointer_comparisons_base_case(
-    condition, *symbol_expr_lhs, other_operand, value_set, language_mode, ns);
-  return true;
+  return try_evaluate_pointer_comparison(
+    expr.id(), *symbol_expr_lhs, rhs, value_set, language_mode, ns);
 }
 
 /// Try to evaluate pointer comparisons where they can be trivially determined
@@ -208,37 +215,11 @@ static renamedt<exprt, L2> try_evaluate_pointer_comparisons(
   const irep_idt language_mode,
   const namespacet &ns)
 {
-  const exprt &condition_expr = condition.get();
-  if(condition_expr.id() == ID_equal || condition_expr.id() == ID_notequal)
-  {
-    if(can_cast_type<pointer_typet>(condition_expr.op0().type()))
-    {
-      // Check if this is the form "symbol rel constant" or "constant rel symbol"
-      if(!try_evaluate_pointer_comparisons_base_case_with_check(
-        condition,
-        condition_expr.op0(),
-        condition_expr.op1(),
-        value_set,
-        language_mode,
-        ns))
-      {
-        try_evaluate_pointer_comparisons_base_case_with_check(
-          condition,
-          condition_expr.op1(),
-          condition_expr.op0(),
-          value_set,
-          language_mode,
-          ns);
-      }
-    }
-  }
-  else
-  {
-    condition.operands().for_each([&](renamedt<exprt, L2> &op) {
-      op = try_evaluate_pointer_comparisons(
-        std::move(op), value_set, language_mode, ns);
+  condition.selectively_mutate(
+    [&value_set, &language_mode, &ns](const exprt &expr) {
+      return try_evaluate_pointer_comparison(
+        expr, value_set, language_mode, ns);
     });
-  }
 
   return condition;
 }
