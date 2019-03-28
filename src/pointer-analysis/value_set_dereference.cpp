@@ -477,6 +477,35 @@ value_set_dereferencet::valuet value_set_dereferencet::build_reference_to(
   return result;
 }
 
+optionalt<exprt> value_set_dereferencet::build_reference_to_value_set_element(
+  const exprt &value_set_element,
+  const symbol_exprt &symbol_expr,
+  const pointer_typet &symbol_type,
+  const irep_idt language_mode,
+  const namespacet &ns)
+{
+  if(
+    value_set_element.id() == ID_unknown ||
+    value_set_element.id() == ID_invalid)
+  {
+    return {};
+  }
+
+  const bool exclude_null_derefs = false;
+  value_set_dereferencet::valuet possible_value = build_reference_to(
+    value_set_element, symbol_expr, exclude_null_derefs, language_mode, ns);
+
+  if(possible_value.ignore)
+  {
+    return {};
+  }
+
+  return
+    possible_value.value.is_nil()
+    ? static_cast<exprt>(null_pointer_exprt{symbol_type})
+    : static_cast<exprt>(address_of_exprt{possible_value.value});
+}
+
 static bool is_a_bv_type(const typet &type)
 {
   return type.id()==ID_unsignedbv ||
