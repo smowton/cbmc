@@ -16,6 +16,7 @@ Author: Romain Brenguier, romain.brenguier@diffblue.com
 #include <unordered_set>
 
 #include <util/irep.h>
+#include <util/range.h>
 #include <util/simplify_expr.h>
 #include <util/ssa_expr.h>
 
@@ -66,6 +67,31 @@ struct symex_renaming_levelt
   }
 };
 
+template <typename underlyingt, levelt level>
+class renamedt;
+
+template <typename underlyingt, levelt level>
+class renamed_vectort
+{
+public:
+  void for_each(std::function<void(renamedt<underlyingt, level>&)> f)
+  {
+    for(auto &op : values)
+    {
+      auto op_as_renamed = renamedt<underlyingt, level>{op};
+      f(op_as_renamed);
+      op = op_as_renamed.value;
+    }
+  }
+
+private:
+  std::vector<underlyingt> &values;
+
+  explicit renamed_vectort(std::vector<underlyingt> &values) : values(values){};
+
+  friend renamedt<underlyingt, level>;
+};
+
 /// Wrapper for expressions or types which have been renamed up to a given
 /// \p level
 template <typename underlyingt, levelt level>
@@ -82,6 +108,16 @@ public:
     return value;
   }
 
+  renamed_vectort<underlyingt, level> operands()
+  {
+    return renamed_vectort<underlyingt, level>{value.operands()};
+  };
+
+  const renamed_vectort<underlyingt, level> operands() const
+  {
+    return renamed_vectort<underlyingt, level>{value.operands()};
+  }
+
   void simplify(const namespacet &ns)
   {
     (void)::simplify(value, ns);
@@ -94,12 +130,20 @@ private:
   friend struct symex_level1t;
   friend struct symex_level2t;
   friend class goto_symex_statet;
+  friend renamed_vectort<underlyingt, level>;
+  template <levelt make_renamed_level>
+  friend renamedt<exprt, make_renamed_level> make_renamed(constant_exprt constant);
 
   /// Only the friend classes can create renamedt objects
   explicit renamedt(underlyingt value) : value(std::move(value))
   {
   }
 };
+
+template <levelt level>
+renamedt<exprt, level> make_renamed(constant_exprt constant) {
+  return renamedt<exprt, level>(std::move(constant));
+}
 
 /// Functor to set the level 0 renaming of SSA expressions.
 /// Level 0 corresponds to threads.
