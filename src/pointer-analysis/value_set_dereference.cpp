@@ -500,10 +500,24 @@ optionalt<exprt> value_set_dereferencet::build_reference_to_value_set_element(
     return {};
   }
 
-  return
-    possible_value.value.is_nil()
-    ? static_cast<exprt>(null_pointer_exprt{symbol_type})
-    : static_cast<exprt>(address_of_exprt{possible_value.value});
+  if(possible_value.value.is_nil())
+  {
+    return null_pointer_exprt{symbol_type};
+  }
+
+  typecast_exprt *typecast =
+    expr_try_dynamic_cast<typecast_exprt>(possible_value.value);
+
+  if(typecast)
+  {
+    // If possible_value.value is `(type1)x` then return `(type1 *)&x`
+    return typecast_exprt{address_of_exprt{typecast->op()},
+                          pointer_type(typecast->type())};
+  }
+  else
+  {
+    return address_of_exprt{possible_value.value};
+  }
 }
 
 static bool is_a_bv_type(const typet &type)
