@@ -15,6 +15,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/byte_operators.h>
 #include <util/c_types.h>
 #include <util/exception_utils.h>
+#include <util/expr_iterator.h>
 #include <util/expr_util.h>
 #include <util/invariant.h>
 #include <util/pointer_offset_size.h>
@@ -222,6 +223,59 @@ void goto_symext::dereference_rec(exprt &expr, statet &state, bool write)
 
     // first make sure there are no dereferences in there
     dereference_rec(tmp1, state, false);
+
+    bool resolved_any_indices = false;
+
+    // Before we try to deref it, see if we can constant-prop away any
+    // non-constant index references:
+    for(
+      auto expr_it = tmp1.depth_begin(), expr_end = tmp1.depth_end();
+      expr_it != expr_end;
+      ++expr_it)
+    {
+      if(expr_it->id() == ID_index)
+      {
+        const exprt &array_cell = to_index_expr(*expr_it).index();
+        if(!array_cell.is_constant())
+        {
+          exprt constant_array_cell = array_cell;
+          state.rename(constant_array_cell, ns);
+          do_simplify(constant_array_cell);
+          if(constant_array_cell.is_constant())
+          {
+            // Insert the newly constant array index, and try to promote to a
+            // SSA identifier:
+            index_exprt &index_expr = to_index_expr(expr_it.mutate());
+            index_expr.index() = constant_array_cell;
+            resolved_any_indices = true;
+          }
+        }
+      }
+      else if(expr_it->id() == ID_plus && expr_it->type().id() == ID_pointer)
+      {
+        const exprt &rhs = expr_it->op1();
+        if(!rhs.is_constant())
+        {
+          exprt constant_rhs = rhs;
+          state.rename(constant_rhs, ns);
+          do_simplify(constant_rhs);
+          if(constant_rhs.is_constant())
+          {
+            // Insert the newly constant offset, and try to promote to a
+            // SSA identifier:
+            exprt &improved_expr = expr_it.mutate();
+            improved_expr.op1() = constant_rhs;
+            resolved_any_indices = true;
+          }
+        }
+      }
+    }
+
+    if(resolved_any_indices)
+    {
+      do_simplify(tmp1);
+      state.field_sensitivity.apply(ns, state, tmp1, write);
+    }
 
     // we need to set up some elaborate call-backs
     symex_dereference_statet symex_dereference_state(state, ns);
