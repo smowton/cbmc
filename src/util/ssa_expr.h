@@ -181,4 +181,10 @@ inline bool is_ssa_expr(const exprt &expr)
          expr.get_bool(ID_C_SSA_symbol);
 }
 
+template <>
+inline bool can_cast_expr<ssa_exprt>(const exprt &base)
+{
+  return is_ssa_expr(base);
+}
+
 #endif // CPROVER_UTIL_SSA_EXPR_H
