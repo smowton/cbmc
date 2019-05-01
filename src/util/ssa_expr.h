@@ -164,13 +164,18 @@ inline bool can_cast_expr<ssa_exprt>(const exprt &base)
   return is_ssa_expr(base);
 }
 
+inline void validate_expr(const ssa_exprt &expr)
+{
+  ssa_exprt::check(expr);
+}
+
 /// Cast a generic exprt to an \ref ssa_exprt.
 /// \param expr: Source expression
 /// \return Object of type \ref ssa_exprt
 /// \ingroup gr_std_expr
 inline const ssa_exprt &to_ssa_expr(const exprt &expr)
 {
-  PRECONDITION(can_cast_expr<ssa_exprt>(expr));
+  ssa_exprt::check(expr);
   return static_cast<const ssa_exprt &>(expr);
 }
 
@@ -178,7 +183,7 @@ inline const ssa_exprt &to_ssa_expr(const exprt &expr)
 /// \ingroup gr_std_expr
 inline ssa_exprt &to_ssa_expr(exprt &expr)
 {
-  PRECONDITION(can_cast_expr<ssa_exprt>(expr));
+  ssa_exprt::check(expr);
   return static_cast<ssa_exprt &>(expr);
 }
 
