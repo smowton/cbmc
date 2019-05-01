@@ -154,8 +154,7 @@ public:
 
 inline bool is_ssa_expr(const exprt &expr)
 {
-  return expr.id()==ID_symbol &&
-         expr.get_bool(ID_C_SSA_symbol);
+  return expr.id() == ID_symbol && expr.get_bool(ID_C_SSA_symbol);
 }
 
 template <>
