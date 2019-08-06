@@ -9,11 +9,17 @@ ifeq ($(filter-out OSX MSVC,$(BUILD_ENV_)),)
 	no_pthread = -X pthread
 endif
 
+ifeq ($(BUILD_ENV_),MSVC)
+	exclusion=$(no_pthread) -X gcc-only
+else
+	exclusion=$(no_pthread)
+endif
+
 test:
-	@../test.pl -e -p -c "../../../src/cbmc/cbmc --validate-goto-model --validate-ssa-equation" $(no_pthread)
+	@../test.pl -e -p -c "../../../src/cbmc/cbmc --validate-goto-model --validate-ssa-equation" $(exclusion)
 
 tests.log: ../test.pl
-	@../test.pl -e -p -c "../../../src/cbmc/cbmc --validate-goto-model --validate-ssa-equation" $(no_pthread)
+	@../test.pl -e -p -c "../../../src/cbmc/cbmc --validate-goto-model --validate-ssa-equation" $(exclusion)
 
 show:
 	@for dir in *; do \
