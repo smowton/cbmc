@@ -1,8 +1,12 @@
 CORE
 indirect/IndirectVirtualCall.class
 --function indirect.IndirectVirtualCall.main
-function java::indirect\.TestEnum\.<clinit>:\(\)V$
 ^EXIT=10$
 ^SIGNAL=0$
 --
 ^Invariant check failed$
+--
+In this test the Enum usage is actually unreachable, as our stubbed version
+of Class.forName always returns exactly a java.lang.Object, which cannot be
+cast to an Enum type. The test serves only to check we don't throw an invariant
+violation when casting to an uninstantiated Enum type.
