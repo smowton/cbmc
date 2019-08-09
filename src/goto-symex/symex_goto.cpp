@@ -268,7 +268,7 @@ void goto_symext::symex_goto(statet &state)
       // generate assume(false) or a suitable negation if this
       // instruction is a conditional goto
       if(new_guard.is_true())
-        symex_assume_l2(state, false_exprt());
+        truncate_current_path(state);
       else
         symex_assume_l2(state, not_exprt(new_guard));
 
@@ -796,14 +796,9 @@ void goto_symext::loop_bound_exceeded(
         "unwinding assertion loop " + std::to_string(loop_number),
         state);
 
-      // add to state guard to prevent further assignments
-      state.guard.add(negated_cond);
     }
-    else
-    {
-      // generate unwinding assumption, unless we permit partial loops
-      symex_assume_l2(state, negated_cond);
-    }
+    // generate unwinding assumption, unless we permit partial loops
+    symex_assume_l2(state, negated_cond);
   }
 }
 

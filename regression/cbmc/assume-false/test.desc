@@ -1,0 +1,11 @@
+CORE
+test.c
+--show-vcc
+main::1::i!0@1#[0-9]+ = 0
+^EXIT=0$
+^SIGNAL=0$
+--
+main::1::i!0@1#[0-9]+ = 2
+--
+This checks that code rendered unreachable by a __CPROVER_assume(0) does not generate constraints.
+

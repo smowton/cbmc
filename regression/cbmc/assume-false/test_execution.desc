@@ -1,0 +1,10 @@
+CORE
+test.c
+
+^VERIFICATION SUCCESSFUL$
+^EXIT=0$
+^SIGNAL=0$
+--
+--
+The main test is in test.desc; this just checks that the program
+has the expected result

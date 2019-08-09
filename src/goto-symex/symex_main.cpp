@@ -160,8 +160,14 @@ void goto_symext::symex_assume_l2(statet &state, const exprt &cond)
 
   if(state.threads.size()==1)
   {
+    exprt unguarded_cond = rewritten_cond;
     exprt tmp = state.guard.guard_expr(rewritten_cond);
     target.assumption(state.guard.as_expr(), tmp, state.source);
+    // There's no need to drag assumptions in general around in the guard, but
+    // when it's obvious that this branch is no longer viable we might as well
+    // avoid the cost of executing other instructions on this branch:
+    if(unguarded_cond.is_false())
+      state.guard.add(unguarded_cond);
   }
   // symex_target_equationt::convert_assertions would fail to
   // consider assumptions of threads that have a thread-id above that
@@ -527,8 +533,11 @@ void goto_symext::execute_next_instruction(
     merge_gotos(state);
 
   // depth exceeded?
-  if(symex_config.max_depth != 0 && state.depth > symex_config.max_depth)
-    state.guard.add(false_exprt());
+  if(symex_config.max_depth != 0 && state.depth > symex_config.max_depth &&
+     !state.guard.is_false())
+  {
+    truncate_current_path(state);
+  }
   state.depth++;
 
   // actually do instruction
@@ -619,7 +628,7 @@ void goto_symext::execute_next_instruction(
   case END_THREAD:
     // behaves like assume(0);
     if(!state.guard.is_false())
-      state.guard.add(false_exprt());
+      truncate_current_path(state);
     symex_transition(state);
     break;
 

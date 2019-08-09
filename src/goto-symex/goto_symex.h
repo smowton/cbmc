@@ -411,6 +411,17 @@ protected:
   virtual void symex_assume(statet &state, const exprt &cond);
   void symex_assume_l2(statet &, const exprt &cond);
 
+  /// Mark the current execution path unviable, due to an ASSUME(FALSE),
+  /// exceeding depth or unwind limits, or anything else that means we
+  /// statically know we can't possibly execute this path. Symex will use this
+  /// to cease executing instructions (on this thread) until we next merge with
+  /// a viable path
+  /// \param state: state to alter
+  void truncate_current_path(statet &state)
+  {
+    symex_assume_l2(state, false_exprt());
+  }
+
   /// Merge all branches joining at the current program point. Applies
   /// \ref merge_goto for each goto state (each of which corresponds to previous
   /// branch).

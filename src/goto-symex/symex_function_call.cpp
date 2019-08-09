@@ -258,8 +258,7 @@ void goto_symext::symex_function_call_code(
       if(symex_config.unwinding_assertions)
         vcc(false_exprt(), "recursion unwinding assertion", state);
 
-      // add to state guard to prevent further assignments
-      state.guard.add(false_exprt());
+      truncate_current_path(state);
     }
 
     symex_transition(state);
