@@ -243,6 +243,12 @@ public:
     return goto_functions.at(id);
   }
 
+  goto_functionst::goto_functiont &get_goto_function_writable(
+    const irep_idt &id)
+  {
+    return goto_functions.at(id);
+  }
+
   /// Check that the goto model is well-formed
   ///
   /// The validation mode indicates whether well-formedness check failures are
@@ -263,7 +269,7 @@ public:
   symbol_tablet &symbol_table;
 
 private:
-  const lazy_goto_functions_mapt goto_functions;
+  lazy_goto_functions_mapt goto_functions;
   language_filest language_files;
 
   // Function/module processing functions
