@@ -127,8 +127,11 @@ void java_bytecode_languaget::set_language_options(const optionst &options)
   max_user_array_length =
     options.get_unsigned_int_option("java-max-vla-length");
 
-  if(options.get_bool_option("symex-driven-lazy-loading"))
+  if(options.get_bool_option("symex-driven-lazy-loading") ||
+     options.get_bool_option("lazy-methods-test-v11"))
+  {
     lazy_methods_mode=LAZY_METHODS_MODE_EXTERNAL_DRIVER;
+  }
   else if(options.get_bool_option("lazy-methods"))
     lazy_methods_mode=LAZY_METHODS_MODE_CONTEXT_INSENSITIVE;
   else
