@@ -47,6 +47,7 @@ SRC = assignments_from_json.cpp \
       remove_exceptions.cpp \
       remove_instanceof.cpp \
       remove_java_new.cpp \
+      replace_java_intrinsics.cpp \
       replace_java_nondet.cpp \
       select_pointer_type.cpp \
       simple_method_stubbing.cpp \

@@ -71,6 +71,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <java_bytecode/remove_exceptions.h>
 #include <java_bytecode/remove_instanceof.h>
 #include <java_bytecode/remove_java_new.h>
+#include <java_bytecode/replace_java_intrinsics.h>
 #include <java_bytecode/replace_java_nondet.h>
 #include <java_bytecode/simple_method_stubbing.h>
 
@@ -773,6 +774,8 @@ void jbmc_parse_optionst::process_goto_function(
 
   bool using_symex_driven_loading =
     options.get_bool_option("symex-driven-lazy-loading");
+
+  replace_java_intrinsics(function, ui_message_handler);
 
   // Removal of RTTI inspection:
   remove_instanceof(
