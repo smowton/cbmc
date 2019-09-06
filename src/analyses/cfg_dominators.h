@@ -12,11 +12,12 @@ Author: Georg Weissenbacher, georg@weissenbacher.name
 #ifndef CPROVER_ANALYSES_CFG_DOMINATORS_H
 #define CPROVER_ANALYSES_CFG_DOMINATORS_H
 
-#include <set>
+#include <cassert>
+#include <iosfwd>
+#include <iterator>
 #include <list>
 #include <map>
-#include <iosfwd>
-#include <cassert>
+#include <set>
 
 #include <goto-programs/goto_functions.h>
 #include <goto-programs/goto_program.h>
@@ -37,11 +38,9 @@ template <class P, class T, bool post_dom>
 class cfg_dominators_templatet
 {
 public:
-  typedef std::set<T> target_sett;
-
   struct nodet
   {
-    target_sett dominators;
+    optionalt<std::size_t> dominator;
   };
 
   typedef procedure_local_cfg_baset<nodet, P, T> cfgt;
@@ -69,6 +68,126 @@ public:
     return cfg.get_node_index(program_point);
   }
 
+  class dominators_iterablet
+  {
+    // Type of our containing \ref dense_integer_mapt
+    typedef cfg_dominators_templatet<P, T, post_dom> cfg_dominatorst;
+
+  public:
+    class dominators_iteratort
+      : public std::iterator<std::forward_iterator_tag, T>
+    {
+      // Type of the std::iterator support class we inherit
+      typedef std::iterator<std::forward_iterator_tag, const T> base_typet;
+
+    public:
+      dominators_iteratort(
+        const cfg_dominatorst &dominator_analysis,
+        std::size_t index)
+        : dominator_analysis(dominator_analysis), current_index(index)
+      {
+      }
+
+    private:
+      explicit dominators_iteratort(const cfg_dominatorst &dominator_analysis)
+        : dominator_analysis(dominator_analysis), current_index{}
+      {
+      }
+
+    public:
+      static dominators_iteratort end(const cfg_dominatorst &dominator_analysis)
+      {
+        return dominators_iteratort{dominator_analysis};
+      }
+
+      dominators_iteratort operator++()
+      {
+        auto i = *this;
+        advance();
+        return i;
+      }
+      dominators_iteratort operator++(int junk)
+      {
+        advance();
+        return *this;
+      }
+      typename base_typet::reference operator*() const
+      {
+        return dominator_analysis.cfg[*current_index].PC;
+      }
+      typename base_typet::pointer operator->() const
+      {
+        return &**this;
+      }
+      bool operator==(const dominators_iteratort &rhs) const
+      {
+        return current_index == rhs.current_index;
+      }
+      bool operator!=(const dominators_iteratort &rhs) const
+      {
+        return current_index != rhs.current_index;
+      }
+
+    private:
+      void advance()
+      {
+        INVARIANT(current_index.has_value(), "can't advance an end() iterator");
+        const auto &next_dominator =
+          dominator_analysis.cfg[*current_index].dominator;
+        INVARIANT(
+          next_dominator.has_value(),
+          "dominator ancestors must end up at the root");
+        if(*next_dominator == *current_index)
+        {
+          // Cycle; this is the root node
+          current_index = optionalt<std::size_t>{};
+        }
+        else
+        {
+          current_index = next_dominator;
+        }
+      }
+
+      const cfg_dominatorst &dominator_analysis;
+      optionalt<std::size_t> current_index;
+    };
+
+    dominators_iterablet(
+      const cfg_dominatorst &dominator_analysis,
+      optionalt<std::size_t> index)
+      : dominator_analysis(dominator_analysis), first_instruction_index(index)
+    {
+    }
+
+    dominators_iteratort begin() const
+    {
+      if(first_instruction_index.has_value())
+        return dominators_iteratort{dominator_analysis,
+                                    *first_instruction_index};
+      else
+        return dominators_iteratort::end(dominator_analysis);
+    }
+
+    dominators_iteratort end() const
+    {
+      return dominators_iteratort::end(dominator_analysis);
+    }
+
+  private:
+    const cfg_dominatorst &dominator_analysis;
+    optionalt<std::size_t> first_instruction_index;
+  };
+
+  dominators_iterablet dominators(const nodet &start_node) const
+  {
+    return dominators_iterablet{*this, start_node.dominator};
+  }
+
+  dominators_iterablet dominators(T start_instruction) const
+  {
+    return dominators(cfg.get_node(start_instruction));
+  }
+
   /// Returns true if the program point corresponding to \p rhs_node is
   /// dominated by program point \p lhs. Saves node lookup compared to the
   /// dominates overload that takes two program points, so this version is
@@ -76,7 +195,13 @@ public:
   /// Note by definition all program points dominate themselves.
   bool dominates(T lhs, const nodet &rhs_node) const
   {
-    return rhs_node.dominators.count(lhs);
+    const auto rhs_dominators = dominators(rhs_node);
+    return std::any_of(
+      rhs_dominators.begin(),
+      rhs_dominators.end(),
+      [&lhs](const goto_programt::const_targett dominator) {
+        return lhs == dominator;
+      });
   }
 
   /// Returns true if program point \p lhs dominates \p rhs.
@@ -94,7 +219,7 @@ public:
     // Dominator analysis walks from the entry point, so a side-effect is to
     // identify unreachable program points (those which don't dominate even
     // themselves).
-    return !program_point_node.dominators.empty();
+    return program_point_node.dominator.has_value();
   }
 
   /// Returns true if the program point for \p program_point_node is reachable
@@ -115,6 +240,8 @@ public:
 protected:
   void initialise(P &program);
   void fixedpoint(P &program);
+  std::size_t
+  intersect(std::size_t potential_dominator, std::size_t edge_index);
 };
 
 /// Print the result of the dominator computation
@@ -156,7 +283,7 @@ void cfg_dominators_templatet<P, T, post_dom>::fixedpoint(P &program)
   else
     entry_node = cfgt::get_first_node(program);
   typename cfgt::nodet &n = cfg.get_node(entry_node);
-  n.dominators.insert(entry_node);
+  n.dominator = cfg.get_node_index(entry_node);
 
   for(typename cfgt::edgest::const_iterator
       s_it=(post_dom?n.in:n.out).begin();
@@ -172,56 +299,31 @@ void cfg_dominators_templatet<P, T, post_dom>::fixedpoint(P &program)
 
     bool changed=false;
     typename cfgt::nodet &node = cfg.get_node(current);
-    if(node.dominators.empty())
-    {
-      for(const auto &edge : (post_dom ? node.out : node.in))
-        if(!cfg[edge.first].dominators.empty())
-        {
-          node.dominators=cfg[edge.first].dominators;
-          node.dominators.insert(current);
-          changed=true;
-        }
-    }
+
+    // Dummy assignment to avoid GCC panicking about possibly-uninitialised
+    // data:
+    optionalt<std::size_t> potential_dominator = 0;
+
+    // Real initialiser:
+    potential_dominator = node.dominator;
 
     // compute intersection of predecessors
     for(const auto &edge : (post_dom ? node.out : node.in))
     {
-      const target_sett &other=cfg[edge.first].dominators;
-      if(other.empty())
+      const typename cfgt::nodet &other = cfg[edge.first];
+      if(!other.dominator)
         continue;
 
-      typename target_sett::const_iterator n_it=node.dominators.begin();
-      typename target_sett::const_iterator o_it=other.begin();
+      if(!potential_dominator)
+        potential_dominator = other.dominator;
 
-      // in-place intersection. not safe to use set_intersect
-      while(n_it!=node.dominators.end() && o_it!=other.end())
-      {
-        if(*n_it==current)
-          ++n_it;
-        else if(*n_it<*o_it)
-        {
-          changed=true;
-          node.dominators.erase(n_it++);
-        }
-        else if(*o_it<*n_it)
-          ++o_it;
-        else
-        {
-          ++n_it;
-          ++o_it;
-        }
-      }
+      potential_dominator = intersect(*potential_dominator, *other.dominator);
+    }
 
-      while(n_it!=node.dominators.end())
-      {
-        if(*n_it==current)
-          ++n_it;
-        else
-        {
-          changed=true;
-          node.dominators.erase(n_it++);
-        }
-      }
+    if(!node.dominator || *potential_dominator != *node.dominator)
+    {
+      node.dominator = potential_dominator;
+      changed = true;
     }
 
     if(changed) // fixed point for node reached?
@@ -232,6 +334,29 @@ void cfg_dominators_templatet<P, T, post_dom>::fixedpoint(P &program)
       }
     }
   }
+}
+
+/// We can make the assumption that as we're walking back all dominators
+/// will have been processed, so all de-referencing should be safe.
+template <class P, class T, bool post_dom>
+std::size_t cfg_dominators_templatet<P, T, post_dom>::intersect(
+  std::size_t potential_dominator,
+  std::size_t edge_index)
+{
+  while(potential_dominator != edge_index)
+  {
+    while(potential_dominator > edge_index)
+    {
+      potential_dominator = cfg[potential_dominator].dominator;
+    }
+
+    while(edge_index < potential_dominator)
+    {
+      edge_index = *cfg[edge_index].dominator;
+    }
+  }
+
+  return potential_dominator;
 }
 
 /// Pretty-print a single node in the dominator tree. Supply a specialisation if
