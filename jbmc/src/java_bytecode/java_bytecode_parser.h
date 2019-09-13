@@ -11,36 +11,65 @@ Author: Daniel Kroening, kroening@kroening.com
 #define CPROVER_JAVA_BYTECODE_JAVA_BYTECODE_PARSER_H
 
 #include <iosfwd>
+#include <memory>
 #include <string>
 #include <util/irep.h>
 #include <util/optional.h>
 
+struct java_bytecodet;
 struct java_bytecode_parse_treet;
 
-/// Attempt to parse a Java class from the given file.
+class java_bytecode_reft
+{
+private:
+  std::unique_ptr<java_bytecodet> bytecode;
+
+public:
+  java_bytecode_reft() noexcept;
+  explicit java_bytecode_reft(java_bytecodet &&bytecode) noexcept;
+  java_bytecode_reft(java_bytecode_reft &&) noexcept;
+  ~java_bytecode_reft();
+
+  bool has_value() const
+  {
+    return bytecode != nullptr;
+  }
+  java_bytecodet &operator*() const
+  {
+    return *bytecode;
+  }
+};
+
+/// Attempt to load the bytecode from the given file.
 /// \param file: file to load from
-/// \param class_name: name of the class to load
 /// \param msg: handles log messages
 /// \param skip_instructions: if true, the loaded class's methods will all be
 ///   empty. Saves time and memory for consumers that only want signature info.
 /// \return parse tree, or empty optionalt on failure
-optionalt<java_bytecode_parse_treet> java_bytecode_parse(
+java_bytecode_reft java_bytecode_load(
   const std::string &file,
-  const irep_idt &class_name,
   class message_handlert &msg,
   bool skip_instructions = false);
 
-/// Attempt to parse a Java class from the given stream
+/// Attempt to load the bytecode from the given stream
 /// \param stream: stream to load from
-/// \param class_name: name of the class to load
 /// \param msg: handles log messages
 /// \param skip_instructions: if true, the loaded class's methods will all be
 ///   empty. Saves time and memory for consumers that only want signature info.
 /// \return parse tree, or empty optionalt on failure
-optionalt<java_bytecode_parse_treet> java_bytecode_parse(
+java_bytecode_reft java_bytecode_load(
   std::istream &stream,
-  const irep_idt &class_name,
   class message_handlert &msg,
   bool skip_instructions = false);
+
+/// Attempt to parse a Java class from the loaded bytecode
+/// \param bytecode: the loaded bytecode
+/// \param expected_class_name: name of the class to load
+/// \param message_handler: handles log messages
+/// \return parse tree, or empty optionalt on failure
+optionalt<java_bytecode_parse_treet> java_bytecode_parse(
+  java_bytecode_reft &bytecode,
+  const irep_idt &expected_class_name,
+  class message_handlert &message_handler);
 
 #endif // CPROVER_JAVA_BYTECODE_JAVA_BYTECODE_PARSER_H
