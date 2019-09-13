@@ -32,18 +32,19 @@ SCENARIO(
     GIVEN(
       "A class with a static lambda variables from " + compiler + " compiler.")
     {
-      optionalt<java_bytecode_parse_treet> parse_tree = java_bytecode_parse(
+      java_bytecode_reft bytecode = java_bytecode_load(
         "./java_bytecode/java_bytecode_parse_lambdas/lambda_examples/" +
           compiler + "_classes/StaticLambdas.class",
-        "StaticLambdas",
         null_message_handler);
+      optionalt<java_bytecode_parse_treet> parse_tree =
+        java_bytecode_parse(bytecode,         "StaticLambdas",
+                            null_message_handler);
       WHEN("Parsing that class")
       {
         REQUIRE(parse_tree);
         REQUIRE(parse_tree->loading_successful);
         const java_bytecode_parse_treet::classt &parsed_class =
           parse_tree->parsed_class;
-        REQUIRE(parsed_class.attribute_bootstrapmethods_read);
         REQUIRE(parsed_class.lambda_method_handle_map.size() == 12);
 
         // Simple lambdas
@@ -343,18 +344,19 @@ SCENARIO(
     [](const std::string &compiler) { // NOLINT(whitespace/braces)
       GIVEN("A method with local lambdas from " + compiler + " compiler.")
       {
-        optionalt<java_bytecode_parse_treet> parse_tree = java_bytecode_parse(
+        java_bytecode_reft bytecode = java_bytecode_load(
           "./java_bytecode/java_bytecode_parse_lambdas/lambda_examples/" +
             compiler + "_classes/LocalLambdas.class",
-          "LocalLambdas",
+
           null_message_handler);
+        optionalt<java_bytecode_parse_treet> parse_tree =
+          java_bytecode_parse(bytecode, "LocalLambdas", null_message_handler);
         WHEN("Parsing that class")
         {
           REQUIRE(parse_tree);
           REQUIRE(parse_tree->loading_successful);
           const java_bytecode_parse_treet::classt &parsed_class =
             parse_tree->parsed_class;
-          REQUIRE(parsed_class.attribute_bootstrapmethods_read);
           REQUIRE(parsed_class.lambda_method_handle_map.size() == 12);
 
           // Simple lambdas
@@ -652,18 +654,19 @@ SCENARIO(
         "A class that has lambdas as member variables from " + compiler +
         " compiler.")
       {
-        optionalt<java_bytecode_parse_treet> parse_tree = java_bytecode_parse(
+        java_bytecode_reft bytecode = java_bytecode_load(
           "./java_bytecode/java_bytecode_parse_lambdas/lambda_examples/" +
             compiler + "_classes/MemberLambdas.class",
-          "MemberLambdas",
+
           null_message_handler);
+        optionalt<java_bytecode_parse_treet> parse_tree =
+          java_bytecode_parse(bytecode, "MemberLambdas", null_message_handler);
         WHEN("Parsing that class")
         {
           REQUIRE(parse_tree);
           REQUIRE(parse_tree->loading_successful);
           const java_bytecode_parse_treet::classt &parsed_class =
             parse_tree->parsed_class;
-          REQUIRE(parsed_class.attribute_bootstrapmethods_read);
           REQUIRE(parsed_class.lambda_method_handle_map.size() == 12);
 
           // Simple lambdas
@@ -987,18 +990,20 @@ SCENARIO(
         "variables from " +
         compiler + " compiler.")
       {
-        optionalt<java_bytecode_parse_treet> parse_tree = java_bytecode_parse(
+        java_bytecode_reft bytecode = java_bytecode_load(
           "./java_bytecode/java_bytecode_parse_lambdas/lambda_examples/" +
             compiler + "_classes/OuterMemberLambdas$Inner.class",
-          "OuterMemberLambdas$Inner",
+
           null_message_handler);
+        optionalt<java_bytecode_parse_treet> parse_tree =
+          java_bytecode_parse(bytecode, "OuterMemberLambdas$Inner", 
+            null_message_handler);
         WHEN("Parsing that class")
         {
           REQUIRE(parse_tree);
           REQUIRE(parse_tree->loading_successful);
           const java_bytecode_parse_treet::classt &parsed_class =
             parse_tree->parsed_class;
-          REQUIRE(parsed_class.attribute_bootstrapmethods_read);
           REQUIRE(parsed_class.lambda_method_handle_map.size() == 3);
 
           // Field ref for getting the outer class
