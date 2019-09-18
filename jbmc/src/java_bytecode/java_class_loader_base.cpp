@@ -9,7 +9,6 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "java_class_loader_base.h"
 
 #include "jar_file.h"
-#include "java_bytecode_parser.h"
 
 #include <util/file_util.h>
 #include <util/prefix.h>
@@ -125,7 +124,7 @@ java_class_loader_baset::class_name_to_os_file(const irep_idt &class_name)
 }
 
 /// attempt to load a class from a classpath_entry
-optionalt<java_bytecode_parse_treet> java_class_loader_baset::load_class(
+java_bytecode_reft java_class_loader_baset::load_class(
   const irep_idt &class_name,
   const classpath_entryt &cp_entry)
 {
@@ -145,8 +144,7 @@ optionalt<java_bytecode_parse_treet> java_class_loader_baset::load_class(
 /// \param class_name: name of class to load in Java source format
 /// \param jar_file: path of the jar file
 /// \return optional value of parse tree, empty if class cannot be loaded
-optionalt<java_bytecode_parse_treet>
-java_class_loader_baset::get_class_from_jar(
+java_bytecode_reft java_class_loader_baset::get_class_from_jar(
   const irep_idt &class_name,
   const std::string &jar_file)
 {
@@ -162,9 +160,7 @@ java_class_loader_baset::get_class_from_jar(
             << eom;
 
     std::istringstream istream(*data);
-    java_bytecode_reft bytecode =
-      java_bytecode_load(istream, get_message_handler());
-    return java_bytecode_parse(bytecode, class_name, get_message_handler());
+    return java_bytecode_load(istream, get_message_handler());
   }
   catch(const std::runtime_error &)
   {
@@ -177,8 +173,7 @@ java_class_loader_baset::get_class_from_jar(
 /// \param class_name: name of class to load in Java source format
 /// \param path: directory to load from
 /// \return optional value of parse tree, empty if class cannot be loaded
-optionalt<java_bytecode_parse_treet>
-java_class_loader_baset::get_class_from_directory(
+java_bytecode_reft java_class_loader_baset::get_class_from_directory(
   const irep_idt &class_name,
   const std::string &path)
 {
@@ -190,9 +185,7 @@ java_class_loader_baset::get_class_from_directory(
   {
     debug() << "Getting class '" << class_name << "' from file " << full_path
             << eom;
-    java_bytecode_reft bytecode =
-      java_bytecode_load(full_path, get_message_handler());
-    return java_bytecode_parse(bytecode, class_name, get_message_handler());
+    return java_bytecode_load(full_path, get_message_handler());
   }
   else
     return {};
