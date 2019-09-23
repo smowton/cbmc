@@ -49,7 +49,8 @@ Author: Daniel Kroening, kroening@kroening.com
   "(lazy-methods-extra-entry-point):" \
   "(java-load-class):" \
   "(java-no-load-class):" \
-  "(static-values):"
+  "(static-values):" \
+  "(java-lift-clinit-calls)"
 
 #define JAVA_BYTECODE_LANGUAGE_OPTIONS_HELP /*NOLINT*/ \
   " --disable-uncaught-exception-check\n" \
@@ -117,7 +118,15 @@ Author: Daniel Kroening, kroening@kroening.com
   "                              instead of calling the normal static initializer\n"/* NOLINT(*) */ \
   "                              (clinit) method.\n" \
   "                              The argument can be a relative or absolute path to\n"/* NOLINT(*) */ \
-  "                              the file.\n"
+  "                              the file.\n" \
+  " --java-lift-clinit-calls     Should we lift clinit calls in function bodies to\n" /* NOLINT(*) */ \
+  "                              the top? For example, turning\n" \
+  "                              `if(x) A.<clinit>() else B.<clinit>()` into\n" /* NOLINT(*) */ \
+  "                              `A.<clinit>(); B.<clinit>(); if(x) ...`\n" \
+  "                              This may reduce the overall cost of static\n" /* NOLINT(*) */ \
+  "                              initialisation, but may be unsound if there are\n" /* NOLINT(*) */ \
+  "                              cyclic dependencies between static initializers due\n" /* NOLINT(*) */ \
+  "                              to potentially changing their order of execution." /* NOLINT(*) */
 // clang-format on
 
 class symbolt;
@@ -200,6 +209,11 @@ struct java_bytecode_language_optionst
   /// same kind of "return nondet null or instance of return type" body that we
   /// use for stubbed methods. The original method body will never be loaded.
   optionalt<prefix_filtert> method_context;
+
+  /// Should we lift clinit calls in function bodies to the top? For example,
+  /// turning `if(x) A.clinit() else B.clinit()` into
+  /// `A.clinit(); B.clinit(); if(x) ...`
+  bool should_lift_clinit_calls;
 };
 
 #define JAVA_CLASS_MODEL_SUFFIX "@class_model"
@@ -306,7 +320,6 @@ protected:
   java_object_factory_parameterst object_factory_parameters;
   method_bytecodet method_bytecode;
   java_string_library_preprocesst string_preprocess;
-
 
 private:
   virtual std::vector<load_extra_methodst>
