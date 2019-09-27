@@ -467,7 +467,7 @@ static java_bytecode_convert_methodt::method_offsett get_common_dominator(
     const auto &dominator_nodeidx=
       dominator_analysis.cfg.entry_map.at(v->var.start_pc);
     const auto &this_var_doms=
-      dominator_analysis.cfg[dominator_nodeidx].dominators;
+      dominator_analysis.dominators(dominator_nodeidx);
     for(const auto this_var_dom : this_var_doms)
       if(this_var_dom<=first_pc)
         candidate_dominators.push_back(this_var_dom);
