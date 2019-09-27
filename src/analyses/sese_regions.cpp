@@ -140,22 +140,18 @@ void sese_region_analysist::compute_sese_regions(
       (*successors.begin())->incoming_edges.size() == 1)
       continue;
 
-    const auto &instruction_postdoms = postdominators.get_node(it).dominators;
-
-    // Ideally we would start with the immediate postdominator and walk down,
-    // but our current dominator analysis doesn't make it easy to determine an
-    // immediate dominator.
+    const auto &instruction_postdom = postdominators.get_node(it).dominator;
+    if(!instruction_postdom)
+      continue;
 
     // Ideally I would use `optionalt<std::size_t>` here, but it triggers a
     // GCC-5 bug.
     std::size_t closest_exit_index = dominators.cfg.size();
-    for(const auto &possible_exit : instruction_postdoms)
+    std::size_t current_index = *instruction_postdom;
+    while(current_index != 0)
     {
-      const auto possible_exit_index = dominators.get_node_index(possible_exit);
-      const auto &possible_exit_node = dominators.cfg[possible_exit_index];
-      const auto possible_exit_dominators =
-        possible_exit_node.dominators.size();
-
+      const auto &possible_exit_node = dominators.cfg[current_index];
+      const auto &possible_exit = possible_exit_node.PC;
       if(
         it != possible_exit && dominators.dominates(it, possible_exit_node) &&
         get_innermost_loop(innermost_loop_ids, it) ==
@@ -165,12 +161,16 @@ void sese_region_analysist::compute_sese_regions(
         // the least dominators, i.e. the closest to the region entrance.
         if(
           closest_exit_index == dominators.cfg.size() ||
-          dominators.cfg[closest_exit_index].dominators.size() >
-            possible_exit_dominators)
+          current_index < closest_exit_index)
         {
-          closest_exit_index = possible_exit_index;
+          closest_exit_index = current_index;
         }
       }
+
+      if(possible_exit_node.dominator)
+        current_index = *possible_exit_node.dominator;
+      else
+        break;
     }
 
     if(closest_exit_index < dominators.cfg.size())
