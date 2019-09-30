@@ -1206,7 +1206,7 @@ bool java_bytecode_languaget::convert_single_method(
   bool ret = convert_single_method_code(
     function_id, symbol_table, needed_lazy_methods, class_to_declared_symbols);
 
-  if(symbol.value.is_not_nil() && language_options->should_lift_clinit_calls)
+  if(symbol.value.is_not_nil())
   {
     auto &writable_symbol = symbol_table.get_writeable_ref(function_id);
     writable_symbol.value =
