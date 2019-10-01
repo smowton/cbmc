@@ -250,7 +250,7 @@ std::size_t cfg_dominators_templatet<P, T, post_dom>::intersect(
   {
     while(potential_dominator > edge_index)
     {
-      potential_dominator = cfg[potential_dominator].dominator;
+      potential_dominator = *cfg[potential_dominator].dominator;
     }
 
     while(edge_index < potential_dominator)
