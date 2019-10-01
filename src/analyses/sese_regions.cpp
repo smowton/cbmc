@@ -140,45 +140,23 @@ void sese_region_analysist::compute_sese_regions(
       (*successors.begin())->incoming_edges.size() == 1)
       continue;
 
-    const auto &instruction_postdom = postdominators.get_node(it).dominator;
-    if(!instruction_postdom)
-      continue;
-
-    // Ideally I would use `optionalt<std::size_t>` here, but it triggers a
-    // GCC-5 bug.
-    std::size_t closest_exit_index = dominators.cfg.size();
-    std::size_t current_index = *instruction_postdom;
-    while(current_index != 0)
+    for(const auto &possible_exit : postdominators.dominators(it))
     {
-      const auto &possible_exit_node = dominators.cfg[current_index];
-      const auto &possible_exit = possible_exit_node.PC;
       if(
-        it != possible_exit && dominators.dominates(it, possible_exit_node) &&
+        it != possible_exit && dominators.dominates(it, possible_exit) &&
         get_innermost_loop(innermost_loop_ids, it) ==
           get_innermost_loop(innermost_loop_ids, possible_exit))
       {
-        // If there are several candidate region exit nodes, prefer the one with
-        // the least dominators, i.e. the closest to the region entrance.
-        if(
-          closest_exit_index == dominators.cfg.size() ||
-          current_index < closest_exit_index)
-        {
-          closest_exit_index = current_index;
-        }
-      }
+        // The first candidate that meets out criteria is the best, as
+        // postdominators are iterated over closest first (i.e. starting with
+        // the immediate postdominator).
 
-      if(possible_exit_node.dominator)
-        current_index = *possible_exit_node.dominator;
-      else
+        auto emplace_result = sese_regions.emplace(it, possible_exit);
+        INVARIANT(
+          emplace_result.second, "should only visit each region entry once");
+
         break;
-    }
-
-    if(closest_exit_index < dominators.cfg.size())
-    {
-      auto emplace_result =
-        sese_regions.emplace(it, dominators.cfg[closest_exit_index].PC);
-      INVARIANT(
-        emplace_result.second, "should only visit each region entry once");
+      }
     }
   }
 }
