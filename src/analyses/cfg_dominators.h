@@ -12,11 +12,12 @@ Author: Georg Weissenbacher, georg@weissenbacher.name
 #ifndef CPROVER_ANALYSES_CFG_DOMINATORS_H
 #define CPROVER_ANALYSES_CFG_DOMINATORS_H
 
-#include <set>
+#include <cassert>
+#include <iosfwd>
+#include <iterator>
 #include <list>
 #include <map>
-#include <iosfwd>
-#include <cassert>
+#include <set>
 
 #include <goto-programs/goto_functions.h>
 #include <goto-programs/goto_program.h>
@@ -67,6 +68,126 @@ public:
     return cfg.get_node_index(program_point);
   }
 
+  class dominators_iterablet
+  {
+    // Type of our containing \ref dense_integer_mapt
+    typedef cfg_dominators_templatet<P, T, post_dom> cfg_dominatorst;
+
+  public:
+    class dominators_iteratort
+      : public std::iterator<std::forward_iterator_tag, T>
+    {
+      // Type of the std::iterator support class we inherit
+      typedef std::iterator<std::forward_iterator_tag, const T> base_typet;
+
+    public:
+      dominators_iteratort(
+        const cfg_dominatorst &dominator_analysis,
+        std::size_t index)
+        : dominator_analysis(dominator_analysis), current_index(index)
+      {
+      }
+
+    private:
+      explicit dominators_iteratort(const cfg_dominatorst &dominator_analysis)
+        : dominator_analysis(dominator_analysis), current_index{}
+      {
+      }
+
+    public:
+      static dominators_iteratort end(const cfg_dominatorst &dominator_analysis)
+      {
+        return dominators_iteratort{dominator_analysis};
+      }
+
+      dominators_iteratort operator++()
+      {
+        auto i = *this;
+        advance();
+        return i;
+      }
+      dominators_iteratort operator++(int junk)
+      {
+        advance();
+        return *this;
+      }
+      typename base_typet::reference operator*() const
+      {
+        return dominator_analysis.cfg[*current_index].PC;
+      }
+      typename base_typet::pointer operator->() const
+      {
+        return &**this;
+      }
+      bool operator==(const dominators_iteratort &rhs) const
+      {
+        return current_index == rhs.current_index;
+      }
+      bool operator!=(const dominators_iteratort &rhs) const
+      {
+        return current_index != rhs.current_index;
+      }
+
+    private:
+      void advance()
+      {
+        INVARIANT(current_index.has_value(), "can't advance an end() iterator");
+        const auto &next_dominator =
+          dominator_analysis.cfg[*current_index].dominator;
+        INVARIANT(
+          next_dominator.has_value(),
+          "dominator ancestors must end up at the root");
+        if(*next_dominator == *current_index)
+        {
+          // Cycle; this is the root node
+          current_index = optionalt<std::size_t>{};
+        }
+        else
+        {
+          current_index = next_dominator;
+        }
+      }
+
+      const cfg_dominatorst &dominator_analysis;
+      optionalt<std::size_t> current_index;
+    };
+
+    dominators_iterablet(
+      const cfg_dominatorst &dominator_analysis,
+      optionalt<std::size_t> index)
+      : dominator_analysis(dominator_analysis), first_instruction_index(index)
+    {
+    }
+
+    dominators_iteratort begin() const
+    {
+      if(first_instruction_index.has_value())
+        return dominators_iteratort{dominator_analysis,
+                                    *first_instruction_index};
+      else
+        return dominators_iteratort::end(dominator_analysis);
+    }
+
+    dominators_iteratort end() const
+    {
+      return dominators_iteratort::end(dominator_analysis);
+    }
+
+  private:
+    const cfg_dominatorst &dominator_analysis;
+    optionalt<std::size_t> first_instruction_index;
+  };
+
+  dominators_iterablet dominators(const nodet &start_node) const
+  {
+    return dominators_iterablet{*this, start_node.dominator};
+  }
+
+  dominators_iterablet dominators(T start_instruction) const
+  {
+    return dominators(cfg.get_node(start_instruction));
+  }
+
   /// Returns true if the program point corresponding to \p rhs_node is
   /// dominated by program point \p lhs. Saves node lookup compared to the
   /// dominates overload that takes two program points, so this version is
@@ -74,42 +195,13 @@ public:
   /// Note by definition all program points dominate themselves.
   bool dominates(T lhs, const nodet &rhs_node) const
   {
-    auto target_index = cfg.get_node_index(lhs);
-    auto current_index = rhs_node.dominator;
-    while (current_index.has_value())
-    {
-      if (*current_index == target_index)
-        return true;
-
-      // Root dominates itself, so to avoid an endless loop, return.
-      if (*current_index == 0)
-        return false;
-
-      current_index = cfg[*current_index].dominator;
-    }
-
-    return false;
-  }
-
-  /// Returns a set of T that are the dominators of start_node. Only use if you
-  /// need the entire set of dominators from node to root.
-  std::set<T> dominators(T start_node) const
-  {
-    auto current_index = cfg.get_node(start_node).dominator;
-    std::set<T> results;
-    while (current_index.has_value())
-    {
-      auto &current_node = cfg[*current_index];
-      results.emplace(current_node.PC);
-
-      // Root dominates itself, so to avoid an endless loop, break.
-      if (*current_index == 0)
-        break;
-
-      current_index = current_node.dominator;
-    }
-
-    return results;
+    const auto rhs_dominators = dominators(rhs_node);
+    return std::any_of(
+      rhs_dominators.begin(),
+      rhs_dominators.end(),
+      [&lhs](const goto_programt::const_targett dominator) {
+        return lhs == dominator;
+      });
   }
 
   /// Returns true if program point \p lhs dominates \p rhs.
