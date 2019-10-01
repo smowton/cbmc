@@ -300,7 +300,11 @@ void cfg_dominators_templatet<P, T, post_dom>::fixedpoint(P &program)
     bool changed=false;
     typename cfgt::nodet &node = cfg.get_node(current);
 
-    auto potential_dominator = node.dominator;
+    // Dummy assignment to avoid GCC panicking about possibly-uninitialised
+    // data:
+    optionalt<std::size_t> potential_dominator = 0;
+    // Real initialiser:
+    potential_dominator = node.dominator;
 
     // compute intersection of predecessors
     for(const auto &edge : (post_dom ? node.out : node.in))
