@@ -41,10 +41,12 @@ public:
   struct nodet
   {
     optionalt<std::size_t> dominator;
+    int postorder_index = -1;
   };
 
   typedef procedure_local_cfg_baset<nodet, P, T> cfgt;
   cfgt cfg;
+  using cfg_nodet = typename cfgt::nodet;
 
   void operator()(P &program);
 
@@ -240,8 +242,9 @@ public:
 protected:
   void initialise(P &program);
   void fixedpoint(P &program);
-  std::size_t
-  intersect(std::size_t potential_dominator, std::size_t edge_index);
+  void assign_postordering(typename cfgt::nodet &start_node);
+  optionalt<cfg_nodet>
+  intersect(cfg_nodet &potential_dominator, cfg_nodet &edge_node);
 };
 
 /// Print the result of the dominator computation
@@ -269,6 +272,34 @@ void cfg_dominators_templatet<P, T, post_dom>::initialise(P &program)
   cfg(program);
 }
 
+/// Assigns post-order index to the nodes to garantee that all nodes' parents
+/// have a lower index than they do. Normal graph generation indexes don't have
+/// this constraint, so we need to apply it manually.
+template <class P, class T, bool post_dom>
+void cfg_dominators_templatet<P, T, post_dom>::assign_postordering(
+  typename cfgt::nodet &start_node)
+{
+  std::size_t index = 0;
+  std::list<std::reference_wrapper<typename cfgt::nodet>> worklist;
+  worklist.push_front(std::reference_wrapper<typename cfgt::nodet>(start_node));
+  while(!worklist.empty())
+  {
+    typename cfgt::nodet &current_node = worklist.front().get();
+    worklist.pop_front();
+    current_node.postorder_index = index++;
+    for(typename cfgt::edgest::const_iterator s_it =
+          (post_dom ? current_node.in : current_node.out).begin();
+        s_it != (post_dom ? current_node.in : current_node.out).end();
+        ++s_it)
+    {
+      auto &edge_node = cfg[s_it->first];
+      if(edge_node.postorder_index == -1)
+        worklist.push_front(
+          std::reference_wrapper<typename cfgt::nodet>(cfg[s_it->first]));
+    }
+  }
+}
+
 /// Computes the MOP for the dominator analysis
 template <class P, class T, bool post_dom>
 void cfg_dominators_templatet<P, T, post_dom>::fixedpoint(P &program)
@@ -285,6 +316,8 @@ void cfg_dominators_templatet<P, T, post_dom>::fixedpoint(P &program)
   typename cfgt::nodet &n = cfg.get_node(entry_node);
   n.dominator = cfg.get_node_index(entry_node);
 
+  assign_postordering(n);
+
   for(typename cfgt::edgest::const_iterator
       s_it=(post_dom?n.in:n.out).begin();
       s_it!=(post_dom?n.in:n.out).end();
@@ -300,29 +333,30 @@ void cfg_dominators_templatet<P, T, post_dom>::fixedpoint(P &program)
     bool changed=false;
     typename cfgt::nodet &node = cfg.get_node(current);
 
-    // Dummy assignment to avoid GCC panicking about possibly-uninitialised
-    // data:
-    optionalt<std::size_t> potential_dominator = 0;
-
-    // Real initialiser:
-    potential_dominator = node.dominator;
+    optionalt<cfg_nodet> potential_dominator = {};
+    if (node.dominator)
+      potential_dominator = cfg[*node.dominator];
 
     // compute intersection of predecessors
-    for(const auto &edge : (post_dom ? node.out : node.in))
+    auto &edges = (post_dom ? node.out : node.in);
+    if (edges.size() != 0)
     {
-      const typename cfgt::nodet &other = cfg[edge.first];
-      if(!other.dominator)
-        continue;
+      for(const auto &edge : edges)
+      {
+        typename cfgt::nodet &other = cfg[edge.first];
+        if(!other.dominator)
+          continue;
 
-      if(!potential_dominator)
-        potential_dominator = other.dominator;
+        if(!potential_dominator)
+          potential_dominator = other;
 
-      potential_dominator = intersect(*potential_dominator, *other.dominator);
+        potential_dominator = intersect(*potential_dominator, other);
+      }
     }
 
-    if(!node.dominator || *potential_dominator != *node.dominator)
+    if(!node.dominator || potential_dominator->postorder_index != cfg[*node.dominator].postorder_index)
     {
-      node.dominator = potential_dominator;
+      node.dominator = potential_dominator->dominator;
       changed = true;
     }
 
@@ -339,20 +373,24 @@ void cfg_dominators_templatet<P, T, post_dom>::fixedpoint(P &program)
 /// We can make the assumption that as we're walking back all dominators
 /// will have been processed, so all de-referencing should be safe.
 template <class P, class T, bool post_dom>
-std::size_t cfg_dominators_templatet<P, T, post_dom>::intersect(
-  std::size_t potential_dominator,
-  std::size_t edge_index)
+optionalt<typename procedure_local_cfg_baset<
+  typename cfg_dominators_templatet<P, T, post_dom>::nodet,
+  P,
+  T>::nodet>
+cfg_dominators_templatet<P, T, post_dom>::intersect(
+  cfg_nodet &potential_dominator,
+  cfg_nodet &edge_node)
 {
-  while(potential_dominator != edge_index)
+  while(potential_dominator.postorder_index != edge_node.postorder_index)
   {
-    while(potential_dominator > edge_index)
+    while(potential_dominator.postorder_index > edge_node.postorder_index)
     {
-      potential_dominator = cfg[potential_dominator].dominator;
+      potential_dominator = cfg[*potential_dominator.dominator];
     }
 
-    while(edge_index < potential_dominator)
+    while(edge_node.postorder_index > potential_dominator.postorder_index)
     {
-      edge_index = *cfg[edge_index].dominator;
+      edge_node = cfg[*edge_node.dominator];
     }
   }
 
