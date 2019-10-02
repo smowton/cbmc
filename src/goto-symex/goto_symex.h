@@ -853,6 +853,16 @@ public:
   {
     target.validate(ns, vm);
   }
+
+  symbol_exprt get_fresh_guard(
+    const exprt &guard_definition,
+    statet &state,
+  const symex_targett::sourcet &source);
+
+  void make_opaque(guard_exprt &guard_expr, statet &state,
+  const symex_targett::sourcet &source);
+
+  guardt merge_state_guards(goto_statet &goto_state, goto_symex_statet &state);
 };
 
 /// Transition to the next instruction, which increments the internal program

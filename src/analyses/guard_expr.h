@@ -70,6 +70,14 @@ public:
     return expr.is_false();
   }
 
+  void make_atomic(std::function<symbol_exprt(const exprt &)> symbol_allocator)
+  {
+    if(expr.id() == ID_and || expr.id() == ID_or)
+    {
+      expr = symbol_allocator(expr);
+    }
+  }
+
   friend guard_exprt &operator-=(guard_exprt &g1, const guard_exprt &g2);
   friend guard_exprt &operator|=(guard_exprt &g1, const guard_exprt &g2);
 

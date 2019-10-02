@@ -452,33 +452,7 @@ void goto_symext::symex_goto(statet &state)
     }
     else
     {
-      symbol_exprt guard_symbol_expr =
-        symbol_exprt(statet::guard_identifier(), bool_typet());
-      exprt new_rhs = boolean_negate(new_guard);
-
-      ssa_exprt new_lhs =
-        state.rename_ssa<L1>(ssa_exprt{guard_symbol_expr}, ns).get();
-      new_lhs =
-        state.assignment(std::move(new_lhs), new_rhs, ns, true, false).get();
-
-      guardt guard{true_exprt{}, guard_manager};
-
-      log.conditional_output(
-        log.debug(),
-        [this, &new_lhs](messaget::mstreamt &mstream) {
-          mstream << "Assignment to " << new_lhs.get_identifier()
-                  << " [" << pointer_offset_bits(new_lhs.type(), ns).value_or(0) << " bits]"
-                  << messaget::eom;
-        });
-
-      target.assignment(
-        guard.as_expr(),
-        new_lhs, new_lhs, guard_symbol_expr,
-        new_rhs,
-        original_source,
-        symex_targett::assignment_typet::GUARD);
-
-      guard_expr = state.rename(boolean_negate(guard_symbol_expr), ns).get();
+      guard_expr = boolean_negate(get_fresh_guard(boolean_negate(new_guard), state, original_source));
     }
 
     if(state.has_saved_jump_target)
@@ -501,8 +475,55 @@ void goto_symext::symex_goto(statet &state)
         state.guard.add(guard_expr);
         new_state.guard.add(boolean_negate(guard_expr));
       }
+
+      make_opaque(new_state.guard, state, original_source);
+      make_opaque(state.guard, state, original_source);
     }
   }
+}
+
+symbol_exprt goto_symext::get_fresh_guard(
+  const exprt &guard_definition,
+  statet &state,
+  const symex_targett::sourcet &source)
+{
+  symbol_exprt guard_symbol_expr =
+    symbol_exprt(statet::guard_identifier(), bool_typet());
+
+  ssa_exprt new_lhs =
+    state.rename_ssa<L1>(ssa_exprt{guard_symbol_expr}, ns).get();
+  new_lhs =
+    state.assignment(std::move(new_lhs), guard_definition, ns, true, false).get();
+
+  guardt guard{true_exprt{}, guard_manager};
+
+  log.conditional_output(
+    log.debug(),
+    [this, &new_lhs](messaget::mstreamt &mstream) {
+      mstream << "Assignment to " << new_lhs.get_identifier()
+              << " [" << pointer_offset_bits(new_lhs.type(), ns).value_or(0) << " bits]"
+              << messaget::eom;
+    });
+
+  target.assignment(
+    guard.as_expr(),
+    new_lhs, new_lhs, guard_symbol_expr,
+    guard_definition,
+    source,
+    symex_targett::assignment_typet::GUARD);
+
+  return to_symbol_expr(state.rename(guard_symbol_expr, ns).get());
+}
+
+void goto_symext::make_opaque(guard_exprt &guard_expr, statet &state, const symex_targett::sourcet &source)
+{
+  auto get_fresh_guard_if_needed =
+    [this, &state, &source](const exprt &expr)
+    {
+      return get_fresh_guard(expr, state, source);
+    };
+
+  guard_expr.make_atomic(get_fresh_guard_if_needed);
 }
 
 void goto_symext::symex_unreachable_goto(statet &state)
@@ -601,8 +622,8 @@ void goto_symext::merge_gotos(statet &state)
   frame.goto_state_map.erase(state_map_it);
 }
 
-static guardt
-merge_state_guards(goto_statet &goto_state, goto_symex_statet &state)
+guardt goto_symext::merge_state_guards(
+  goto_statet &goto_state, goto_symex_statet &state)
 {
   // adjust guard, even using guards from unreachable states. This helps to
   // shrink the state guard if the incoming edge is from a path that was
@@ -621,6 +642,7 @@ merge_state_guards(goto_statet &goto_state, goto_symex_statet &state)
     state.guard.disjunction_may_simplify(goto_state.guard))
   {
     state.guard |= goto_state.guard;
+    make_opaque(state.guard, state, state.source);
     return std::move(state.guard);
   }
   else if(!state.reachable && goto_state.reachable)
