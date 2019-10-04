@@ -113,9 +113,13 @@ public:
         advance();
         return *this;
       }
+      const cfg_nodet &get_node() const
+      {
+        return dominator_analysis.cfg[*current_index];
+      }
       typename base_typet::reference operator*() const
       {
-        return dominator_analysis.cfg[*current_index].PC;
+        return get_node().PC;
       }
       typename base_typet::pointer operator->() const
       {
@@ -243,8 +247,8 @@ protected:
   void initialise(P &program);
   void fixedpoint(P &program);
   void assign_postordering(typename cfgt::nodet &start_node);
-  optionalt<cfg_nodet>
-  intersect(cfg_nodet &potential_dominator, cfg_nodet &edge_node);
+  const cfg_nodet &intersect(
+    const cfg_nodet &potential_dominator, const cfg_nodet &edge_node);
 };
 
 /// Print the result of the dominator computation
@@ -333,9 +337,8 @@ void cfg_dominators_templatet<P, T, post_dom>::fixedpoint(P &program)
     bool changed=false;
     typename cfgt::nodet &node = cfg.get_node(current);
 
-    optionalt<cfg_nodet> potential_dominator = {};
-    if (node.dominator)
-      potential_dominator = cfg[*node.dominator];
+    const cfg_nodet *dominator_node =
+      node.dominator ? &cfg[*node.dominator] : nullptr;
 
     // compute intersection of predecessors
     auto &edges = (post_dom ? node.out : node.in);
@@ -343,20 +346,20 @@ void cfg_dominators_templatet<P, T, post_dom>::fixedpoint(P &program)
     {
       for(const auto &edge : edges)
       {
-        typename cfgt::nodet &other = cfg[edge.first];
+        const typename cfgt::nodet &other = cfg[edge.first];
         if(!other.dominator)
           continue;
 
-        if(!potential_dominator)
-          potential_dominator = other;
-
-        potential_dominator = intersect(*potential_dominator, other);
+        if(!dominator_node)
+          dominator_node = &other;
+        else
+          dominator_node = &intersect(*dominator_node, other);
       }
     }
 
-    if(!node.dominator || potential_dominator->postorder_index != cfg[*node.dominator].postorder_index)
+    if(!node.dominator || dominator_node->postorder_index != cfg[*node.dominator].postorder_index)
     {
-      node.dominator = potential_dominator->dominator;
+      node.dominator = cfg.get_node_index(dominator_node->PC);
       changed = true;
     }
 
@@ -373,28 +376,39 @@ void cfg_dominators_templatet<P, T, post_dom>::fixedpoint(P &program)
 /// We can make the assumption that as we're walking back all dominators
 /// will have been processed, so all de-referencing should be safe.
 template <class P, class T, bool post_dom>
-optionalt<typename procedure_local_cfg_baset<
-  typename cfg_dominators_templatet<P, T, post_dom>::nodet,
-  P,
-  T>::nodet>
+const typename cfg_dominators_templatet<P, T, post_dom>::cfgt::nodet &
 cfg_dominators_templatet<P, T, post_dom>::intersect(
-  cfg_nodet &potential_dominator,
-  cfg_nodet &edge_node)
+  const cfg_nodet &left_input_node,
+  const cfg_nodet &right_input_node)
 {
-  while(potential_dominator.postorder_index != edge_node.postorder_index)
-  {
-    while(potential_dominator.postorder_index > edge_node.postorder_index)
-    {
-      potential_dominator = cfg[*potential_dominator.dominator];
-    }
+  auto left_node_dominators = dominators(left_input_node);
+  auto right_node_dominators = dominators(left_input_node);
+  auto left_it = left_node_dominators.begin();
+  auto right_it = left_node_dominators.begin();
 
-    while(edge_node.postorder_index > potential_dominator.postorder_index)
+  while(left_it.get_node().postorder_index !=
+        right_it.get_node().postorder_index)
+  {
+    while(left_it.get_node().postorder_index >
+          right_it.get_node().postorder_index)
     {
-      edge_node = cfg[*edge_node.dominator];
+      ++left_it;
+      INVARIANT(
+        left_it != left_node_dominators.end(),
+        "should only move the iterator that is further from the root");
+   }
+
+    while(right_it.get_node().postorder_index >
+          left_it.get_node().postorder_index)
+    {
+      ++right_it;
+      INVARIANT(
+        right_it != right_node_dominators.end(),
+        "should only move the iterator that is further from the root");
     }
   }
 
-  return potential_dominator;
+  return left_it.get_node();
 }
 
 /// Pretty-print a single node in the dominator tree. Supply a specialisation if
