@@ -441,7 +441,7 @@ void cfg_dominators_templatet<P, T, post_dom>::output(std::ostream &out) const
     else
       out << " dominated by ";
     bool first=true;
-    for(const auto &d : cfg[node.second].dominators)
+    for(const auto &d : dominators(n))
     {
       if(!first)
         out << ", ";
