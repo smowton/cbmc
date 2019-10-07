@@ -41,7 +41,11 @@ public:
   struct nodet
   {
     optionalt<std::size_t> dominator;
-    int postorder_index = -1;
+    // Not on the stack; not seen yet
+    const static int NODE_NOT_VISITED = -1;
+    // On the stack but not yet numbered
+    const static int NODE_INDEX_PENDING = -2;
+    int postorder_index = NODE_NOT_VISITED;
   };
 
   typedef procedure_local_cfg_baset<nodet, P, T> cfgt;
@@ -138,12 +142,15 @@ public:
       void advance()
       {
         INVARIANT(current_index.has_value(), "can't advance an end() iterator");
-        const auto &next_dominator =
-          dominator_analysis.cfg[*current_index].dominator;
+        const auto &current_node = dominator_analysis.cfg[*current_index];
+        const auto &next_dominator = current_node.dominator;
         INVARIANT(
+          current_node.postorder_index ==
+          cfg_dominatorst::nodet::NODE_NOT_VISITED ||
           next_dominator.has_value(),
-          "dominator ancestors must end up at the root");
-        if(*next_dominator == *current_index)
+          "reachable nodes' dominator chains should lead to the root");
+
+        if(!next_dominator || *next_dominator == *current_index)
         {
           // Cycle; this is the root node
           current_index = optionalt<std::size_t>{};
@@ -184,24 +191,16 @@ public:
     optionalt<std::size_t> first_instruction_index;
   };
 
-  dominators_iterablet dominators(const nodet &start_node) const
-  {
-    return dominators_iterablet{*this, start_node.dominator};
-  }
-
   dominators_iterablet dominators(T start_instruction) const
   {
-    return dominators(cfg.get_node(start_instruction));
+    return dominators_iterablet{*this, cfg.get_node_index(start_instruction)};
   }
 
-  /// Returns true if the program point corresponding to \p rhs_node is
-  /// dominated by program point \p lhs. Saves node lookup compared to the
-  /// dominates overload that takes two program points, so this version is
-  /// preferable if you intend to check more than one potential dominator.
+  /// Returns true if program point \p lhs dominates \p rhs.
   /// Note by definition all program points dominate themselves.
-  bool dominates(T lhs, const nodet &rhs_node) const
+  bool dominates(T lhs, T rhs) const
   {
-    const auto rhs_dominators = dominators(rhs_node);
+    const auto rhs_dominators = dominators(rhs);
     return std::any_of(
       rhs_dominators.begin(),
       rhs_dominators.end(),
@@ -210,11 +209,12 @@ public:
       });
   }
 
-  /// Returns true if program point \p lhs dominates \p rhs.
+  /// Returns true if program point \p lhs dominates the instruction
+  /// corresponding to \p rhs_node.
   /// Note by definition all program points dominate themselves.
-  bool dominates(T lhs, T rhs) const
+  bool dominates(T lhs, const typename cfgt::nodet &rhs_node) const
   {
-    return dominates(lhs, get_node(rhs));
+    return dominates(lhs, rhs_node.PC);
   }
 
   /// Returns true if the program point for \p program_point_node is reachable
@@ -246,7 +246,9 @@ public:
 protected:
   void initialise(P &program);
   void fixedpoint(P &program);
-  void assign_postordering(typename cfgt::nodet &start_node);
+  void assign_postordering(std::size_t start_node_index);
+  std::vector<T> get_reverse_postordered_instructions(
+    std::size_t entry_node_index) const;
   const cfg_nodet &intersect(
     const cfg_nodet &potential_dominator, const cfg_nodet &edge_node);
 };
@@ -276,100 +278,159 @@ void cfg_dominators_templatet<P, T, post_dom>::initialise(P &program)
   cfg(program);
 }
 
-/// Assigns post-order index to the nodes to garantee that all nodes' parents
-/// have a lower index than they do. Normal graph generation indexes don't have
-/// this constraint, so we need to apply it manually.
+/// Assigns post-order index to the nodes to guarantee that all nodes' parents
+/// have a lower index than they do. Normal cfgt indices don't have this
+/// constraint, so we need to add our own ordering.
 template <class P, class T, bool post_dom>
 void cfg_dominators_templatet<P, T, post_dom>::assign_postordering(
-  typename cfgt::nodet &start_node)
+  std::size_t start_node_index)
 {
-  std::size_t index = 0;
-  std::list<std::reference_wrapper<typename cfgt::nodet>> worklist;
-  worklist.push_back(std::reference_wrapper<typename cfgt::nodet>(start_node));
-  while(!worklist.empty())
+  struct stack_entryt
   {
-    typename cfgt::nodet &current_node = worklist.front().get();
-    current_node.postorder_index = index++;
-    worklist.pop_front();
-    for(typename cfgt::edgest::const_iterator s_it =
-          (post_dom ? current_node.in : current_node.out).begin();
-        s_it != (post_dom ? current_node.in : current_node.out).end();
-        ++s_it)
+    // cfg index, not the post-order index we're assigning
+    std::size_t node_index;
+    typename cfgt::nodet::edgest::const_iterator child_iterator;
+    typename cfgt::nodet::edgest::const_iterator child_end;
+  };
+
+  std::size_t next_postorder_index = 0;
+  std::vector<stack_entryt> stack;
+
+  auto place_node_on_stack_if_not_visited =
+    [this, &stack](std::size_t node_index)
+  {
+    auto &node = cfg[node_index];
+    if(node.postorder_index != nodet::NODE_NOT_VISITED)
+      return;
+
+    const auto &node_successors = post_dom ? node.in : node.out;
+    stack.push_back(
+      {
+        node_index,
+        node_successors.begin(),
+        node_successors.end()
+      });
+    node.postorder_index = nodet::NODE_INDEX_PENDING;
+  };
+
+  place_node_on_stack_if_not_visited(start_node_index);
+  INVARIANT(
+    stack.size() == 1,
+    "entry node should not be visited yet");
+
+  while(!stack.empty())
+  {
+    auto &stack_top = stack.back();
+    auto &current_node = cfg[stack_top.node_index];
+
+    INVARIANT(
+      current_node.postorder_index == nodet::NODE_INDEX_PENDING,
+      "a node on the stack should not be numbered yet");
+
+    if(stack_top.child_iterator == stack_top.child_end)
     {
-      auto &edge_node = cfg[s_it->first];
-      if(edge_node.postorder_index == -1)
-        worklist.push_back(
-          std::reference_wrapper<typename cfgt::nodet>(cfg[s_it->first]));
+      // Node childern all visited; number this node
+      current_node.postorder_index = next_postorder_index++;
+      stack.pop_back();
+    }
+    else
+    {
+      // Check next child
+      // Alter top of stack before it is perhaps reallocated on extension:
+      const auto next_child_index = stack_top.child_iterator->first;
+      ++stack_top.child_iterator;
+      place_node_on_stack_if_not_visited(next_child_index);
     }
   }
+}
+
+template <class P, class T, bool post_dom>
+std::vector<T> cfg_dominators_templatet<P, T, post_dom>::
+  get_reverse_postordered_instructions(std::size_t entry_node_index) const
+{
+  auto reverse_postordering = [this](T lhs, T rhs)
+  {
+    return cfg.get_node(lhs).postorder_index >
+      cfg.get_node(rhs).postorder_index;
+  };
+
+  std::vector<T> order;
+
+  for(std::size_t i = 0; i < cfg.size(); ++i)
+  {
+    if(i != entry_node_index &&
+       cfg[i].postorder_index != nodet::NODE_NOT_VISITED)
+    {
+      order.push_back(cfg[i].PC);
+    }
+  }
+
+  std::sort(order.begin(), order.end(), reverse_postordering);
+
+  return order;
 }
 
 /// Computes the MOP for the dominator analysis
 template <class P, class T, bool post_dom>
 void cfg_dominators_templatet<P, T, post_dom>::fixedpoint(P &program)
 {
-  std::list<T> worklist;
-
   if(cfgt::nodes_empty(program))
     return;
 
+  // Initialise entry node to be its own dominator:
   if(post_dom)
     entry_node = cfgt::get_last_node(program);
   else
     entry_node = cfgt::get_first_node(program);
   typename cfgt::nodet &n = cfg.get_node(entry_node);
-  n.dominator = cfg.get_node_index(entry_node);
+  const auto entry_node_index = cfg.get_node_index(entry_node);
+  n.dominator = entry_node_index;
 
-  assign_postordering(n);
+  // Calculate a post-ordering on the CFG:
+  assign_postordering(entry_node_index);
 
-  for(typename cfgt::edgest::const_iterator s_it =
-        (post_dom ? n.in : n.out).begin();
-      s_it != (post_dom ? n.in : n.out).end();
-      ++s_it)
-    worklist.push_back(cfg[s_it->first].PC);
+  const auto visit_order =
+    get_reverse_postordered_instructions(entry_node_index);
 
-  while(!worklist.empty())
+  bool any_change = true;
+
+  while(any_change)
   {
-    // get node from worklist
-    T current = worklist.front();
-    worklist.pop_front();
-
-    bool changed = false;
-    typename cfgt::nodet &node = cfg.get_node(current);
-
-    const cfg_nodet *dominator_node =
-      node.dominator ? &cfg[*node.dominator] : nullptr;
-
-    // compute intersection of predecessors
-    auto &edges = (post_dom ? node.out : node.in);
-    if(edges.size() != 0)
+    any_change = false;
+    for(const auto current : visit_order)
     {
-      for(const auto &edge : edges)
-      {
-        const typename cfgt::nodet &other = cfg[edge.first];
-        if(!other.dominator)
-          continue;
+      auto &node = cfg.get_node(current);
+      const cfg_nodet *dominator_node = nullptr;
 
-        if(!dominator_node)
-          dominator_node = &other;
-        else
-          dominator_node = &intersect(*dominator_node, other);
+      // compute intersection of predecessors
+      auto &edges = (post_dom ? node.out : node.in);
+      if(edges.size() != 0)
+      {
+        for(const auto &edge : edges)
+        {
+          const typename cfgt::nodet &other = cfg[edge.first];
+          if(!other.dominator)
+            continue;
+
+          if(!dominator_node)
+            dominator_node = &other;
+          else
+            dominator_node = &intersect(*dominator_node, other);
+        }
       }
-    }
 
-    if(
-      !node.dominator ||
-      dominator_node->postorder_index != cfg[*node.dominator].postorder_index)
-    {
-      node.dominator = cfg.get_node_index(dominator_node->PC);
-      changed = true;
-    }
-
-    if(changed) // fixed point for node reached?
-    {
-      for(const auto &edge : (post_dom ? node.in : node.out))
+      if(
+        !node.dominator ||
+        dominator_node->postorder_index != cfg[*node.dominator].postorder_index)
       {
-        worklist.push_back(cfg[edge.first].PC);
+        node.dominator = cfg.get_node_index(dominator_node->PC);
+        // Note when any node's idom changes this way we re-visit the *whole*
+        // graph again in post-order, because changing one node's immediate
+        // dominator may change the dominator *set* of an instruction some
+        // distance away.
+        // We could optimise this to only re-visit instructions reachable from
+        // the change site.
+        any_change = true;
       }
     }
   }
