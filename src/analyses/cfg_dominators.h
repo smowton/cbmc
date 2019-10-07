@@ -381,15 +381,15 @@ cfg_dominators_templatet<P, T, post_dom>::intersect(
   const cfg_nodet &left_input_node,
   const cfg_nodet &right_input_node)
 {
-  auto left_node_dominators = dominators(left_input_node);
-  auto right_node_dominators = dominators(left_input_node);
+  auto left_node_dominators = dominators(left_input_node.PC);
+  auto right_node_dominators = dominators(right_input_node.PC);
   auto left_it = left_node_dominators.begin();
-  auto right_it = left_node_dominators.begin();
+  auto right_it = right_node_dominators.begin();
 
   while(left_it.get_node().postorder_index !=
         right_it.get_node().postorder_index)
   {
-    while(left_it.get_node().postorder_index >
+    while(left_it.get_node().postorder_index <
           right_it.get_node().postorder_index)
     {
       ++left_it;
@@ -398,7 +398,7 @@ cfg_dominators_templatet<P, T, post_dom>::intersect(
         "should only move the iterator that is further from the root");
     }
 
-    while(right_it.get_node().postorder_index >
+    while(right_it.get_node().postorder_index <
           left_it.get_node().postorder_index)
     {
       ++right_it;
