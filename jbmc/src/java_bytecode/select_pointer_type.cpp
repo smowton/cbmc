@@ -37,22 +37,26 @@ pointer_typet select_pointer_typet::specialize_generics(
     // Make a local copy of the specialization map to unwind
     generic_parameter_specialization_mapt spec_map_copy =
       generic_parameter_specialization_map;
+    pointer_typet best_specialization = pointer_type;
     while(true)
     {
       const optionalt<reference_typet> specialization =
         spec_map_copy.pop(parameter_name);
       if(!specialization)
       {
-        // This means that the generic pointer_type has not been specialized
-        // in the current context (e.g., the method under test is generic);
-        // we return the pointer_type itself which is a pointer to its upper
-        // bound
-        return pointer_type;
+        // This means that the generic pointer_type has not been fully
+        // specialized in the current context (e.g., the method under test is
+        // generic); we return the closest specialization we found, which may
+        // be the original pointer (i.e., effectively its upper bound) or the
+        // bound or a type variable used to instantiate it, which may be
+        // tighter.
+        return best_specialization;
       }
 
       if(!is_java_generic_parameter(*specialization))
         return *specialization;
       parameter_name = to_java_generic_parameter(*specialization).get_name();
+      best_specialization = *specialization;
     }
   }
 
