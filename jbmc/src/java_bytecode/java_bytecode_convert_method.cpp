@@ -237,7 +237,7 @@ exprt java_bytecode_convert_methodt::variable(
 /// \return the constructed member type
 java_method_typet member_type_lazy(
   const std::string &descriptor,
-  const optionalt<std::string> &signature,
+  const optionalt<java_method_type_signaturet> &signature,
   const std::string &class_name,
   const std::string &method_name,
   message_handlert &message_handler)
@@ -261,17 +261,14 @@ java_method_typet member_type_lazy(
   {
     try
     {
-      auto member_type_from_signature =
-        java_type_from_string(signature.value(), class_name);
+      auto member_type_from_signature = signature->get_type(class_name, true);
       INVARIANT(
-        member_type_from_signature.has_value() &&
-          member_type_from_signature->id() == ID_code,
-        "Must be code type");
+        member_type_from_signature.id() == ID_code, "Must be code type");
       if(
-        to_java_method_type(*member_type_from_signature).parameters().size() ==
+        to_java_method_type(member_type_from_signature).parameters().size() ==
         to_java_method_type(*member_type_from_descriptor).parameters().size())
       {
-        return to_java_method_type(*member_type_from_signature);
+        return to_java_method_type(member_type_from_signature);
       }
       else
       {
@@ -316,7 +313,7 @@ void java_bytecode_convert_method_lazy(
 
   java_method_typet member_type = member_type_lazy(
     m.descriptor,
-    m.signature,
+    m.parsed_sig,
     id2string(class_symbol.name),
     id2string(m.base_name),
     message_handler);

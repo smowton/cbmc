@@ -91,6 +91,7 @@ struct java_bytecode_parse_treet
 
     typedef std::vector<instructiont> instructionst;
     instructionst instructions;
+    optionalt<java_method_type_signaturet> parsed_sig;
 
     instructiont &add_instruction()
     {
@@ -222,6 +223,10 @@ struct java_bytecode_parse_treet
     bool is_static_class = false;
     bool is_anonymous_class = false;
     irep_idt outer_class; // when no outer class is set, there is no outer class
+    irep_idt enclosing_class;  // set when an anonymous class has an
+                               // enclosing class (but not an outer)
+    irep_idt enclosing_method; // set when an anonymous class has an
+                               // enclosing method
     size_t enum_elements=0;
 
     enum class method_handle_typet

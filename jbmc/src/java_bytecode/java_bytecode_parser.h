@@ -40,7 +40,8 @@ public:
   {
     return *bytecode;
   }
-  optionalt<std::string> get_outer_class_name();
+  optionalt<std::string> get_enclosing_class_name();
+  optionalt<std::string> get_enclosing_method_name();
 };
 
 /// Attempt to load the bytecode from the given file.

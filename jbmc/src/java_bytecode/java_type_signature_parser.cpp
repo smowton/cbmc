@@ -18,6 +18,7 @@ static std::shared_ptr<java_ref_type_signaturet> parse_class_type(
 
 static void parse_type_parameter_bounds(
   parsable_stringt &parameter_string,
+  const java_generic_type_parameter_mapt &outer_parameters,
   const std::shared_ptr<java_generic_type_parametert> &result);
 
 /// Parse a java_value_type_signaturet from a parsable_stringt pointing at an
@@ -66,14 +67,14 @@ static std::shared_ptr<java_value_type_signaturet> parse_type(
   {
     std::shared_ptr<java_generic_type_parametert> result =
       std::make_shared<java_generic_type_parametert>(true);
-    parse_type_parameter_bounds(type_string, result);
+    parse_type_parameter_bounds(type_string, parameters, result);
     return result;
   }
   case '-': // Wildcard super
   {
     std::shared_ptr<java_generic_type_parametert> result =
       std::make_shared<java_generic_type_parametert>(false);
-    parse_type_parameter_bounds(type_string, result);
+    parse_type_parameter_bounds(type_string, parameters, result);
     return result;
   }
   default:
@@ -123,13 +124,14 @@ static std::shared_ptr<java_ref_type_signaturet> parse_class_type(
 /// \param parameter_string A parsable_stringt starting at the type signature
 ///   of a type parameter
 /// \return The parsed type parameter
-static std::shared_ptr<java_generic_type_parametert>
-parse_type_parameter(parsable_stringt &parameter_string)
+static std::shared_ptr<java_generic_type_parametert> parse_type_parameter(
+  parsable_stringt &parameter_string,
+  const java_generic_type_parameter_mapt &outer_parameters)
 {
   std::shared_ptr<java_generic_type_parametert> result =
     std::make_shared<java_generic_type_parametert>(
       parameter_string.split_at_first(':', "No colon in type parameter bound"));
-  parse_type_parameter_bounds(parameter_string, result);
+  parse_type_parameter_bounds(parameter_string, outer_parameters, result);
   return result;
 }
 
@@ -139,9 +141,10 @@ parse_type_parameter(parsable_stringt &parameter_string)
 /// \param result The parsed type parameter to add bounds to
 static void parse_type_parameter_bounds(
   parsable_stringt &parameter_string,
+  const java_generic_type_parameter_mapt &outer_parameters,
   const std::shared_ptr<java_generic_type_parametert> &result)
 {
-  java_generic_type_parameter_mapt parameter_map;
+  java_generic_type_parameter_mapt parameter_map = outer_parameters;
   // Allow recursive definitions where the bound refers to the parameter itself
   parameter_map.emplace(result->name, result);
   if(!parameter_string.starts_with(':'))
@@ -164,18 +167,22 @@ static void parse_type_parameter_bounds(
 /// \example
 /// This java method: static void <T, U extends V> foo(T t, U u, int x)
 /// Would have this signature: <T:Ljava/lang/Object;U:LV;>(TT;TU;I)V
-static java_generic_type_parameter_listt
-parse_type_parameters(parsable_stringt &parameters_string)
+static java_generic_type_parameter_listt parse_type_parameters(
+  parsable_stringt &parameters_string,
+  const java_generic_type_parameter_mapt &outer_parameters)
 {
-  java_generic_type_parameter_listt parameter_map;
+  java_generic_type_parameter_listt parameter_list;
+  java_generic_type_parameter_mapt parameter_map = outer_parameters;
   if(parameters_string.try_skip('<'))
   {
     do
     {
-      parameter_map.push_back(parse_type_parameter(parameters_string));
+      parameter_list.push_back(
+        parse_type_parameter(parameters_string, outer_parameters));
+      parameter_map.emplace(parameter_list.back()->name, parameter_list.back());
     } while(!parameters_string.try_skip('>'));
   }
-  return parameter_map;
+  return parameter_list;
 }
 
 
@@ -220,17 +227,19 @@ java_generic_type_parametert::java_generic_type_parametert()
 }
 
 typet java_generic_type_parametert::get_type(
-  const std::string &class_name_prefix) const
+  const std::string &class_name_prefix,
+  bool include_bounds) const
 {
   if(name.empty())
     throw unsupported_java_class_signature_exceptiont("Wild card generic");
+  // We currently only support one bound per variable, use the first
+  const java_value_type_signaturet &bound_sig =
+    *(class_bound != nullptr ? class_bound : interface_bounds[0]);
+  typet bound = (include_bounds || is_wild())
+                  ? bound_sig.get_type(class_name_prefix, false)
+                  : bound_sig.get_raw_type();
   return java_generic_parametert(
-    class_name_prefix + "::" + name,
-    to_struct_tag_type(
-      // We currently only support one bound per variable, use the first
-      (class_bound != nullptr ? class_bound : interface_bounds[0])
-        ->get_type(class_name_prefix)
-        .subtype()));
+    class_name_prefix + "::" + name, to_struct_tag_type(bound.subtype()));
 }
 
 void java_generic_type_parametert::full_output(
@@ -271,8 +280,15 @@ void java_generic_type_parametert::collect_class_dependencies_from_bounds(
   }
 }
 
+typet java_generic_type_parametert::get_raw_type() const
+{
+  return (class_bound == nullptr ? interface_bounds[0] : class_bound)
+    ->get_raw_type();
+}
+
 typet java_primitive_type_signaturet::get_type(
-  const std::string &class_name_prefix) const
+  const std::string &class_name_prefix,
+  bool) const
 {
   switch(type_character)
   {
@@ -335,14 +351,19 @@ void java_primitive_type_signaturet::output(std::ostream &stm) const
   }
 }
 
+typet java_primitive_type_signaturet::get_raw_type() const
+{
+  return get_type("", false);
+}
+
 void java_array_type_signaturet::collect_class_dependencies(
   std::set<irep_idt> &deps) const
 {
   element_type->collect_class_dependencies(deps);
 }
 
-typet java_array_type_signaturet::get_type(
-  const std::string &class_name_prefix) const
+typet java_array_type_signaturet::make_array_type(
+  const typet &result_element_type) const
 {
   // If this is a reference array, we generate a plain array[reference]
   // with void* members, but note the real type in ID_C_element_type.
@@ -350,14 +371,26 @@ typet java_array_type_signaturet::get_type(
     std::dynamic_pointer_cast<java_primitive_type_signaturet>(element_type);
   typet result = java_array_type(static_cast<char>(std::tolower(
     primitive_elt_type == nullptr ? 'A' : primitive_elt_type->type_character)));
-  result.subtype().set(
-    ID_element_type, element_type->get_type(class_name_prefix));
+  result.subtype().set(ID_element_type, result_element_type);
   return result;
+}
+
+typet java_array_type_signaturet::get_type(
+  const std::string &class_name_prefix,
+  bool include_bounds) const
+{
+  return make_array_type(
+    element_type->get_type(class_name_prefix, include_bounds));
 }
 
 void java_array_type_signaturet::output(std::ostream &stm) const
 {
   stm << *element_type << "[]";
+}
+
+typet java_array_type_signaturet::get_raw_type() const
+{
+  return make_array_type(element_type->get_raw_type());
 }
 
 java_ref_type_signaturet::java_ref_type_signaturet(
@@ -384,7 +417,8 @@ void java_ref_type_signaturet::collect_class_dependencies(
 }
 
 typet java_ref_type_signaturet::get_type(
-  const std::string &class_name_prefix) const
+  const std::string &class_name_prefix,
+  bool include_bounds) const
 {
   PRECONDITION(!inner_class); // Currently not supported
 
@@ -400,10 +434,9 @@ typet java_ref_type_signaturet::get_type(
     type_arguments.begin(),
     type_arguments.end(),
     std::back_inserter(result.generic_type_arguments()),
-    [&class_name_prefix](
-      const std::shared_ptr<java_value_type_signaturet> &type_argument)
-    {
-      const typet type = type_argument->get_type(class_name_prefix);
+    [&](const std::shared_ptr<java_value_type_signaturet> &type_argument) {
+      const typet type =
+        type_argument->get_type(class_name_prefix, include_bounds);
       const reference_typet *ref_type =
         type_try_dynamic_cast<reference_typet>(type);
       if(ref_type == nullptr)
@@ -421,6 +454,11 @@ void java_ref_type_signaturet::output(std::ostream &stm) const
     stm << "<" << type_arguments << ">";
   if(inner_class)
     stm << "." << *inner_class;
+}
+
+typet java_ref_type_signaturet::get_raw_type() const
+{
+  return get_without_arguments().get_type("", false);
 }
 
 std::ostream &operator<<(
@@ -449,7 +487,8 @@ java_class_type_signaturet::java_class_type_signaturet(
   const java_generic_type_parameter_mapt &outer_parameter_map)
 {
   parsable_stringt type_str = type_string;
-  explicit_type_parameters = parse_type_parameters(type_str);
+  explicit_type_parameters =
+    parse_type_parameters(type_str, outer_parameter_map);
   type_parameter_map = outer_parameter_map;
   for(const std::shared_ptr<java_generic_type_parametert> &parameter :
       explicit_type_parameters)
@@ -476,7 +515,8 @@ void java_class_type_signaturet::collect_class_dependencies(
 }
 
 typet java_class_type_signaturet::get_type(
-  const std::string &class_name_prefix) const
+  const std::string &class_name_prefix,
+  bool) const
 {
   // TODO: Implement this
   UNREACHABLE;
@@ -525,7 +565,8 @@ java_method_type_signaturet::java_method_type_signaturet(
   java_generic_type_parameter_mapt class_parameter_map)
 {
   parsable_stringt type_str = type_string;
-  explicit_type_parameters = parse_type_parameters(type_str);
+  explicit_type_parameters =
+    parse_type_parameters(type_str, class_parameter_map);
   type_parameter_map = class_parameter_map;
   for(const std::shared_ptr<java_generic_type_parametert> &parameter :
       explicit_type_parameters)
@@ -554,21 +595,21 @@ void java_method_type_signaturet::collect_class_dependencies(
 }
 
 typet java_method_type_signaturet::get_type(
-  const std::string &class_name_prefix) const
+  const std::string &class_name_prefix,
+  bool include_bounds) const
 {
   code_typet::parameterst parameter_types;
   std::transform(
     parameters.begin(),
     parameters.end(),
     std::back_inserter(parameter_types),
-    [&class_name_prefix](
-      const std::shared_ptr<java_value_type_signaturet> &parameter)
-    {
-      return code_typet::parametert(parameter->get_type(class_name_prefix));
+    [&](const std::shared_ptr<java_value_type_signaturet> &parameter) {
+      return code_typet::parametert(
+        parameter->get_type(class_name_prefix, include_bounds));
     });
-  return
-    java_method_typet
-    { std::move(parameter_types), return_type->get_type(class_name_prefix) };
+  return java_method_typet{
+    std::move(parameter_types),
+    return_type->get_type(class_name_prefix, include_bounds)};
 }
 
 void java_method_type_signaturet::output(std::ostream &stm) const
