@@ -91,6 +91,53 @@ static optionalt<irep_idt> lambda_method_name(
   return {};
 }
 
+class no_unique_unimplemented_method_exceptiont : public std::exception {
+public:
+  explicit no_unique_unimplemented_method_exceptiont(const std::string &s) :
+    message(s) {}
+    const std::string message;
+};
+
+static optionalt<irep_idt> get_unique_unimplemented_method(
+  const irep_idt &interface_id,
+  const namespacet &ns)
+{
+  const java_class_typet &interface =
+    to_java_class_type(ns.lookup(interface_id).type);
+
+  if(interface.get_is_stub())
+  {
+    throw no_unique_unimplemented_method_exceptiont(
+      "produces a type that inherits the stub type " +
+      id2string(interface_id));
+  }
+
+  const auto nmethods = interface.methods().size();
+  optionalt<irep_idt> result;
+
+  if(nmethods >= 2) {
+    throw no_unique_unimplemented_method_exceptiont(
+      "produces a type with at least two unimplemented methods");
+  }
+
+  if(nmethods == 1)
+    result = interface.methods().at(0).get_name();
+
+  for(const auto &base : interface.bases()) {
+    optionalt<irep_idt> base_result = get_unique_unimplemented_method(base
+      .type().get_identifier(), ns);
+    if(base_result.has_value() && result.has_value() && *base_result !=
+    *result) {
+      throw no_unique_unimplemented_method_exceptiont(
+        "produces a type with at least two unimplemented methods");
+    }
+    else if(base_result.has_value())
+      result = base_result;
+  }
+
+  return result;
+}
+
 static optionalt<irep_idt> interface_method_id(
   const symbol_tablet &symbol_table,
   const struct_tag_typet &functional_interface_tag,
@@ -99,34 +146,27 @@ static optionalt<irep_idt> interface_method_id(
   const messaget &log)
 {
   const namespacet ns{symbol_table};
-  const java_class_typet &implemented_interface_type = [&] {
-    const symbolt &implemented_interface_symbol =
-      ns.lookup(functional_interface_tag.get_identifier());
-    return to_java_class_type(implemented_interface_symbol.type);
-  }();
-
-  if(implemented_interface_type.get_is_stub())
-  {
-    log.debug() << "ignoring invokedynamic at " << method_identifier
-                << " address " << instruction_address
-                << " which produces a stub type "
-                << functional_interface_tag.get_identifier() << messaget::eom;
-    return {};
+  try {
+    optionalt<irep_idt> method_to_implement =
+      get_unique_unimplemented_method(functional_interface_tag.get_identifier
+      (), ns);
+    if(!method_to_implement) {
+      throw no_unique_unimplemented_method_exceptiont(
+        "produces a type with no methods");
+    }
+    return method_to_implement;
   }
-  else if(implemented_interface_type.methods().size() != 1)
-  {
+  catch(const no_unique_unimplemented_method_exceptiont &e) {
     log.debug()
       << "ignoring invokedynamic at " << method_identifier << " address "
-      << instruction_address << " which produces type "
+      << instruction_address << " with type "
       << functional_interface_tag.get_identifier()
-      << " which should have exactly one abstract method but actually has "
-      << implemented_interface_type.methods().size()
-      << ". Note default methods are not supported yet."
+      << " which " << e.message <<
+      ". Note default methods are not supported yet. "
       << "Also note methods declared in an inherited interface are not "
       << "supported either." << messaget::eom;
     return {};
   }
-  return implemented_interface_type.methods().at(0).get_name();
 }
 
 symbolt synthetic_class_symbol(
