@@ -1139,23 +1139,6 @@ public:
   }
 };
 
-inline typet java_method_type_from_string_with_exception(
-  const std::string &descriptor,
-  const std::string &signature,
-  const java_generic_type_parameter_mapt &parameter_map,
-  const std::string &class_name)
-{
-  try
-  {
-    return java_method_type_signaturet(signature, parameter_map)
-      .get_type(class_name);
-  }
-  catch(unsupported_java_class_signature_exceptiont &)
-  {
-    return *java_type_from_string(descriptor, class_name);
-  }
-}
-
 inline optionalt<typet> java_type_from_string_with_exception(
   const std::string &descriptor,
   const optionalt<std::string> &signature,

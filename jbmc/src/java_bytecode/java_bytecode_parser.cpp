@@ -54,6 +54,8 @@ struct java_bytecodet
   u2 super_class_index;
   u2 sourcefile_name_index = 0;
   u2 signature_index = 0;
+  u2 enclosing_class_index = 0;
+  u2 enclosing_method_index = 0;
 
   std::vector<u2> implements_indices;
 
@@ -68,7 +70,8 @@ struct java_bytecodet
     u2 class_access_flags;
   };
   optionalt<inner_classt> inner_class_info;
-  optionalt<std::string> get_outer_class_name();
+  optionalt<std::string> get_enclosing_class_name();
+  optionalt<std::string> get_enclosing_method_name();
 
   struct bootstrap_methodt
   {
@@ -182,6 +185,8 @@ private:
   std::vector<methodt> methods;
 
   annotationst class_annotations;
+
+  std::string get_class_name(u2 index);
 };
 
 java_bytecode_reft::java_bytecode_reft() noexcept = default;
@@ -192,9 +197,14 @@ java_bytecode_reft::java_bytecode_reft(java_bytecodet &&bytecode) noexcept
 java_bytecode_reft::java_bytecode_reft(java_bytecode_reft &&) noexcept =
   default;
 java_bytecode_reft::~java_bytecode_reft() = default;
-optionalt<std::string> java_bytecode_reft::get_outer_class_name()
+optionalt<std::string> java_bytecode_reft::get_enclosing_class_name()
 {
-  return bytecode->get_outer_class_name();
+  return bytecode->get_enclosing_class_name();
+}
+
+optionalt<std::string> java_bytecode_reft::get_enclosing_method_name()
+{
+  return bytecode->get_enclosing_method_name();
 }
 
 // An element_valuet for constant values looked up from the constant pool
@@ -355,6 +365,8 @@ public:
 private:
   const bool skip_instructions;
   bool attribute_bootstrapmethods_read = false;
+
+  void renclosing_method_attribute();
 };
 
 class java_bytecode_parsert : public messaget
@@ -410,9 +422,9 @@ private:
   {
     PRECONDITION(parse_tree.parsed_class.parsed_sig);
     return java_method_type_signaturet(
-        id2string(pool_entry(index).s),
-        parse_tree.parsed_class.parsed_sig->type_parameter_map)
-      .get_type("java::" + id2string(parse_tree.parsed_class.name));
+             id2string(pool_entry(index).s),
+             parse_tree.parsed_class.parsed_sig->type_parameter_map)
+      .get_type("java::" + id2string(parse_tree.parsed_class.name), true);
   }
 
   void rClassFile(
@@ -458,6 +470,10 @@ private:
   void store_unknown_method_handle(
     size_t bootstrap_method_index,
     std::vector<u2> u2_values);
+
+  void renclosing_method_attribute(
+    u2 enclosing_class_index,
+    u2 enclosing_method_attribute);
 };
 
 #define CONSTANT_Class                7
@@ -956,15 +972,11 @@ void java_bytecode_parsert::get_class_refs()
       get_annotation_class_refs(parameter_annotations);
 
     bool gathered_from_method = false;
-    if(method.signature.has_value())
+    if(method.parsed_sig.has_value())
     {
       try
       {
-        java_method_type_signaturet method_sig {
-          method.signature.value(),
-          parse_tree.parsed_class.parsed_sig->type_parameter_map
-        };
-        method_sig.collect_class_dependencies(parse_tree.class_refs);
+        method.parsed_sig->collect_class_dependencies(parse_tree.class_refs);
         for(const auto &var : method.local_variable_table)
         {
           bool gathered_from_var = false;
@@ -973,7 +985,7 @@ void java_bytecode_parsert::get_class_refs()
             try
             {
               java_value_type_signaturet::parse_single_value_type(
-                  var.signature.value(), method_sig.type_parameter_map)
+                var.signature.value(), method.parsed_sig->type_parameter_map)
                 ->collect_class_dependencies(parse_tree.class_refs);
               gathered_from_var = true;
             }
@@ -1840,7 +1852,12 @@ void java_bytecode_parsert::rmethod_attribute(
   }
 
   if(raw_method.signature_index != 0)
+  {
     method.signature = id2string(pool_entry(raw_method.signature_index).s);
+    method.parsed_sig = java_method_type_signaturet{
+      *method.signature,
+      parse_tree.parsed_class.parsed_sig->type_parameter_map};
+  }
 
   rRuntimeAnnotation_attribute(method.annotations, raw_method.annotations);
 
@@ -2293,18 +2310,46 @@ void java_bytecode_loadert::rinner_classes_attribute(
   }
 }
 
-optionalt<std::string> java_bytecodet::get_outer_class_name()
+void java_bytecode_loadert::renclosing_method_attribute()
 {
-  if(!inner_class_info)
-    return {};
-  if(inner_class_info->outer_class_info_index == 0)
+  java_bytecode.enclosing_class_index = read<u2>();
+  java_bytecode.enclosing_method_index = read<u2>();
+}
+
+std::string java_bytecodet::get_class_name(u2 index)
+{
+  const auto get_pool_entry = [this](u2 index) -> raw_pool_entryt & {
+    return constant_pool[index];
+  };
+  return class_infot(constant_pool[index]).get_name(get_pool_entry);
+}
+
+optionalt<std::string> java_bytecodet::get_enclosing_class_name()
+{
+  if(inner_class_info && inner_class_info->outer_class_info_index != 0)
+  {
     // outer_class_info_index == 0 => the inner class is anonymous or local
-    // TODO: Surely we should still be able to find the outer class
+    return get_class_name(inner_class_info->outer_class_info_index);
+  }
+  else if(enclosing_class_index != 0)
+  {
+    return get_class_name(enclosing_class_index);
+  }
+  else
+  {
     return {};
+  }
+}
+
+optionalt<std::string> java_bytecodet::get_enclosing_method_name()
+{
   const auto get_pool_entry =
     [this](u2 index) -> raw_pool_entryt & { return constant_pool[index]; };
-  return class_infot(constant_pool[inner_class_info->outer_class_info_index])
-    .get_name(get_pool_entry);
+
+  return enclosing_method_index != 0
+           ? name_and_type_infot(constant_pool[enclosing_method_index])
+               .get_name(get_pool_entry)
+           : optionalt<std::string>{};
 }
 
 /// When a parsed class is an inner class, the accessibility
@@ -2344,6 +2389,43 @@ void java_bytecode_parsert::rinner_classes_attribute(
     parsed_class.is_protected =
       (inner_class.class_access_flags & ACC_PROTECTED) != 0;
     parsed_class.is_public = (inner_class.class_access_flags & ACC_PUBLIC) != 0;
+  }
+}
+
+static std::string make_method_symbol_name(
+  const class_infot &class_entry,
+  const name_and_type_infot &name_and_type,
+  std::function<pool_entryt &(u2)> pool_entry_lambda)
+{
+  std::string class_name = class_entry.get_name(pool_entry_lambda);
+  // replace '.' for '$' (inner classes)
+  std::replace(class_name.begin(), class_name.end(), '.', '$');
+  // replace '/' for '.' (package)
+  std::replace(class_name.begin(), class_name.end(), '/', '.');
+  return class_name + "." + name_and_type.get_name(pool_entry_lambda) + ':' +
+         name_and_type.get_descriptor(pool_entry_lambda);
+}
+
+void java_bytecode_parsert::renclosing_method_attribute(
+  u2 enclosing_class_index,
+  u2 enclosing_method_index)
+{
+  if(enclosing_class_index == 0)
+    return;
+
+  classt &parsed_class = parse_tree.parsed_class;
+
+  const std::function<pool_entryt &(u2)> pool_entry_lambda =
+    [this](u2 index) -> pool_entryt & { return pool_entry(index); };
+
+  class_infot enclosing_class{constant_pool[enclosing_class_index]};
+  parsed_class.enclosing_class = enclosing_class.get_name(pool_entry_lambda);
+
+  if(enclosing_method_index != 0)
+  {
+    name_and_type_infot name_and_type{constant_pool[enclosing_method_index]};
+    parsed_class.enclosing_method = make_method_symbol_name(
+      enclosing_class, name_and_type, pool_entry_lambda);
   }
 }
 
@@ -2412,6 +2494,10 @@ void java_bytecode_loadert::rclass_attribute(const u2 class_info_index)
   {
     rinner_classes_attribute(attribute_length, class_info_index);
   }
+  else if(attribute_name == "EnclosingMethod")
+  {
+    renclosing_method_attribute();
+  }
   else
     skip_bytes(attribute_length);
 }
@@ -2452,6 +2538,8 @@ void java_bytecode_parsert::rclass_attributes(
   read_bootstrapmethods_entry(java_bytecode.bootstrap_methods);
 
   rinner_classes_attribute(java_bytecode.inner_class_info);
+  renclosing_method_attribute(
+    java_bytecode.enclosing_class_index, java_bytecode.enclosing_method_index);
 }
 
 void java_bytecode_loadert::rmethods()

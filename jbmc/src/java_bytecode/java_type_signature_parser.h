@@ -33,10 +33,16 @@ public:
   /// Get the typet representation of this type
   /// \param class_name_prefix The prefix to put before the class name to make
   ///   the full name for a class used in its typet representation
+  /// \param include_bounds if true, include type bounds (e.g. "E extends A");
+  ///   if false, exclude them. Currently only used when making types for the
+  ///   bounds themselves -- for example, it's Enum<E extends Enum<E>>, not
+  ///   Enum<E extends Enum<E extends Enum<...
   /// \return The typet representation of this type
   /// \remarks This may lose information where typet doesn't currently support
   ///   all the features of java
-  virtual typet get_type(const std::string &class_name_prefix) const = 0;
+  virtual typet get_type(
+    const std::string &class_name_prefix,
+    bool include_bounds = true) const = 0;
 
   /// Output this type in human readable (Java) format
   /// \param stm The stream to which to output
@@ -66,6 +72,8 @@ public:
   static std::shared_ptr<java_value_type_signaturet> parse_single_value_type(
     const std::string &type_string,
     const java_generic_type_parameter_mapt &parameter_map);
+
+  virtual typet get_raw_type() const = 0;
 };
 
 /// A list of type signatures, typically used for the types of type parameter
@@ -154,8 +162,11 @@ public:
     collect_class_dependencies_from_bounds(deps);
   }
 
+  typet get_raw_type() const override;
+
   /// \copydoc java_type_signaturet::get_type
-  typet get_type(const std::string &class_name_prefix) const override;
+  typet get_type(const std::string &class_name_prefix, bool include_bounds)
+    const override;
 
   /// \copydoc java_type_signaturet::output
   void output(std::ostream &stm) const override
@@ -202,8 +213,10 @@ public:
   {
   }
 
+  typet get_raw_type() const override;
+
   /// \copydoc java_type_signaturet::get_type
-  typet get_type(const std::string &class_name_prefix) const override;
+  typet get_type(const std::string &class_name_prefix, bool) const override;
 
   /// \copydoc java_type_signaturet::output
   void output(std::ostream &stm) const override;
@@ -224,11 +237,16 @@ public:
   /// \copydoc java_type_signaturet::collect_class_dependencies
   void collect_class_dependencies(std::set<irep_idt> &deps) const override;
 
+  typet get_raw_type() const override;
+
   /// \copydoc java_type_signaturet::get_type
-  typet get_type(const std::string &class_name_prefix) const override;
+  typet get_type(const std::string &class_name_prefix, bool include_bounds)
+    const override;
 
   /// \copydoc java_type_signaturet::output
   void output(std::ostream &stm) const override;
+
+  typet make_array_type(const typet &result_type) const;
 };
 
 /// A reference to a class type
@@ -243,7 +261,6 @@ public:
   /// current class reference
   std::shared_ptr<java_ref_type_signaturet> inner_class;
 
-  java_ref_type_signaturet(const java_ref_type_signaturet &) = delete;
   java_ref_type_signaturet(java_ref_type_signaturet &&) = default;
 
   java_ref_type_signaturet(
@@ -255,10 +272,23 @@ public:
   void collect_class_dependencies(std::set<irep_idt> &deps) const override;
 
   /// \copydoc java_type_signaturet::get_type
-  typet get_type(const std::string &class_name_prefix) const override;
+  typet get_type(const std::string &class_name_prefix, bool include_bounds)
+    const override;
+
+  typet get_raw_type() const override;
 
   /// \copydoc java_type_signaturet::output
   void output(std::ostream &stm) const override;
+
+private:
+  java_ref_type_signaturet(const java_ref_type_signaturet &) = default;
+
+  java_ref_type_signaturet get_without_arguments() const
+  {
+    java_ref_type_signaturet copy = *this;
+    copy.type_arguments = {};
+    return copy;
+  }
 };
 
 /// Type signature of a class, does not include its name
@@ -294,7 +324,8 @@ public:
   void collect_class_dependencies(std::set<irep_idt> &deps) const override;
 
   /// \copydoc java_type_signaturet::get_type
-  typet get_type(const std::string &class_name_prefix) const override;
+  typet get_type(const std::string &class_name_prefix, bool include_bounds)
+    const override;
 
   /// \copydoc java_type_signaturet::output
   void output(std::ostream &stm) const override;
@@ -326,7 +357,8 @@ public:
   void collect_class_dependencies(std::set<irep_idt> &deps) const override;
 
   /// \copydoc java_type_signaturet::get_type
-  typet get_type(const std::string &class_name_prefix) const override;
+  typet get_type(const std::string &class_name_prefix, bool include_bounds)
+    const override;
 
   /// \copydoc java_type_signaturet::output
   void output(std::ostream &stm) const override;

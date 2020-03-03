@@ -207,15 +207,42 @@ optionalt<java_bytecode_parse_treet> java_class_loadert::get_parse_tree(
     return {};
   // Load outer class's generic parameters
   java_generic_type_parameter_mapt outer_generic_parameters;
-  optionalt<std::string> outer_name = bytecode.get_outer_class_name();
-  if(outer_name)
+  optionalt<std::string> enclosing_class_name =
+    bytecode.get_enclosing_class_name();
+  if(enclosing_class_name)
   {
+    PRECONDITION(enclosing_class_name->find('.') == std::string::npos);
+    std::replace(
+      enclosing_class_name->begin(), enclosing_class_name->end(), '/', '.');
     optionalt<java_bytecode_parse_treet> outer =
-      get_parse_tree(*outer_name, cp_entry);
+      get_parse_tree(*enclosing_class_name, cp_entry);
     if(outer && outer->parsed_class.parsed_sig)
     {
       outer_generic_parameters =
         outer->parsed_class.parsed_sig->type_parameter_map;
+      if(auto enclosing_method = bytecode.get_enclosing_method_name())
+      {
+        const auto &outer_methods = outer->parsed_class.methods;
+        const irep_idt enclosing_method_name = *enclosing_method;
+        const auto method = std::find_if(
+          outer_methods.begin(),
+          outer_methods.end(),
+          [&enclosing_method_name](
+            const java_bytecode_parse_treet::methodt &method) {
+            return enclosing_method_name == method.base_name;
+          });
+        POSTCONDITION(method != outer_methods.end());
+        if(method->parsed_sig)
+        {
+          for(const auto &parameter :
+              method->parsed_sig->explicit_type_parameters)
+          {
+            auto insert_result =
+              outer_generic_parameters.emplace(parameter->name, parameter);
+            POSTCONDITION(insert_result.second);
+          }
+        }
+      }
     }
   }
   return java_bytecode_parse(
