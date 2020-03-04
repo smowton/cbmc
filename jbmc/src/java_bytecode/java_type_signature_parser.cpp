@@ -577,8 +577,11 @@ java_method_type_signaturet::java_method_type_signaturet(
   while(!type_str.try_skip(')'))
     parameters.push_back(parse_type(type_str, type_parameter_map));
   return_type = parse_type(type_str, type_parameter_map);
-  if(!type_str.empty())
-    throw parse_exceptiont("Extra content after type signature");
+  if(!type_str.empty()) {
+    // Allow a generic 'throws' spec, which we currently don't parse.
+    if(!type_str.starts_with('^'))
+      throw parse_exceptiont("Extra content after type signature");
+  }
 }
 
 void java_method_type_signaturet::collect_class_dependencies(
