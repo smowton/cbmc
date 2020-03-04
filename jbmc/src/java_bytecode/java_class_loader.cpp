@@ -237,9 +237,13 @@ optionalt<java_bytecode_parse_treet> java_class_loadert::get_parse_tree(
           for(const auto &parameter :
               method->parsed_sig->explicit_type_parameters)
           {
-            auto insert_result =
-              outer_generic_parameters.emplace(parameter->name, parameter);
-            POSTCONDITION(insert_result.second);
+            // Note this overwrites any existing binding (i.e., it is legal
+            // for type parameters declared at a narrow scope to shadow those
+            // declared at an enclosing scope).
+            // TODO: avoid loading outer type variables at all once we hit a
+            //  static method or static inner class, neither of which may
+            //  legally refer to an outer scope's type variables.
+            outer_generic_parameters[parameter->name] = parameter;
           }
         }
       }
