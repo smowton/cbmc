@@ -98,10 +98,42 @@ public:
     const std::string message;
 };
 
+static optionalt<irep_idt> get_unique_abstract_method(
+  const java_class_typet::methodst &methods,
+  const namespacet &ns)
+{
+  optionalt<irep_idt> result;
+  for(const auto &method : methods) {
+    const auto &name = method.get_name();
+    static irep_idt equals = "equals";
+    static irep_idt hashCode = "hashCode";
+    if(method.get_base_name() == equals || method.get_base_name() == hashCode) {
+      // equals and hashCode methods can't be the implemented method of a
+      // functional interface, even if the interface re-declares them as
+      // abstract.
+      continue;
+    }
+    if(!ns.lookup(name).type.get_bool(ID_C_abstract))
+      continue;
+    if(result.has_value() && name != *result) {
+      throw no_unique_unimplemented_method_exceptiont(
+        "produces a type with at least two unimplemented methods");
+    }
+    result = name;
+  }
+  return result;
+}
+
 static optionalt<irep_idt> get_unique_unimplemented_method(
   const irep_idt &interface_id,
   const namespacet &ns)
 {
+  static irep_idt jlo = "java::java.lang.Object";
+  // Terminate recursion at Object; any other base of an interface must
+  // itself be an interface.
+  if(jlo == interface_id)
+    return {};
+
   const java_class_typet &interface =
     to_java_class_type(ns.lookup(interface_id).type);
 
@@ -112,16 +144,8 @@ static optionalt<irep_idt> get_unique_unimplemented_method(
       id2string(interface_id));
   }
 
-  const auto nmethods = interface.methods().size();
-  optionalt<irep_idt> result;
-
-  if(nmethods >= 2) {
-    throw no_unique_unimplemented_method_exceptiont(
-      "produces a type with at least two unimplemented methods");
-  }
-
-  if(nmethods == 1)
-    result = interface.methods().at(0).get_name();
+  optionalt<irep_idt> result =
+    get_unique_abstract_method(interface.methods(), ns);
 
   for(const auto &base : interface.bases()) {
     optionalt<irep_idt> base_result = get_unique_unimplemented_method(base
@@ -161,10 +185,7 @@ static optionalt<irep_idt> interface_method_id(
       << "ignoring invokedynamic at " << method_identifier << " address "
       << instruction_address << " with type "
       << functional_interface_tag.get_identifier()
-      << " which " << e.message <<
-      ". Note default methods are not supported yet. "
-      << "Also note methods declared in an inherited interface are not "
-      << "supported either." << messaget::eom;
+      << " which " << e.message << "." << messaget::eom;
     return {};
   }
 }
@@ -263,23 +284,24 @@ static symbolt constructor_symbol(
   return constructor_symbol;
 }
 
-symbolt implemented_method_symbol(
+static symbolt implemented_method_symbol(
   synthetic_methods_mapt &synthetic_methods,
   const symbolt &interface_method_symbol,
-  const struct_tag_typet &functional_interface_tag,
   const irep_idt &synthetic_class_name)
 {
   const std::string implemented_method_name = [&] {
     std::string implemented_method_name =
       id2string(interface_method_symbol.name);
-    const std::string &functional_interface_tag_str =
-      id2string(functional_interface_tag.get_identifier());
+    const std::string &implemented_interface_tag_str =
+      id2string(interface_method_symbol.type.get(ID_C_class));
+    INVARIANT(!implemented_interface_tag_str.empty(),
+      "implemented method's type must specify its declaring class");
     INVARIANT(
-      has_prefix(implemented_method_name, functional_interface_tag_str),
+      has_prefix(implemented_method_name, implemented_interface_tag_str),
       "method names should be prefixed by their defining type");
     implemented_method_name.replace(
       0,
-      functional_interface_tag_str.length(),
+      implemented_interface_tag_str.length(),
       id2string(synthetic_class_name));
     return implemented_method_name;
   }();
@@ -378,7 +400,6 @@ void create_invokedynamic_synthetic_classes(
     symbol_table.add(implemented_method_symbol(
       synthetic_methods,
       symbol_table.lookup_ref(*interface_method_id),
-      functional_interface_tag,
       synthetic_class_name));
     symbol_table.add(synthetic_class_symbol(
       synthetic_class_name,
