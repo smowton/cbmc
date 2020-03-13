@@ -10,6 +10,7 @@
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <util/type.h>
@@ -74,6 +75,31 @@ public:
     const java_generic_type_parameter_mapt &parameter_map);
 
   virtual typet get_raw_type() const = 0;
+
+  /// Visitor that takes a const-ref to a parent node and a mutable reference
+  // to a child pointer, and is called for each parent-child connection in
+  // the type graph.
+  typedef std::function<void(const
+  java_value_type_signaturet &, std::shared_ptr<java_value_type_signaturet>
+    &)> visitort;
+
+  void apply_visitor(visitort visitor) {
+    std::unordered_set<std::shared_ptr<java_value_type_signaturet>> seen;
+    apply_visitor_rec(visitor, seen);
+  }
+
+protected:
+  typedef std::unordered_set<std::shared_ptr<java_value_type_signaturet>>
+  value_type_sett  ;
+
+  virtual void apply_visitor_rec(visitort, value_type_sett &) = 0;
+
+  static void apply_if_not_seen(visitort visitor,
+    std::shared_ptr<java_value_type_signaturet> tovisit, value_type_sett
+  &seen) {
+    if(seen.insert(tovisit).second)
+      tovisit->apply_visitor_rec(visitor, seen);
+  }
 };
 
 /// A list of type signatures, typically used for the types of type parameter
@@ -95,6 +121,8 @@ class java_generic_type_parametert : public java_value_type_signaturet
 public:
   /// The name of the parameter, empty for a wildcard type
   const std::string name;
+  /// Is this a placeholder for a dangling reference?
+  bool is_dangling = false;
   /// Bound on the type parameter that is a class
   /// \remarks
   /// If there isn't one then there must be at least one interface bound
@@ -120,14 +148,19 @@ public:
   /// \param bounds_are_upper Whether the bounds to be added will be upper
   ///   bounds
   explicit java_generic_type_parametert(bool bounds_are_upper)
-    : bounds_are_upper(bounds_are_upper)
+    : is_dangling(false), bounds_are_upper(bounds_are_upper)
   {
   }
 
   /// Create a named type parameter
   /// \param name The name of the type parameter to create
   explicit java_generic_type_parametert(std::string name)
-    : name(std::move(name)), bounds_are_upper(true)
+    : name(std::move(name)), is_dangling(false), bounds_are_upper(true)
+  {
+  }
+
+  java_generic_type_parametert(std::string name, bool is_dangling)
+    : name(std::move(name)), is_dangling(is_dangling), bounds_are_upper(true)
   {
   }
 
@@ -136,6 +169,11 @@ public:
   bool is_wild() const
   {
     return name.empty();
+  }
+
+  bool is_dangling_reference() const
+  {
+    return is_dangling;
   }
 
   /// Gather the names of classes referred to by this parameter at the point
@@ -179,6 +217,17 @@ public:
   void full_output(std::ostream &stm, bool show_bounds = false) const;
 
 private:
+  void apply_visitor_rec(visitort visitor, value_type_sett &seen) override {
+    if(class_bound) {
+      apply_if_not_seen(visitor, class_bound, seen);
+      visitor(*this, class_bound);
+    }
+    for(auto &bound : interface_bounds) {
+      apply_if_not_seen(visitor, bound, seen);
+      visitor(*this, bound);
+    }
+  }
+
   /// Gather the names of classes referred to by this parameter
   /// \param deps A set into which to gether the names of classes referred to
   ///   by this type
@@ -220,6 +269,9 @@ public:
 
   /// \copydoc java_type_signaturet::output
   void output(std::ostream &stm) const override;
+
+private:
+  void apply_visitor_rec(visitort, value_type_sett &) override {}
 };
 
 /// An array type, specifying the type of the elements
@@ -247,6 +299,13 @@ public:
   void output(std::ostream &stm) const override;
 
   typet make_array_type(const typet &result_type) const;
+
+  private:
+  void apply_visitor_rec(visitort visitor, value_type_sett &seen) override {
+    apply_if_not_seen(visitor, element_type, seen);
+    visitor(*this, element_type);
+  }
+
 };
 
 /// A reference to a class type
@@ -288,6 +347,18 @@ private:
     java_ref_type_signaturet copy = *this;
     copy.type_arguments = {};
     return copy;
+  }
+
+  void apply_visitor_rec(visitort visitor, value_type_sett &seen) override {
+    if(inner_class) {
+      // Can't apply the visitor to this link as it is specifically a struct
+      // tag, not a general value
+      inner_class->apply_visitor_rec(visitor, seen);
+    }
+    for(auto &arg : type_arguments) {
+      apply_if_not_seen(visitor, arg, seen);
+      visitor(*this, arg);
+    }
   }
 };
 
