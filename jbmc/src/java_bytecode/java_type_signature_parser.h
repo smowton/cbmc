@@ -10,6 +10,7 @@
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <util/type.h>
@@ -74,6 +75,31 @@ public:
     const java_generic_type_parameter_mapt &parameter_map);
 
   virtual typet get_raw_type() const = 0;
+
+  /// Visitor that takes a const-ref to a parent node and a mutable reference
+  // to a child pointer, and is called for each parent-child connection in
+  // the type graph.
+  typedef std::function<void(const
+  java_value_type_signaturet &, std::shared_ptr<java_value_type_signaturet>
+    &)> visitort;
+
+  void apply_visitor(visitort visitor) {
+    std::unordered_set<std::shared_ptr<java_value_type_signaturet>> seen;
+    apply_visitor_rec(visitor, seen);
+  }
+
+protected:
+  typedef std::unordered_set<std::shared_ptr<java_value_type_signaturet>>
+  value_type_sett  ;
+
+  virtual void apply_visitor_rec(visitort, value_type_sett &) = 0;
+
+  static void apply_if_not_seen(visitort visitor,
+    std::shared_ptr<java_value_type_signaturet> tovisit, value_type_sett
+  &seen) {
+    if(seen.insert(tovisit).second)
+      tovisit->apply_visitor_rec(visitor, seen);
+  }
 };
 
 /// A list of type signatures, typically used for the types of type parameter
