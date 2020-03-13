@@ -14,6 +14,7 @@
 #include <vector>
 
 #include <util/type.h>
+#include "java_types.h"
 
 class java_generic_type_parametert;
 typedef
@@ -210,6 +211,12 @@ public:
   typet get_type(const std::string &class_name_prefix, bool include_bounds)
     const override;
 
+  java_generic_parametert get_parameter_type(const std::string &class_name_prefix, bool include_bounds)
+  const {
+    return to_java_generic_parameter(get_type(class_name_prefix,
+      include_bounds));
+  }
+
   /// \copydoc java_type_signaturet::output
   void output(std::ostream &stm) const override
   {
@@ -401,6 +408,13 @@ public:
   /// \copydoc java_type_signaturet::get_type
   typet get_type(const std::string &class_name_prefix, bool include_bounds)
     const override;
+
+  java_class_typet get_class_type(const std::string &class_name_prefix, bool include_bounds)
+    const {
+    return to_java_class_type(get_type
+    (class_name_prefix,
+      include_bounds));
+  }
 
   /// \copydoc java_type_signaturet::output
   void output(std::ostream &stm) const override;
