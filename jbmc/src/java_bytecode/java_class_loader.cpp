@@ -223,13 +223,15 @@ optionalt<java_bytecode_parse_treet> java_class_loadert::get_parse_tree(
       if(auto enclosing_method = bytecode.get_enclosing_method_name())
       {
         const auto &outer_methods = outer->parsed_class.methods;
-        const irep_idt enclosing_method_name = *enclosing_method;
+        const irep_idt enclosing_method_name = enclosing_method->first,
+          enclosing_method_descriptor = enclosing_method->second;
         const auto method = std::find_if(
           outer_methods.begin(),
           outer_methods.end(),
-          [&enclosing_method_name](
+          [&](
             const java_bytecode_parse_treet::methodt &method) {
-            return enclosing_method_name == method.base_name;
+            return enclosing_method_name == method.base_name &&
+            enclosing_method_descriptor == method.descriptor;
           });
         POSTCONDITION(method != outer_methods.end());
         if(method->parsed_sig)
