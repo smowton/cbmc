@@ -71,7 +71,7 @@ struct java_bytecodet
   };
   optionalt<inner_classt> inner_class_info;
   optionalt<std::string> get_enclosing_class_name();
-  optionalt<std::string> get_enclosing_method_name();
+  optionalt<std::pair<std::string, std::string>> get_enclosing_method_name();
 
   struct bootstrap_methodt
   {
@@ -193,7 +193,8 @@ optionalt<std::string> java_bytecode_reft::get_enclosing_class_name()
   return bytecode->get_enclosing_class_name();
 }
 
-optionalt<std::string> java_bytecode_reft::get_enclosing_method_name()
+optionalt<std::pair<std::string, std::string>>
+  java_bytecode_reft::get_enclosing_method_name()
 {
   return bytecode->get_enclosing_method_name();
 }
