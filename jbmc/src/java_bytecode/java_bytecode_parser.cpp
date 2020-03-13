@@ -2709,6 +2709,18 @@ java_bytecode_parsert::parse_method_handle(const method_handle_infot &entry)
   const name_and_type_infot &name_and_type =
     ref_entry.get_name_and_type(pool_entry_lambda);
 
+  if(entry.get_reference_kind() ==
+  method_handle_infot::method_handle_kindt::REF_getField ||
+    entry.get_reference_kind() ==
+    method_handle_infot::method_handle_kindt::REF_putField ||
+    entry.get_reference_kind() ==
+    method_handle_infot::method_handle_kindt::REF_getStatic ||
+   entry.get_reference_kind() ==
+  method_handle_infot::method_handle_kindt::REF_putStatic) {
+    // Field accessors not implemented yet
+    return {};
+  }
+
   const std::string method_ref =
     make_method_symbol_name(class_entry, name_and_type, pool_entry_lambda);
 
