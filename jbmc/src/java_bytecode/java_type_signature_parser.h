@@ -439,11 +439,11 @@ public:
 
   /// Create a java_method_type_signaturet by parsing a type signature
   /// \param type_string The type signature to parse
-  /// \param class_parameter_map A map giving the parameters in scope for this
+  /// \param outer_parameter_map A map giving the parameters in scope for this
   ///   signature
   java_method_type_signaturet(
     const std::string &type_string,
-    java_generic_type_parameter_mapt class_parameter_map);
+    java_generic_type_parameter_mapt outer_parameter_map);
 
   /// \copydoc java_type_signaturet::collect_class_dependencies
   void collect_class_dependencies(std::set<irep_idt> &deps) const override;
