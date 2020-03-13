@@ -1035,17 +1035,18 @@ void mark_java_implicitly_generic_class_type(
   // the class must be an inner non-static class, i.e., have a field this$*
   // TODO this should be simplified once static inner classes are marked
   //   during parsing
-  bool no_this_field = std::none_of(
-    class_type.components().begin(),
-    class_type.components().end(),
-    [](const struct_union_typet::componentt &component)
-    {
-      return id2string(component.get_name()).substr(0, 5) == "this$";
-    });
-  if(no_this_field)
-  {
+  auto lacks_this_field = [](const java_class_typet &class_type) {
+    return std::none_of(
+      class_type.components().begin(),
+      class_type.components().end(),
+      [](const struct_union_typet::componentt &component)
+      {
+        return id2string(component.get_name()).substr(0, 5) == "this$";
+      });
+  };
+
+  if(lacks_this_field(class_type))
     return;
-  }
 
   // create a vector of all generic type parameters of all outer classes, in
   // the order from the outer-most inwards
@@ -1064,6 +1065,7 @@ void mark_java_implicitly_generic_class_type(
         to_java_class_type(outer_class_symbol.type);
       if(is_java_generic_class_type(outer_class_type))
       {
+        std::vector<java_generic_parametert> new_implicit_parameters;
         for(const java_generic_parametert &outer_generic_type_parameter :
             to_java_generic_class_type(outer_class_type).generic_types())
         {
@@ -1075,10 +1077,18 @@ void mark_java_implicitly_generic_class_type(
           java_generic_parameter_tagt bound = to_java_generic_parameter_tag(
             outer_generic_type_parameter.subtype());
           bound.type_variable_ref().set_identifier(identifier);
-          implicit_generic_type_parameters.emplace_back(identifier, bound);
+          new_implicit_parameters.emplace_back(identifier, bound);
         }
+        implicit_generic_type_parameters.insert(
+          implicit_generic_type_parameters.begin(),
+          new_implicit_parameters.begin(),
+          new_implicit_parameters.end());
       }
       outer_class_delimiter = outer_class_name.rfind('$');
+      // If this is a static class, stop inheriting parameters; those of any
+      // surrounding class can't be referred to in this context.
+      if(lacks_this_field(outer_class_type))
+        break;
     }
     else
     {
