@@ -463,6 +463,12 @@ public:
   //   }
   // };
   using java_lambda_method_handlest = irept::subt;
+  enum class method_handle_typet
+  {
+    LAMBDA_METHOD_HANDLE,
+    LAMBDA_CONSTRUCTOR_HANDLE,
+    UNKNOWN_HANDLE
+  };
 
   const java_lambda_method_handlest &lambda_method_handles() const
   {
