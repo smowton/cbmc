@@ -51,7 +51,7 @@ irep_idt lambda_synthetic_class_name(
 ///   methods) of the class where the lambda is called
 /// \param index: Index of the lambda method handle in the vector
 /// \return Symbol of the lambda method if the method handle has a known type
-static optionalt<symbolt> get_lambda_method_symbol(
+static optionalt<java_class_typet::java_lambda_method_handlet> get_lambda_method_handle(
   const symbol_table_baset &symbol_table,
   const java_class_typet::java_lambda_method_handlest &lambda_method_handles,
   const size_t index)
@@ -62,15 +62,17 @@ static optionalt<symbolt> get_lambda_method_symbol(
   // internally by the string solver.
   if(index >= lambda_method_handles.size())
     return {};
-  const irept &lambda_method_handle = lambda_method_handles.at(index);
+  const auto &lambda_method_handle = lambda_method_handles.at(index);
   // If the lambda method handle has an unknown type, it does not refer to
   // any symbol (it has an empty identifier)
-  if(!lambda_method_handle.id().empty())
-    return symbol_table.lookup_ref(lambda_method_handle.id());
+  if(lambda_method_handle.get_handle_type() !=
+  java_class_typet::method_handle_typet::UNKNOWN_HANDLE)
+    return lambda_method_handle;
   return {};
 }
 
-static optionalt<irep_idt> lambda_method_name(
+static optionalt<java_class_typet::java_lambda_method_handlet>
+lambda_method_handle(
   const symbol_tablet &symbol_table,
   const irep_idt &method_identifier,
   const java_method_typet &dynamic_method_type)
@@ -84,11 +86,8 @@ static optionalt<irep_idt> lambda_method_name(
   const auto &lambda_method_handles = class_type.lambda_method_handles();
   auto lambda_handle_index =
     dynamic_method_type.get_int(ID_java_lambda_method_handle_index);
-  const auto lambda_method_symbol = get_lambda_method_symbol(
+  return get_lambda_method_handle(
     symbol_table, lambda_method_handles, lambda_handle_index);
-  if(lambda_method_symbol)
-    return lambda_method_symbol->name;
-  return {};
 }
 
 class no_unique_unimplemented_method_exceptiont : public std::exception {
@@ -192,7 +191,7 @@ static optionalt<irep_idt> interface_method_id(
 
 symbolt synthetic_class_symbol(
   const irep_idt &synthetic_class_name,
-  const irep_idt &lambda_method_name,
+  const java_class_typet::java_lambda_method_handlet &lambda_method_handle,
   const struct_tag_typet &functional_interface_tag,
   const java_method_typet &dynamic_method_type)
 {
@@ -204,7 +203,7 @@ symbolt synthetic_class_symbol(
   synthetic_class_type.set_name(synthetic_class_name);
   synthetic_class_type.set_synthetic(true);
   synthetic_class_type.set(
-    ID_java_lambda_method_identifier, lambda_method_name);
+    ID_java_lambda_method_handle, lambda_method_handle);
   struct_tag_typet base_tag("java::java.lang.Object");
   synthetic_class_type.add_base(base_tag);
   synthetic_class_type.add_base(functional_interface_tag);
@@ -371,9 +370,9 @@ void create_invokedynamic_synthetic_classes(
       continue;
     const auto &dynamic_method_type =
       to_java_method_type(instruction.args.at(0).type());
-    const auto lambda_method_name = ::lambda_method_name(
+    const auto lambda_handle = lambda_method_handle(
       symbol_table, method_identifier, dynamic_method_type);
-    if(!lambda_method_name)
+    if(!lambda_handle)
     {
       log.debug() << "ignoring invokedynamic at " << method_identifier
                   << " address " << instruction.address
@@ -392,7 +391,7 @@ void create_invokedynamic_synthetic_classes(
       continue;
     log.debug() << "identified invokedynamic at " << method_identifier
                 << " address " << instruction.address
-                << " for lambda: " << *lambda_method_name << messaget::eom;
+                << " for lambda: " << lambda_handle->get_lambda_method_identifier() << messaget::eom;
     const irep_idt synthetic_class_name =
       lambda_synthetic_class_name(method_identifier, instruction.address);
     symbol_table.add(constructor_symbol(
@@ -403,7 +402,7 @@ void create_invokedynamic_synthetic_classes(
       synthetic_class_name));
     symbol_table.add(synthetic_class_symbol(
       synthetic_class_name,
-      *lambda_method_name,
+      *lambda_handle,
       functional_interface_tag,
       dynamic_method_type));
   }
@@ -499,6 +498,48 @@ codet invokedynamic_synthetic_constructor(
   return std::move(result);
 }
 
+static symbol_exprt instantiate_new_object(
+  const irep_idt &function_id,
+  const symbolt &lambda_method_symbol,
+  symbol_table_baset &symbol_table,
+  code_blockt &result)
+{
+  // We must instantiate the object, then call the requested constructor
+  const auto &method_type = to_code_type(lambda_method_symbol.type);
+  INVARIANT(method_type.get_bool(ID_constructor),
+            "REF_NewInvokeSpecial lambda must refer to a constructor");
+  const auto &created_type = method_type.parameters().at(0)
+    .type();
+  irep_idt created_class = to_struct_tag_type(created_type.subtype())
+    .get_identifier();
+
+  // Call static init if it exists:
+  irep_idt static_init_name = clinit_wrapper_name(created_class);
+  if(const auto *static_init_symbol = symbol_table.lookup(static_init_name)) {
+    result.add(code_function_callt{static_init_symbol->symbol_expr(), {}});
+  }
+
+  // Make a local to hold the new instance:
+  irep_idt new_instance_var_basename = "newinvokespecial_instance";
+  irep_idt new_instance_var_name =
+    id2string(function_id) + "::" + id2string(new_instance_var_basename);
+  auxiliary_symbolt new_instance_var_symbol;
+  new_instance_var_symbol.name = new_instance_var_name;
+  new_instance_var_symbol.base_name = new_instance_var_basename;
+  new_instance_var_symbol.mode = ID_java;
+  new_instance_var_symbol.type = created_type;
+  bool add_failed = symbol_table.add(new_instance_var_symbol);
+  POSTCONDITION(!add_failed);
+  symbol_exprt new_instance_var = new_instance_var_symbol.symbol_expr();
+  result.add(code_declt{new_instance_var});
+
+  // Instantiate the object:
+  side_effect_exprt java_new_expr(ID_java_new, created_type, {});
+  result.add(code_assignt{new_instance_var, java_new_expr});
+
+  return new_instance_var;
+}
+
 codet invokedynamic_synthetic_method(
   const irep_idt &function_id,
   symbol_table_baset &symbol_table,
@@ -549,10 +590,26 @@ codet invokedynamic_synthetic_method(
     lambda_method_args.push_back(param_symbol.symbol_expr());
   }
 
-  const auto &lambda_method_symbol =
-    ns.lookup(class_type.get(ID_java_lambda_method_identifier));
+  const auto &lambda_method_handle =
+    static_cast<const java_class_typet::java_lambda_method_handlet &>(class_type
+    .find
+    (ID_java_lambda_method_handle));
 
-  if(return_type != empty_typet())
+  const auto &lambda_method_symbol = ns.lookup(lambda_method_handle
+                                                 .get_lambda_method_identifier());
+  const auto handle_type = lambda_method_handle.get_handle_type();
+  const auto is_constructor_lambda = handle_type ==
+    java_class_typet::method_handle_typet::LAMBDA_CONSTRUCTOR_HANDLE;
+
+  if(is_constructor_lambda) {
+    auto new_instance_var = instantiate_new_object(function_id,
+      lambda_method_symbol, symbol_table, result);
+
+    // Prepend the newly created object to the lambda arg list:
+    lambda_method_args.insert(lambda_method_args.begin(), new_instance_var);
+  }
+
+  if(return_type != empty_typet() && !is_constructor_lambda)
   {
     result.add(code_returnt(side_effect_expr_function_callt(
       lambda_method_symbol.symbol_expr(),
@@ -564,6 +621,12 @@ codet invokedynamic_synthetic_method(
   {
     result.add(code_function_callt(
       lambda_method_symbol.symbol_expr(), lambda_method_args));
+  }
+
+  if(is_constructor_lambda) {
+    // Return the newly-created object.
+    result.add(code_returnt{typecast_exprt::conditional_cast
+    (lambda_method_args.at(0), return_type)});
   }
 
   return std::move(result);
