@@ -56,9 +56,8 @@ static std::shared_ptr<java_value_type_signaturet> parse_type(
       ';', "Type parameter reference doesn't have closing semicolon");
     auto parameter = parameters.find(parameter_name);
     if(parameter == parameters.end())
-      throw parse_exceptiont(
-        "Reference to undefined type parameter: " +
-          std::string(parameter_name));
+      return std::make_shared<java_generic_type_parametert>(parameter_name,
+        true);
     return parameter->second;
   }
   case '*': // Wildcard
@@ -177,10 +176,32 @@ static java_generic_type_parameter_listt parse_type_parameters(
   {
     do
     {
-      parameter_list.push_back(
-        parse_type_parameter(parameters_string, outer_parameters));
+      parameter_list.push_back(parse_type_parameter(parameters_string,
+        outer_parameters));
       parameter_map.emplace(parameter_list.back()->name, parameter_list.back());
     } while(!parameters_string.try_skip('>'));
+
+    // Now we know about them all, resolve references:
+    auto resolve_dangling_ref = [&](const java_value_type_signaturet &parent,
+     std::shared_ptr<java_value_type_signaturet> &child) {
+      if(auto child_arg =
+        std::dynamic_pointer_cast<java_generic_type_parametert>(child)) {
+        if(child_arg->is_dangling_reference()) {
+          auto resolved = parameter_map.find(child_arg->name);
+          if(resolved == parameter_map.end()) {
+            throw parse_exceptiont("Dangling reference to generic parameter "
+            + child_arg->name);
+          }
+          else {
+            child = resolved->second;
+          }
+        }
+      }
+    };
+
+    for(auto &parameter : parameter_list) {
+      parameter->apply_visitor(resolve_dangling_ref);
+    }
   }
   return parameter_list;
 }
