@@ -125,6 +125,12 @@ get_inherited_component(
   const symbol_tablet &symbol_table,
   bool include_interfaces);
 
+optionalt<resolve_inherited_componentt::inherited_componentt>
+get_inherited_method_implementation(
+  const irep_idt &call_basename,
+  const irep_idt &classname,
+  const symbol_tablet &symbol_table);
+
 bool is_non_null_library_global(const irep_idt &);
 
 extern const std::unordered_set<std::string> cprover_methods_to_ignore;
