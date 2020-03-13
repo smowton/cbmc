@@ -256,6 +256,7 @@ typet java_generic_type_parametert::get_type(
   const std::string &class_name_prefix,
   bool include_bounds) const
 {
+  PRECONDITION(!is_dangling);
   // We currently only support one bound per variable, use the first
   const java_value_type_signaturet &bound_sig =
     *(class_bound != nullptr ? class_bound : interface_bounds[0]);
