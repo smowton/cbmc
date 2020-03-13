@@ -375,7 +375,7 @@ private:
   using instructiont = java_bytecode_parse_treet::instructiont;
   using annotationt = java_bytecode_parse_treet::annotationt;
   using method_handle_typet =
-    java_bytecode_parse_treet::classt::method_handle_typet;
+    java_class_typet::method_handle_typet;
   using lambda_method_handlet =
     java_bytecode_parse_treet::classt::lambda_method_handlet;
 
