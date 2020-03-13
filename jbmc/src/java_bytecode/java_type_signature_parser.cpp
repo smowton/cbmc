@@ -445,31 +445,64 @@ typet java_ref_type_signaturet::get_type(
   const std::string &class_name_prefix,
   bool include_bounds) const
 {
-  PRECONDITION(!inner_class); // Currently not supported
-
   std::string identifier = "java::" + class_name;
   struct_tag_typet struct_tag_type(identifier);
   struct_tag_type.set(ID_C_base_name, class_name);
 
-  if(type_arguments.empty())
-    return java_reference_type(struct_tag_type);
+  if(!type_arguments.empty()) {
+    struct_tag_type = java_generic_struct_tag_typet{struct_tag_type};
+    auto &result = to_java_generic_struct_tag_type(struct_tag_type);
+    std::transform(
+      type_arguments.begin(),
+      type_arguments.end(),
+      std::back_inserter(result.generic_types()),
+      [&](const std::shared_ptr<java_value_type_signaturet> &type_argument) {
+        const typet type =
+          type_argument->get_type(class_name_prefix, include_bounds);
+        const reference_typet *ref_type =
+          type_try_dynamic_cast<reference_typet>(type);
+        if(ref_type == nullptr)
+          throw unsupported_java_class_signature_exceptiont(
+            "All generic type arguments should be references");
+        return *ref_type;
+      });
+  }
 
-  java_generic_typet result(struct_tag_type);
-  std::transform(
-    type_arguments.begin(),
-    type_arguments.end(),
-    std::back_inserter(result.generic_type_arguments()),
-    [&](const std::shared_ptr<java_value_type_signaturet> &type_argument) {
-      const typet type =
-        type_argument->get_type(class_name_prefix, include_bounds);
-      const reference_typet *ref_type =
-        type_try_dynamic_cast<reference_typet>(type);
-      if(ref_type == nullptr)
-        throw unsupported_java_class_signature_exceptiont(
-          "All generic type arguments should be references");
-      return *ref_type;
-    });
-  return std::move(result);
+  if(inner_class) {
+    auto sub_result =
+      to_java_reference_type(inner_class->get_type(class_name_prefix,
+        include_bounds));
+    auto &sub_result_tag = sub_result.subtype();
+    std::string full_inner_identifier = identifier + "$" +
+      id2string(sub_result_tag.get_identifier()).substr(6);
+    sub_result_tag.set_identifier(full_inner_identifier);
+
+    // Generic instances of inner classes are currently lifted (see also
+    // `java_implicitly_generic_class_typet`), so that a reference to an
+    // A<X, Y>.B<Z, W>.C<U, V> is represented like an A$B$C<X, Y, Z, W, U, V>
+    // Therefore prepend this class' generic arguments:
+
+    if(!type_arguments.empty()) {
+      if(!is_java_generic_struct_tag_type(sub_result_tag)) {
+        // The inner class doesn't have generic type parameters -- upgrade it
+        // to a generic reference:
+        sub_result_tag = java_generic_struct_tag_typet{sub_result_tag};
+      };
+
+      auto &sub_result_generic = to_java_generic_struct_tag_type(sub_result_tag);
+      auto &result = to_java_generic_struct_tag_type(struct_tag_type);
+
+      sub_result_generic.generic_types().insert(
+        sub_result_generic.generic_types().begin(),
+        result.generic_types().begin(),
+        result.generic_types().end());
+    }
+
+    return std::move(sub_result);
+  }
+  else {
+    return java_reference_type(struct_tag_type);
+  }
 }
 
 void java_ref_type_signaturet::output(std::ostream &stm) const
