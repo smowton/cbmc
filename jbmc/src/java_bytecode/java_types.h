@@ -20,8 +20,6 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/std_types.h>
 #include <util/type.h>
 
-#include "java_type_signature_parser.h"
-
 class java_annotationt : public irept
 {
 public:
