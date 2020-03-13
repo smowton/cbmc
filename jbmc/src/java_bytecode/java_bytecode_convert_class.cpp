@@ -176,94 +176,6 @@ private:
   std::unordered_set<std::string> no_load_classes;
 };
 
-/// Auxiliary function to extract the generic superclass reference from the
-/// class signature. If the signature is empty or the superclass is not generic
-/// it returns empty.
-/// Example:
-/// - class: A<T> extends B<T, Integer> implements C, D<T>
-/// - signature: <T:Ljava/lang/Object;>B<TT;Ljava/lang/Integer;>;LC;LD<TT;>;
-/// - returned superclass reference: B<TT;Ljava/lang/Integer;>;
-/// \param signature: Signature of the class
-/// \return Reference of the generic superclass, or empty if the superclass
-///   is not generic
-static optionalt<std::string>
-extract_generic_superclass_reference(const optionalt<std::string> &signature)
-{
-  if(signature.has_value())
-  {
-    // skip the (potential) list of generic parameters at the beginning of the
-    // signature
-    const size_t start =
-      signature.value().front() == '<'
-        ? find_closing_delimiter(signature.value(), 0, '<', '>') + 1
-        : 0;
-
-    // extract the superclass reference
-    const size_t end =
-      find_closing_semi_colon_for_reference_type(signature.value(), start);
-    const std::string superclass_ref =
-      signature.value().substr(start, (end - start) + 1);
-
-    // if the superclass is generic then the reference is of form
-    // `Lsuperclass-name<generic-types;>;` if it is implicitly generic, then the
-    // reference is of the form
-    // `Lsuperclass-name<Tgeneric-types;>.Innerclass-Name`
-    if(superclass_ref.find('<') != std::string::npos)
-      return superclass_ref;
-  }
-  return {};
-}
-
-/// Auxiliary function to extract the generic interface reference of an
-/// interface with the specified name from the class signature. If the
-/// signature is empty or the interface is not generic it returns empty.
-/// Example:
-/// - class: A<T> extends B<T, Integer> implements C, D<T>
-/// - signature: <T:Ljava/lang/Object;>B<TT;Ljava/lang/Integer;>;LC;LD<TT;>;
-/// - returned interface reference for C: LC;
-/// - returned interface reference for D: LD<TT;>;
-/// \param signature: Signature of the class
-/// \param interface_name: The interface name
-/// \return Reference of the generic interface, or empty if the interface
-///   is not generic
-static optionalt<std::string> extract_generic_interface_reference(
-  const optionalt<std::string> &signature,
-  const std::string &interface_name)
-{
-  if(signature.has_value())
-  {
-    // skip the (potential) list of generic parameters at the beginning of the
-    // signature
-    size_t start =
-      signature.value().front() == '<'
-        ? find_closing_delimiter(signature.value(), 0, '<', '>') + 1
-        : 0;
-
-    // skip the superclass reference (if there is at least one interface
-    // reference in the signature, then there is a superclass reference)
-    start =
-      find_closing_semi_colon_for_reference_type(signature.value(), start) + 1;
-
-    // if the interface name includes package name, convert dots to slashes
-    std::string interface_name_slash_to_dot = interface_name;
-    std::replace(
-      interface_name_slash_to_dot.begin(),
-      interface_name_slash_to_dot.end(),
-      '.',
-      '/');
-
-    start =
-      signature.value().find("L" + interface_name_slash_to_dot + "<", start);
-    if(start != std::string::npos)
-    {
-      const size_t &end =
-        find_closing_semi_colon_for_reference_type(signature.value(), start);
-      return signature.value().substr(start, (end - start) + 1);
-    }
-  }
-  return {};
-}
-
 /// Convert a class, adding symbols to the symbol table for its members
 /// \param c: Bytecode of the class to convert
 /// \param overlay_classes: Bytecode of any overlays for the class to convert
@@ -279,34 +191,14 @@ void java_bytecode_convert_classt::convert(
   }
 
   java_class_typet class_type;
-  if(c.signature.has_value() && c.signature.value()[0]=='<')
-  {
-    java_generic_class_typet generic_class_type;
+  if(c.parsed_sig.has_value()) {
+    class_type = c.parsed_sig->get_class_type(qualified_classname, true);
 #ifdef DEBUG
     std::cout << "INFO: found generic class signature "
               << c.signature.value()
               << " in parsed class "
               << c.name << "\n";
 #endif
-    try
-    {
-      const std::vector<typet> &generic_types=java_generic_type_from_string(
-        id2string(c.name),
-        c.signature.value());
-      for(const typet &t : generic_types)
-      {
-        generic_class_type.generic_types()
-          .push_back(to_java_generic_parameter(t));
-      }
-      class_type=generic_class_type;
-    }
-    catch(const unsupported_java_class_signature_exceptiont &e)
-    {
-      debug() << "Class: " << c.name
-              << "\n could not parse signature: " << c.signature.value()
-              << "\n " << e.what() << "\n ignoring that the class is generic"
-              << eom;
-    }
   }
 
   class_type.set_tag(c.name);
@@ -346,35 +238,11 @@ void java_bytecode_convert_classt::convert(
 
   if(!c.super_class.empty())
   {
-    const struct_tag_typet base("java::" + id2string(c.super_class));
-
-    // if the superclass is generic then the class has the superclass reference
-    // including the generic info in its signature
-    // e.g., signature for class 'A<T>' that extends
-    // 'Generic<Integer>' is '<T:Ljava/lang/Object;>LGeneric<LInteger;>;'
-    const optionalt<std::string> &superclass_ref =
-      extract_generic_superclass_reference(c.signature);
-    if(superclass_ref.has_value())
-    {
-      try
-      {
-        const java_generic_struct_tag_typet generic_base(
-          base, superclass_ref.value(), qualified_classname);
-        class_type.add_base(generic_base);
-      }
-      catch(const unsupported_java_class_signature_exceptiont &e)
-      {
-        debug() << "Superclass: " << c.super_class << " of class: " << c.name
-                << "\n could not parse signature: " << superclass_ref.value()
-                << "\n " << e.what()
-                << "\n ignoring that the superclass is generic" << eom;
-        class_type.add_base(base);
-      }
-    }
-    else
-    {
+    if(!c.parsed_sig.has_value()) {
+      const struct_tag_typet base("java::" + id2string(c.super_class));
       class_type.add_base(base);
     }
+
     java_class_typet::componentt base_class_field;
     base_class_field.type() = class_type.bases().at(0).type();
     base_class_field.set_name("@" + id2string(c.super_class));
@@ -384,35 +252,10 @@ void java_bytecode_convert_classt::convert(
   }
 
   // interfaces are recorded as bases
-  for(const auto &interface : c.implements)
-  {
-    const struct_tag_typet base("java::" + id2string(interface));
-
-    // if the interface is generic then the class has the interface reference
-    // including the generic info in its signature
-    // e.g., signature for class 'A implements GenericInterface<Integer>' is
-    // 'Ljava/lang/Object;LGenericInterface<LInteger;>;'
-    const optionalt<std::string> interface_ref =
-      extract_generic_interface_reference(c.signature, id2string(interface));
-    if(interface_ref.has_value())
+  if(!c.parsed_sig.has_value()) {
+    for(const auto &interface : c.implements)
     {
-      try
-      {
-        const java_generic_struct_tag_typet generic_base(
-          base, interface_ref.value(), qualified_classname);
-        class_type.add_base(generic_base);
-      }
-      catch(const unsupported_java_class_signature_exceptiont &e)
-      {
-        debug() << "Interface: " << interface << " of class: " << c.name
-                << "\n could not parse signature: " << interface_ref.value()
-                << "\n " << e.what()
-                << "\n ignoring that the interface is generic" << eom;
-        class_type.add_base(base);
-      }
-    }
-    else
-    {
+      const struct_tag_typet base("java::" + id2string(interface));
       class_type.add_base(base);
     }
   }
