@@ -638,12 +638,12 @@ void java_class_type_signaturet::output(std::ostream &stm) const
 
 java_method_type_signaturet::java_method_type_signaturet(
   const std::string &type_string,
-  java_generic_type_parameter_mapt class_parameter_map)
+  java_generic_type_parameter_mapt outer_parameter_map)
 {
   parsable_stringt type_str = type_string;
   explicit_type_parameters =
-    parse_type_parameters(type_str, class_parameter_map);
-  type_parameter_map = class_parameter_map;
+    parse_type_parameters(type_str, outer_parameter_map);
+  type_parameter_map = outer_parameter_map;
   for(const std::shared_ptr<java_generic_type_parametert> &parameter :
       explicit_type_parameters)
   {
