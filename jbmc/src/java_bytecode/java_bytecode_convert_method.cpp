@@ -383,8 +383,6 @@ void java_bytecode_convert_method_lazy(
   }
 
   method_symbol.type=member_type;
-  // Not used in jbmc at present, but other codebases that use jbmc as a library
-  // use this information.
   method_symbol.type.set(ID_C_abstract, m.is_abstract);
   set_declaring_class(method_symbol, class_symbol.name);
 
