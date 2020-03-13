@@ -646,6 +646,10 @@ public:
     reference_index = entry.ref2;
   }
 
+  method_handle_kindt get_reference_kind() const {
+    return reference_kind;
+  }
+
   base_ref_infot get_reference(const pool_entry_lookupt &pool_entry) const
   {
     const base_ref_infot ref_entry{pool_entry(reference_index)};
