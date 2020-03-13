@@ -115,13 +115,17 @@ typedef std::vector<std::shared_ptr<java_value_type_signaturet>>
 std::ostream &
 operator<<(std::ostream &stm, const java_type_signature_listt &types);
 
+std::string fresh_wildcard_name();
+
 /// A generic type parameter, this class is used to represent both their
 /// declarations and their usages
 class java_generic_type_parametert : public java_value_type_signaturet
 {
 public:
-  /// The name of the parameter, empty for a wildcard type
+  /// The name of the parameter, synthesised for a wildcard type
   const std::string name;
+  /// Is this a wildcard?
+  bool is_wildcard;
   /// Bound on the type parameter that is a class
   /// \remarks
   /// If there isn't one then there must be at least one interface bound
@@ -147,14 +151,22 @@ public:
   /// \param bounds_are_upper Whether the bounds to be added will be upper
   ///   bounds
   explicit java_generic_type_parametert(bool bounds_are_upper)
-    : bounds_are_upper(bounds_are_upper)
+    : name(fresh_wildcard_name()), is_wildcard(true),
+    bounds_are_upper
+    (bounds_are_upper)
   {
   }
 
   /// Create a named type parameter
   /// \param name The name of the type parameter to create
   explicit java_generic_type_parametert(std::string name)
-    : name(std::move(name)), bounds_are_upper(true)
+    : name(std::move(name)), is_wildcard(false), bounds_are_upper(true)
+  {
+  }
+
+  java_generic_type_parametert(std::string name, bool is_dangling)
+    : name(std::move(name)), is_dangling(is_dangling),
+    bounds_are_upper(true)
   {
   }
 
@@ -162,7 +174,7 @@ public:
   /// \return Whether this is a wildcard type parameter
   bool is_wild() const
   {
-    return name.empty();
+    return is_wildcard;
   }
 
   /// Gather the names of classes referred to by this parameter at the point
@@ -173,7 +185,7 @@ public:
   {
     // Bounds are collected from type parameter declarations except in the case
     // of wildcard bounds
-    if(name.empty())
+    if(is_wildcard)
       collect_class_dependencies_from_bounds(deps);
   }
 
@@ -185,7 +197,7 @@ public:
   collect_class_dependencies_from_declaration(std::set<irep_idt> &deps) const
   {
     // This should only be called on type parameter declarations, not wildcards
-    PRECONDITION(!name.empty());
+    PRECONDITION(!is_wildcard);
     collect_class_dependencies_from_bounds(deps);
   }
 
