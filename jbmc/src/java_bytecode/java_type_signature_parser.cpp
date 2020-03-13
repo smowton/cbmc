@@ -247,12 +247,15 @@ java_generic_type_parametert::java_generic_type_parametert()
     nullptr);
 }
 
+std::string fresh_wildcard_name() {
+  static std::size_t idx = 0;
+  return std::string("Wildcard") + std::to_string(idx++);
+}
+
 typet java_generic_type_parametert::get_type(
   const std::string &class_name_prefix,
   bool include_bounds) const
 {
-  if(name.empty())
-    throw unsupported_java_class_signature_exceptiont("Wild card generic");
   // We currently only support one bound per variable, use the first
   const java_value_type_signaturet &bound_sig =
     *(class_bound != nullptr ? class_bound : interface_bounds[0]);
