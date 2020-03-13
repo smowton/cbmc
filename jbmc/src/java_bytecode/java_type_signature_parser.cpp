@@ -516,10 +516,28 @@ void java_class_type_signaturet::collect_class_dependencies(
 
 typet java_class_type_signaturet::get_type(
   const std::string &class_name_prefix,
-  bool) const
+  bool include_bounds) const
 {
-  // TODO: Implement this
-  UNREACHABLE;
+  java_class_typet result;
+  if(!explicit_type_parameters.empty())
+    result = java_generic_class_typet{};
+  // Only populate the sections that we have generic info for -- i.e., the
+  // formal generic parameters and the base types -- as the rest is still
+  // done by java_bytecode_convert_classt::convert.
+  for(const auto &parameter : explicit_type_parameters) {
+    to_java_generic_class_type(result).generic_types().push_back
+    (parameter->get_parameter_type
+    (class_name_prefix, include_bounds));
+  }
+
+  for(const auto &base : bases) {
+    auto base_type = to_java_reference_type(base->get_type(class_name_prefix,
+      include_bounds));
+
+    result.bases().emplace_back(to_struct_tag_type(base_type.subtype()));
+  }
+
+  return std::move(result);
 }
 
 void java_class_type_signaturet::output(std::ostream &stm) const
