@@ -901,6 +901,16 @@ public:
   {
     return to_java_generic_struct_tag_type(subtype()).generic_types();
   }
+
+  java_generic_struct_tag_typet &subtype() {
+    return static_cast<java_generic_struct_tag_typet &>
+    (reference_typet::subtype());
+  }
+
+  const java_generic_struct_tag_typet &subtype() const {
+    return static_cast<const java_generic_struct_tag_typet &>
+    (reference_typet::subtype());
+  }
 };
 
 template <>
