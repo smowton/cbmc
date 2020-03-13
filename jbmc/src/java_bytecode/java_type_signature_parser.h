@@ -14,6 +14,7 @@
 #include <vector>
 
 #include <util/type.h>
+#include "java_types.h"
 
 class java_generic_type_parametert;
 typedef
