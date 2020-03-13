@@ -271,7 +271,7 @@ void java_generic_type_parametert::full_output(
   std::ostream &stm,
   bool show_bounds) const
 {
-  stm << (name.empty() ? "?" : name);
+  stm << (is_wild() ? "?" : name);
   if(show_bounds)
   {
     stm << (bounds_are_upper ? " extends " : " super ");
