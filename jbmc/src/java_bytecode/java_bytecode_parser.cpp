@@ -71,7 +71,7 @@ struct java_bytecodet
   };
   optionalt<inner_classt> inner_class_info;
   optionalt<std::string> get_enclosing_class_name();
-  optionalt<std::string> get_enclosing_method_name();
+  optionalt<std::pair<std::string, std::string>> get_enclosing_method_name();
 
   struct bootstrap_methodt
   {
@@ -202,7 +202,8 @@ optionalt<std::string> java_bytecode_reft::get_enclosing_class_name()
   return bytecode->get_enclosing_class_name();
 }
 
-optionalt<std::string> java_bytecode_reft::get_enclosing_method_name()
+optionalt<std::pair<std::string, std::string>>
+  java_bytecode_reft::get_enclosing_method_name()
 {
   return bytecode->get_enclosing_method_name();
 }
@@ -2341,15 +2342,18 @@ optionalt<std::string> java_bytecodet::get_enclosing_class_name()
   }
 }
 
-optionalt<std::string> java_bytecodet::get_enclosing_method_name()
+optionalt<std::pair<std::string, std::string>>
+  java_bytecodet::get_enclosing_method_name()
 {
+  if(enclosing_method_index == 0)
+    return {};
+
   const auto get_pool_entry =
     [this](u2 index) -> raw_pool_entryt & { return constant_pool[index]; };
 
-  return enclosing_method_index != 0
-           ? name_and_type_infot(constant_pool[enclosing_method_index])
-               .get_name(get_pool_entry)
-           : optionalt<std::string>{};
+  name_and_type_infot name_and_type{constant_pool[enclosing_method_index]};
+  return {{name_and_type.get_name(get_pool_entry), name_and_type
+  .get_descriptor(get_pool_entry)}};
 }
 
 /// When a parsed class is an inner class, the accessibility
